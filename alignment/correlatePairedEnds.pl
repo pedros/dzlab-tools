@@ -37,6 +37,7 @@
 
 use strict;
 use warnings;
+use diagnostics;
 use Getopt::Long;
 
 # Globals, passed as command line options
@@ -75,11 +76,6 @@ my $result = GetOptions (
     "usage|help|h" => \$usage
     );
 
-# redirects STDOUT to file if specified by user
-if(!($output eq '-')) {
-    open(STDOUT, ">$output");
-}
-
 # holds name of chromosomes as keys and length of chromosomes in bp as values
 my %reference=();
 
@@ -112,6 +108,10 @@ my %reference=();
 }
 
 
+# redirects STDOUT to file if specified by user
+if(!($output eq '-')) {
+    open(STDOUT, ">$output");
+}
 # reads left end sequences
 open(LEFT, "<$leftendfile");
 my @leftend=<LEFT>;
@@ -120,8 +120,7 @@ close(LEFT);
 open(RIGHT, "<$rightendfile");
 my @rightend=<RIGHT>;
 close(RIGHT);
-
-# open file for debugging
+# opens file for debugging
 open(DBG, ">dbg");
 
 
@@ -137,12 +136,15 @@ for(my $i=0;$i<@leftend;$i++) {
     my $lsequence=$left{'sequence'};
     my $rsequence=$right{'sequence'};
 
+    my $allowed;
+    $allowed=$left{'allowed'} or $allowed=$right{'allowed'} or $allowed=0;
+    
 
     ##### NM - NM #####
     ##### No matches on either end #####
     if($lmatch==0 && $rmatch==0) {
-	print $left{'line'} . "\t" . $lsequence . "\t" . 0 . "\n";
-	print $right{'line'} + @leftend . "\t" . $rsequence . "\t" . 0 . "\n";
+	print $left{'line'} . "\tNM\t" . $lsequence . "\n";
+	print $right{'line'} + @leftend . "\tNM\t" . $rsequence . "\n";
     }
     ##### No matches on either end #####
 
@@ -158,17 +160,17 @@ for(my $i=0;$i<@leftend;$i++) {
 
 	if($match) {
 	    if($left{'chr0'}=~/^RC_/i) {
-		print $left{'line'} . "\t" . $lsequence . "\t" . substr($reference{"$tmp-rc"}, $left{'coord'}-1, $readsize) . "\t" . "U0\t" . abs($left{'coord'}-($reference{$tmp}-$right{'coord'}))  . "\n";
-		print $right{'line'} + @rightend . "\t" . $rsequence . "\t" . substr($reference{"$tmp-seq"}, $right{'coord'}-1, $readsize) . "\t" . "U0\t" . abs($left{'coord'}-($reference{$tmp}-$right{'coord'})) . "\n";
+		print $left{'line'} . "\t" . "U$allowed" . "\t" . $lsequence . "\t" . ($reference{$tmp}-$left{'coord'}) . "\t" . substr($reference{"$tmp-rc"}, $left{'coord'}-1, $readsize) . "\t"  . abs($left{'coord'}-($reference{$tmp}-$right{'coord'}))  . "\n";
+		print $right{'line'} + @rightend . "\t" . "U$allowed" .  "\t" . $rsequence . "\t" . $right{'coord'} . "\t" .  substr($reference{"$tmp-seq"}, $right{'coord'}-1, $readsize) . "\t"  . abs($left{'coord'}-($reference{$tmp}-$right{'coord'})) . "\n";
 	    }
 	    else {
-		print $left{'line'} . "\t" . $lsequence . "\t" . substr($reference{"$tmp-seq"}, $left{'coord'}-1, $readsize) . "\t" . "U0\t" . abs($left{'coord'}-($reference{$tmp}-$right{'coord'}))  ."\n";
-		print $right{'line'} + @rightend . "\t" . $rsequence . "\t" . substr($reference{"$tmp-rc"}, $right{'coord'}-1, $readsize) . "\t" . "U0\t" . abs($left{'coord'}-($reference{$tmp}-$right{'coord'}))  . "\n";
+		print $left{'line'} . "\t" .  "U$allowed" . "\t" . $lsequence . "\t" . $left{'coord'} . "\t" . substr($reference{"$tmp-seq"}, $left{'coord'}-1, $readsize) . "\t" . abs($left{'coord'}-($reference{$tmp}-$right{'coord'}))  ."\n";
+		print $right{'line'} + @rightend . "\t" .  "U$allowed" . "\t" . $rsequence . "\t"  . ($reference{$tmp}-$right{'coord'}) . "\t" . substr($reference{"$tmp-rc"}, $right{'coord'}-1, $readsize) . "\t" . abs($left{'coord'}-($reference{$tmp}-$right{'coord'}))  . "\n";
 	    }
 	}
 	else {
-	    print $left{'line'} . "\t" . $lsequence . "\t" . 0 . "\n";
-	    print $right{'line'} + @rightend . "\t" . $rsequence . "\t" .   0 . "\n";
+	    print $left{'line'} . "\tNM\t" . $lsequence . "\n";
+	    print $right{'line'} + @rightend . "\tNM\t" . $rsequence . "\n";
 	}
     }
     ##### Unique matches on both ends #####
@@ -188,8 +190,8 @@ for(my $i=0;$i<@leftend;$i++) {
 	else {
 	    $tmp=substr($reference{"$tmp-seq"}, $right{'coord'}, $readsize);
 	}
-	print $left{'line'} . "\t" . $lsequence . "\t" . 0 . "\n";
-	print $right{'line'} + @rightend . "\t" . $rsequence . "\t" . $tmp . "\n";
+	print $left{'line'} . "\tNM\t" . $lsequence . "\n";
+	print $right{'line'} + @rightend . "\t" . "U$allowed" . "\t" .  $rsequence . "\t" . ($reference{$tmp}-$right{'coord'}) . "\t" . $tmp . "\n";
     }
 
     if($lmatch==1 && $rmatch==0) {
@@ -203,8 +205,8 @@ for(my $i=0;$i<@leftend;$i++) {
 	else {
 	    $tmp=substr($reference{"$tmp-seq"}, $left{'coord'}, $readsize);
 	}
-	print $left{'line'} + @leftend . "\t" . $lsequence . "\t" . $tmp . "\n";
-	print $right{'line'} . "\t" . $rsequence . "\t" . 0 . "\n";
+	print $left{'line'} + @leftend . "\t" . "U$allowed" . "\t" . $lsequence . "\t" .  ($reference{$tmp}-$left{'coord'}) . "\t" .  $tmp . "\n";
+	print $right{'line'} . "\tNM\t" . $rsequence . "\n";
     }
     ##### No match on one end, 1 match on other #####
 
@@ -213,41 +215,39 @@ for(my $i=0;$i<@leftend;$i++) {
     ##### NM - R0 #####
     ##### No match on one end, multiple matches on other #####
     if($lmatch==0 && $rmatch>1) {
-	print $left{'line'} . "\t" . $lsequence . "\t" . 0 . "\n";
-	print $right{'line'} + @rightend . "\t" . $rsequence . "\t";
+	print $left{'line'} . "\tNM\t" . $lsequence . "\n";
+	print $right{'line'} + @rightend . "\t" . "R$allowed" . "\t" . $rsequence . "\t";
 	for(my $i=0;$i<$rmatch;$i++) {
 	    $right{"chr$i"}=~m/(chr.)/i; # this puts the base chromosome name ('chr.') into $1
 	    my $tmp=$1;
 	    $tmp=~tr/A-Z/a-z/;
 	    if($right{"chr$i"}=~m/^RC_/i) {
-		print substr($reference{"$tmp-rc"}, $right{"coord$i"}-1, $readsize) . "\t";
+		print substr($reference{"$tmp-rc"}, $right{"coord$i"}-1, $readsize) . ",";
 	    }
 	    else {
-		print substr($reference{"$tmp-seq"}, $right{"coord$i"}-1, $readsize) . "\t";
+		print substr($reference{"$tmp-seq"}, $right{"coord$i"}-1, $readsize) . ",";
 	    }
 	}
 	print "\n";
     }
 
     if($lmatch>1 && $rmatch==0) {
-	print $left{'line'} . "\t" . $lsequence . "\t";
+	print $left{'line'} . "\t" . "R$allowed" . "\t" . $lsequence . "\t";
 	for(my $i=0;$i<$lmatch;$i++) {
 	    $left{"chr$i"}=~m/(chr.)/i; # this puts the base chromosome name ('chr.') into $1
 	    my $tmp=$1;
 	    $tmp=~tr/A-Z/a-z/;
 	    if($left{"chr$i"}=~m/^RC_/i) {
-		print substr($reference{"$tmp-rc"}, $left{"coord$i"}-1, $readsize) . "\t";
+		print substr($reference{"$tmp-rc"}, $left{"coord$i"}-1, $readsize) . ",";
 	    }
 	    else {
-		print substr($reference{"$tmp-seq"}, $left{"coord$i"}-1, $readsize) . "\t";
+		print substr($reference{"$tmp-seq"}, $left{"coord$i"}-1, $readsize) . ",";
 	    }
 	}
 	print "\n";
-	print $right{'line'} + @rightend . "\t" . $rsequence . "\t" . 0 . "\n";
+	print $right{'line'} + @rightend . "\tNM\t" . $rsequence . "\n";
     }
     ##### No match on one end, multiple matches on other #####
-
-
 
 
 
@@ -274,12 +274,12 @@ for(my $i=0;$i<@leftend;$i++) {
 	$tmp=$1;
 	$tmp=~tr/A-Z/a-z/;
 	if($beststrand=~m/^RC_/i) {
-	    print $left{'line'} . "\t" . $lsequence . "\t" . substr($reference{"$tmp-seq"}, $left{'coord'}-1, $readsize) . "\t" . "U0\t"  . $score . "\n";
-	    print $right{'line'} + @rightend . "\t" . $rsequence . "\t" . substr($reference{"$tmp-rc"}, $bestcoord-1, $readsize) . "\t" . "U0\t"  . $score .  "\n";
+	    print $left{'line'} . "\t" . "U$allowed" . "\t" . $lsequence . "\t" . $left{'coord'} . "\t" .  substr($reference{"$tmp-seq"}, $left{'coord'}-1, $readsize) . "\t" . $score . "\n";
+	    print $right{'line'} + @rightend . "\t" . "U$allowed" . "\t" . $rsequence . "\t" .  ($reference{$tmp}-$bestcoord) . "\t" .  substr($reference{"$tmp-rc"}, $bestcoord-1, $readsize) . "\t" . $score .  "\n";
 	}
 	else {
-	    print $left{'line'} . "\t" . $lsequence . "\t" . substr($reference{"$tmp-rc"}, $left{'coord'}-1, $readsize) . "\t" . "U0\t"  . $score .  "\n";
-	    print $right{'line'} + @rightend . "\t" . $rsequence . "\t" . substr($reference{"$tmp-seq"}, $bestcoord-1, $readsize) . "\t" . "U0\t"  . $score .  "\n";
+	    print $left{'line'} . "\t" . "U$allowed" . "\t" . $lsequence . "\t" .  ($reference{$tmp}-$left{'coord'}) . "\t" . substr($reference{"$tmp-rc"}, $left{'coord'}-1, $readsize) . "\t" . $score .  "\n";
+	    print $right{'line'} + @rightend . "\t" . "U$allowed" . "\t" . $rsequence . "\t" . $bestcoord . "\t" . substr($reference{"$tmp-seq"}, $bestcoord-1, $readsize) . "\t" . $score .  "\n";
 	}
     }
 
@@ -304,12 +304,12 @@ for(my $i=0;$i<@leftend;$i++) {
 	$tmp=$1;
 	$tmp=~tr/A-Z/a-z/;
 	if($beststrand=~m/^RC_/i) {
-	    print $left{'line'} . "\t" . $lsequence . "\t" . substr($reference{"$tmp-rc"}, $bestcoord-1, $readsize) . "\t" . "U0\t"  . $score .  "\n";
-	    print $right{'line'} + @rightend . "\t" . $rsequence . "\t" . substr($reference{"$tmp-seq"}, $right{'coord'}-1, $readsize) . "\t" . "U0\t"  . $score .  "\n";
+	    print $left{'line'} . "\t" . "U$allowed" . "\t" . $lsequence . "\t" .  ($reference{$tmp}-$bestcoord) . "\t" . substr($reference{"$tmp-rc"}, $bestcoord-1, $readsize) . "\t"  . $score .  "\n";
+	    print $right{'line'} + @rightend . "\t" . "U$allowed" . "\t" . $rsequence . "\t" . $right{'coord'} . "\t" . substr($reference{"$tmp-seq"}, $right{'coord'}-1, $readsize) . "\t" . $score .  "\n";
 	}
 	else {
-	    print $left{'line'} . "\t" . $lsequence . "\t" . substr($reference{"$tmp-seq"}, $bestcoord-1, $readsize) . "\t" . "U0\t"  . $score .  "\n";
-	    print $right{'line'} + @rightend . "\t" . $rsequence . "\t" . substr($reference{"$tmp-rc"}, $right{'coord'}-1, $readsize) . "\t" . "U0\t"  . $score .  "\n";
+	    print $left{'line'} . "\t" . "U$allowed" . "\t" . $lsequence . "\t" . $bestcoord . "\t" . substr($reference{"$tmp-seq"}, $bestcoord-1, $readsize) . "\t" . $score .  "\n";
+	    print $right{'line'} + @rightend . "\t" . "U$allowed" . "\t" . $rsequence . "\t" .  ($reference{$tmp}-$right{'coord'}) . "\t" . substr($reference{"$tmp-rc"}, $right{'coord'}-1, $readsize) . "\t" . $score .  "\n";
 	}
     }
    #####    One match on one end, multiple matches on other end #####
@@ -318,7 +318,7 @@ for(my $i=0;$i<@leftend;$i++) {
 
     ##### R0 - R0 #####
     ##### Multiple matches on both ends #####
-    if($lmatch>1 && $rmatch>1 && $lmatch<10 && $rmatch<10) {
+    if($lmatch>1 && $rmatch>1) {
 
 	print DBG "\n==============================\n";
 	print DBG "SEQ ", $i+1, "\n";
@@ -370,12 +370,12 @@ for(my $i=0;$i<@leftend;$i++) {
 	my $tmp=$1;
 	$tmp=~tr/A-Z/a-z/;
 	if($lbeststrand=~m/^RC_/i) {
-	    print $left{'line'} . "\t" . $lsequence . "\t" . substr($reference{"$tmp-rc"}, $lbestcoord-1, $readsize) . "\t" . "U0\t" . $bestscore . "\n";
-	    print $right{'line'} + @rightend . "\t" . $rsequence . "\t" . substr($reference{"$tmp-seq"}, $rbestcoord-1, $readsize) . "\t" . "U0\t" . $bestscore .  "\n";
+	    print $left{'line'} . "\t" . "U$allowed" . "\t" .  $lsequence . "\t" .  ($reference{$tmp}-$lbestcoord) . "\t" . substr($reference{"$tmp-rc"}, $lbestcoord-1, $readsize) . "\t" . $bestscore . "\n";
+	    print $right{'line'} + @rightend . "\t" . "U$allowed" . "\t" .  $rsequence . "\t" . $rbestcoord . "\t" . substr($reference{"$tmp-seq"}, $rbestcoord-1, $readsize) . "\t" . $bestscore .  "\n";
 	}
 	else {
-	    print $left{'line'} . "\t" . $lsequence . "\t" . substr($reference{"$tmp-seq"}, $lbestcoord-1, $readsize) . "\t" . "U0\t" . $bestscore .  "\n";
-	    print $right{'line'} + @rightend . "\t" . $rsequence . "\t" . substr($reference{"$tmp-rc"}, $rbestcoord-1, $readsize) . "\t" . "U0\t" . $bestscore .  "\n";
+	    print $left{'line'} . "\t" . "U$allowed" . "\t" . $lsequence . "\t" . $lbestcoord . " \t" . substr($reference{"$tmp-seq"}, $lbestcoord-1, $readsize) . "\t" . $bestscore .  "\n";
+	    print $right{'line'} + @rightend . "\t"  . "U$allowed" . "\t" . $rsequence . "\t" .  ($reference{$tmp}-$rbestcoord) . "\t" .  substr($reference{"$tmp-rc"}, $rbestcoord-1, $readsize) . "\t" . $bestscore .  "\n";
 	}
     }
     ##### Multiple matches on both ends #####
@@ -454,7 +454,8 @@ sub parseEland3Line {
 	$tmp=~s/\n//g;
 	$hash{'chr0'}=$tmp;
 	$tmp=(split ':', $line[3])[1];
-	$tmp=~s/[A-Z][0-9]$//i;
+	$tmp=~s/[A-Z]([0-9])$//i;
+	$hash{'allowed'}=$1;
 	$tmp=~s/\n//g;
 	$hash{'coord'}=$tmp;
     }

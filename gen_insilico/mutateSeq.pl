@@ -32,7 +32,7 @@ die "Usage:\tmutateSeq.pl <inputfile> [numseqs] [seqsize]\n\t<inputfile> is a fa
 ##### START MAIN #####
 
 # single or paired ends output file
-my ($paired, $distance, $offset)=(1, 100, 150);
+my ($paired, $distance, $offset)=(1, 150, 50);
 
 # read fasta file contents to string
 my $fastafile = "$ARGV[0]";
