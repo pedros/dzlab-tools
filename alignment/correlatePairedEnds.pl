@@ -397,16 +397,16 @@ sub checkMatch {
 
     # check chromosome
     if($lchr=~m/^(chr.)/i) {
-	if(!$rchr=~m/^RC_$1/i) {$match=0;print "=====1=====";}
+	if(!$rchr=~m/^RC_$1/i) {$match=0;}
     }
     else {
 	if($rchr=~m/^RC_(chr.)/i) {
-	    if(!$lchr=~m/^$1/i) {$match=0;print "=====2=====";}
+	    if(!$lchr=~m/^$1/i) {$match=0;}
 	}
     }
 
     # check coordinates
-    if( ($lcoord+$rcoord>$chrlength+($offset+$distance)*2) || ($lcoord+$rcoord<$chrlength-($offset+$distance)*2) ) {
+    if( ($lcoord+$rcoord>$chrlength+($offset+$distance)) || ($lcoord+$rcoord<$chrlength-($offset+$distance)) ) {
 	$match=0;
     }
     return $match;
@@ -430,7 +430,7 @@ sub checkMultMatch {
 	}
     }
     # check absolute coordinates
-    if( ($lcoord+$rcoord>$chrlength+($offset+$distance)*2) || ($lcoord+$rcoord<$chrlength-($offset+$distance)*2) ) {
+    if( ($lcoord+$rcoord>$chrlength+($offset+$distance)) || ($lcoord+$rcoord<$chrlength-($offset+$distance)) ) {
 	$score=-1;
     }
     # check relative coordinates    
@@ -448,7 +448,9 @@ sub parseEland3Line {
     $hash{'line'}=$line[0];
     $hash{'sequence'}=$line[1];
     if($line[2] =~ 'NM') {$hash{'matches'}=0;}
-    else {$hash{'matches'}=$line[2];}
+    else {$hash{'matches'}=(split ':', $line[2])[0];}
+    my @all=split(/,/, $line[3]);
+    $hash{'matches'}=scalar(@all);
     if($hash{'matches'}==1) {
 	my $tmp=(split ':', $line[3])[0];
 	$tmp=~s/\n//g;

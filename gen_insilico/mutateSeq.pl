@@ -145,7 +145,7 @@ sub fas2short {
 	}
 	$shortseq[$i] .= "\n";
     }
-    print @shortseq;exit;
+    return @shortseq;
 }
 
 # converts input sequence to reverse complement
