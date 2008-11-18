@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 #
 # Last edited 2008-11-06
 # Copyright 2008 Pedro Silva <psilva@dzlab.pmb.berkeley.edu/>
@@ -18,7 +18,6 @@
 #
 
 =head1 Synopsis
-
 Takes a paired ends sequencing output (needs to be preprocessed to fit above)
 and compares each pair to maximize unique alignment matches to a genome.
 Considers the following occurrences:
@@ -30,11 +29,11 @@ Considers the following criteria:
 (b) The distance between potential pairs in the case of multiple matches must be larger than $offset and smaller than $offset+$distance
 =cut
 
+use Getopt::Long;
 use strict;
 use warnings;
-#use diagnostics;
-use Getopt::Long;
-use threads;
+use diagnostics;
+disable diagnostics;
 
 # Globals, passed as command line options
 my $leftendfile   = ""; # left end sequences file in eland 3 format
@@ -43,28 +42,13 @@ my $referencefile = ""; # unmodified reference genome file in fasta format
 my $distance = 150; # maximum (random) range distance beyond offset.
 my $offset = 50; # minimum distance between left and right sequences of a pair.
 my $output = '-'; # output mode. standard output by default
-my $readsize = 45;
-my $output_repeats = 0;
-# For any given in silico sequence, the true distance was given by: (int(rand($distance)) + $offset + 1) --pedro
+my $readsize = 45; # length of each read
+my $repeats = 0; # print ambiguous reads
+my $nomatches = 0; # print unmatched reads
 my $usage = 0; # print usage and exit
 
 # Initial check of command line parameters
-if ($usage || @ARGV<5) {
-    print STDERR
-"correlatePairedEnds.pl <PARAMETERS> [OPTIONS]
-\t<--left>\t5' raw sequence file
-\t<--right>\t3' raw sequence file
-\t<--reference>\tFasta genome file
-\t<--offset>\tMinimum library size
-\t<--distance>\tMaximum variation from offset
-\t[--output]\tFilename to write results to (default is STDOUT)
-\t[--readsize]\tRaw sequence length
-\t[--repeats]\tPrint reads with multiple matches
-\t[--usage]\tPrints this
-Takes a paired ends sequencing output (needs to be preprocessed to fit above) 
-and compares each pair to maximize unique alignment matches to a genome.\n";
-    exit 1;
-}
+&usage;
 
 # Parse command line arguments
 my $result = GetOptions (
@@ -75,8 +59,10 @@ my $result = GetOptions (
     "offset|off=i" => \$offset,
     "output|out:s" => \$output,
     "readsize|s:i" => \$readsize,
-    "repeats" => \$output_repeats,
-    "usage|help|h" => \$usage
+    "repeats" => \$repeats,
+    "nomatches" => \$nomatches,
+    "verbose|v" => sub {enable diagnostics;},
+    "usage|help|h" => \&usage
     );
 
 # holds name of chromosomes as keys and length of chromosomes in bp as values
@@ -151,17 +137,29 @@ for(my $i=0;$i<@leftend;$i++) {
 
     ##### NM - NM #####
     ##### No matches on either end #####
-    if($lmatch==0 && $rmatch==0) {
-	print join("\t",
-		   $left{'line'},
-		   "NM",
-		   $lsequence,
-		   "\n");
-	print join("\t",
-		   $right{'line'} + @leftend,
-		   "NM",
-		   $rsequence,
-		   "\n");
+    if($nomatches) {
+	if($lmatch==0 && $rmatch==0) {
+	    print join("\t",
+		       ".",
+		       "pair_align",
+		       $left{'line'} . ":" . $lsequence,
+		       ".",
+		       ".",
+		       0,
+		       ".",
+		       ".",
+		       ".") . "\n";
+	    print join("\t",
+		       ".",
+		       "pair_align",
+		       $right{'line'} . ":" . $rsequence,
+		       ".",
+		       ".",
+		       0,
+		       ".",
+		       ".",
+		       ".") . "\n";
+	}
     }
     ##### No matches on either end #####
 
@@ -178,52 +176,72 @@ for(my $i=0;$i<@leftend;$i++) {
 	if($match) {
 	    if($left{'chr0'}=~/^RC_/i) {
 		print join("\t",
-			   $left{'line'},
-			   "U$allowed",
-			   $lsequence,
-			   ($reference{$tmp}-$left{'coord'}),
-			   substr($reference{"$tmp-rc"}, $left{'coord'}-1, $readsize+2),
-			   abs($left{'coord'}-($reference{$tmp}-$right{'coord'})),
-			   "\n");
+			   $tmp,
+			   "pair_align",
+			   $left{'line'} . ":" . $lsequence,
+			   $reference{$tmp} - $left{'coord'},
+			   $reference{$tmp} - $left{'coord'} + $readsize,
+			   1,
+			   "-",
+			   ".",
+			   "target=" . substr($reference{"$tmp-rc"}, $left{'coord'}-1, $readsize+2)) . "\n";
 		print join("\t",
-			   $right{'line'} + @rightend,
-			   "U$allowed",
-			   $rsequence,
+			   $tmp,
+			   "pair_align",
+			   $right{'line'} . ":" . $rsequence,
 			   $right{'coord'},
-			   substr($reference{"$tmp-seq"}, $right{'coord'}-1, $readsize+2),
-			   abs($left{'coord'}-($reference{$tmp}-$right{'coord'})),
-			   "\n");
+			   $right{'coord'}+$readsize,
+			   1,
+			   "+",
+			   ".",
+			   "target=" . substr($reference{"$tmp-seq"}, $right{'coord'}-1, $readsize+2)) . "\n";			   
 	    }
 	    else {
 		print join("\t",
-			    $left{'line'},
-			    "U$allowed",
-			    $lsequence,
-			    $left{'coord'},
-			    substr($reference{"$tmp-seq"}, $left{'coord'}-1, $readsize+2),
-			    abs($left{'coord'}-($reference{$tmp}-$right{'coord'})),
-			    "\n");
+			   $tmp,
+			   "pair_align",
+			   $left{'line'} . ":" . $lsequence,
+			   $left{'coord'},
+			   $left{'coord'} + $readsize,
+			   1,
+			   "+",
+			   ".",
+			   "target=" . substr($reference{"$tmp-seq"}, $left{'coord'}-1, $readsize+2)) . "\n";
 		print join("\t",
-			    $right{'line'} + @rightend,
-			    "U$allowed",
-			    $rsequence,
-			    ($reference{$tmp}-$right{'coord'}),
-			    substr($reference{"$tmp-rc"}, $right{'coord'}-1, $readsize+2),
-			    abs($left{'coord'}-($reference{$tmp}-$right{'coord'})),
-			    "\n");
+			   $tmp,
+			   "pair_align",
+			   $right{'line'} . ":" . $rsequence,
+			   $reference{$tmp} - $right{'coord'},
+			   $reference{$tmp} - $right{'coord'} + $readsize,
+			   1,
+			   "-",
+			   ".",
+			   "target=" . substr($reference{"$tmp-rc"}, $right{'coord'}-1, $readsize+2)) . "\n";
 	    }
 	}
 	else {
-	    print join("\t",
-			$left{'line'},
-			"NM",
-			$lsequence,
-			"\n");
-	    print join("\t",
-		       $right{'line'} + @rightend,
-		       "NM",
-		       $rsequence,
-		       "\n");
+	    if($nomatches) {
+		print join("\t",
+			   ".",
+			   "pair_align",
+			   $left{'line'} . ":" . $lsequence,
+			   ".",
+			   ".",
+			   0,
+			   ".",
+			   ".",
+			   ".") . "\n";
+		print join("\t",
+			   ".",
+			   "pair_align",
+			   $right{'line'} . ":" . $rsequence,
+			   ".",
+			   ".",
+			   0,
+			   ".",
+			   ".",
+			   ".") . "\n";
+	    }
 	}
     }
     ##### Unique matches on both ends #####
@@ -233,53 +251,91 @@ for(my $i=0;$i<@leftend;$i++) {
     ##### NM - U0 #####
     ##### No match on one end, 1 match on other #####
     if($lmatch==0 && $rmatch==1) {
-	$right{'chr0'}=~m/(chr.)/i; # this puts the base chromosome name ('chr.') into $1
-	my $tmp=$1;
-	$tmp=~tr/A-Z/a-z/;
-	if($right{'chr0'}=~m/^RC_/i) { # checks that this maps to reverse strand
-	    my $revcoord=$reference{$tmp}-$right{'coord'};
-	    $tmp=substr($reference{"$tmp-rc"}, $revcoord, $readsize+2);
+        $right{'chr0'}=~m/(chr.)/i; # this puts the base chromosome name ('chr.') into $1
+        my $tmp=$1;
+        $tmp=~tr/A-Z/a-z/;
+
+	if($nomatches) {
+	    print join("\t",
+		       ".",
+		       "pair_align",
+		       $left{'line'} . ":" . $lsequence,
+		       ".",
+		       ".",
+		       0,
+		       ".",
+		       ".",
+		       ".") . "\n";
 	}
-	else {
-	    $tmp=substr($reference{"$tmp-seq"}, $right{'coord'}, $readsize+2);
-	}
-	print join("\t",
-		   $left{'line'},
-		   "NM",
-		   $lsequence,
-		   "\n");
-	print join("\t",
-		   $right{'line'} + @rightend,
-		   "U$allowed",
-		   $rsequence,
-		   ($reference{$tmp}-$right{'coord'}),
-		   $tmp,
-		   "\n");
+	
+        if($right{'chr0'}=~m/^RC_/i) { # checks that this maps to reverse strand
+	    print join("\t",
+		       $tmp,
+		       "pair_align",
+		       $right{'line'} . ":" . $rsequence,
+		       $reference{$tmp} - $right{'coord'},
+		       $reference{$tmp} - $right{'coord'} + $readsize,
+		       1,
+		       "-",
+		       ".",
+		       "target=" . substr($reference{"$tmp-rc"}, $right{'coord'}-1, $readsize+2)) . "\n";
+        }
+        else {
+	    print join("\t",
+		       $tmp,
+		       "pair_align",
+		       $right{'line'} . ":" . $rsequence,
+		       $right{'coord'},
+		       $right{'coord'} + $readsize,
+		       1,
+		       "+",
+		       ".",
+		       "target=" . substr($reference{"$tmp-seq"}, $right{'coord'}-1, $readsize+2)) . "\n";
+        }
+    
     }
 
     if($lmatch==1 && $rmatch==0) {
-	$left{'chr0'}=~m/(chr.)/i; # this puts the base chromosome name ('chr.') into $1
-	my $tmp=$1;
-	$tmp=~tr/A-Z/a-z/;
+        $left{'chr0'}=~m/(chr.)/i; # this puts the base chromosome name ('chr.') into $1
+        my $tmp=$1;
+        $tmp=~tr/A-Z/a-z/;
+        
 	if($left{'chr0'}=~m/^RC_/i) {
-	    my $revcoord=$reference{$tmp}-$left{'coord'};
-	    $tmp=substr($reference{"$tmp-rc"}, $revcoord, $readsize+2);
+	    print join("\t",
+		       $tmp,
+		       "pair_align",
+		       $left{'line'} . ":" . $lsequence,
+		       $reference{$tmp} - $left{'coord'},
+		       $reference{$tmp} - $left{'coord'} + $readsize,
+		       1,
+		       "-",
+		       ".",
+		       "target=" . substr($reference{"$tmp-rc"}, $left{'coord'}-1, $readsize+2)) . "\n";
+        }
+        else {
+	    print join("\t",
+		       $tmp,
+		       $left{'line'} . ":" . $lsequence,
+		       $left{'coord'},
+		       $left{'coord'} + $readsize,
+		       1,
+		       "+",
+		       ".",
+		       "target=" . substr($reference{"$tmp-seq"}, $left{'coord'}-1, $readsize+2)) . "\n";
+        }
+        
+	if($nomatches) {
+	    print join("\t",
+		       ".",
+		       "pair_align",
+		       $right{'line'} . ":" . $rsequence,
+		       ".",
+		       ".",
+		       0,
+		       ".",
+		       ".",
+		       ".") . "\n";
 	}
-	else {
-	    $tmp=substr($reference{"$tmp-seq"}, $left{'coord'}, $readsize+2);
-	}
-	print join("\t",
-		   $left{'line'} + @leftend,
-		   "U$allowed",
-		   $lsequence,
-		   ($reference{$tmp}-$left{'coord'}),
-		   $tmp,
-		   "\n");
-	print join("\t",
-		   $right{'line'},
-		   "NM",
-		   $rsequence,
-		   "\n");
     }
     ##### No match on one end, 1 match on other #####
 
@@ -287,55 +343,96 @@ for(my $i=0;$i<@leftend;$i++) {
 
     ##### NM - R0 #####
     ##### No match on one end, multiple matches on other #####
-    if($output_repeats) {
+    if($repeats) {
 	if($lmatch==0 && $rmatch>1) {
+	    if($nomatches) {
+		print join("\t",
+			   ".",
+			   "pair_align",
+			   $left{'line'} . ":" . $lsequence,
+			   ".",
+			   ".",
+			   0,
+			   ".",
+			   ".",
+			   ".") . "\n";
+	    }
 	    print join("\t",
-		       $left{'line'},
-		       "NM",
-		       $lsequence,
-		       "\n");
-	    print join("\t",
-		       $right{'line'} + @rightend,
-		       "R$allowed",
-		       $rsequence,
-		       "\t");
+		       ".",
+		       "pair_align",
+		       $right{'line'} . ":" . $rsequence,
+		       ".",
+		       ".",
+		       $rmatch,
+		       ".",
+		       ".",
+		       "targets=");
+
 	    for(my $i=0;$i<$rmatch;$i++) {
 		$right{"chr$i"}=~m/(chr.)/i; # this puts the base chromosome name ('chr.') into $1
 		my $tmp=$1;
 		$tmp=~tr/A-Z/a-z/;
 		if($right{"chr$i"}=~m/^RC_/i) {
-		    print substr($reference{"$tmp-rc"}, $right{"coord$i"}-1, $readsize+2) . ",";
+		    print join(":",
+			       $right{"chr$i"},
+			       $reference{$tmp} - $right{"coord$i"},
+			       substr($reference{"$tmp-rc"}, $right{"coord$i"}-1, $readsize+2));
 		}
 		else {
-		    print substr($reference{"$tmp-seq"}, $right{"coord$i"}-1, $readsize+2) . ",";
+		    print join(":",
+			       $right{"chr$i"},
+			       $right{"coord$i"},
+			       substr($reference{"$tmp-seq"}, $right{"coord$i"}-1, $readsize+2));
 		}
+		print ",";
 	    }
-	    print "\n";
+	    print "\b\n";
 	}
 
 	if($lmatch>1 && $rmatch==0) {
 	    print join("\t",
-		       $left{'line'},
-		       "R$allowed",
-		       $lsequence,
-		       "\t");
+		       ".",
+		       "pair_align",
+		       $left{'line'} . ":" . $lsequence,
+		       ".",
+		       ".",
+		       $lmatch,
+		       ".",
+		       ".",
+		       "targets=");
+
 	    for(my $i=0;$i<$lmatch;$i++) {
 		$left{"chr$i"}=~m/(chr.)/i; # this puts the base chromosome name ('chr.') into $1
 		my $tmp=$1;
 		$tmp=~tr/A-Z/a-z/;
 		if($left{"chr$i"}=~m/^RC_/i) {
-		    print substr($reference{"$tmp-rc"}, $left{"coord$i"}-1, $readsize+2) . ",";
+		    print join(":",
+			       $left{"chr$i"},
+			       $reference{$tmp} - $left{"coord$i"},
+			       substr($reference{"$tmp-rc"}, $left{"coord$i"}-1, $readsize+2));
 		}
 		else {
-		    print substr($reference{"$tmp-seq"}, $left{"coord$i"}-1, $readsize+2) . ",";
+		    print join(":",
+			       $left{"chr$i"},
+			       $left{"coord$i"},
+			       substr($reference{"$tmp-seq"}, $left{"coord$i"}-1, $readsize+2));
 		}
+		print ",";
 	    }
-	    print "\n";
-	    print join("\t",
-		       $right{'line'} + @rightend,
-		       "NM",
-		       $rsequence,
-		       "\n");
+	    print "\b\n";
+
+	    if($nomatches) {
+		print join("\t",
+			   ".",
+			   "pair_align",
+			   $right{'line'} . ":" . $rsequence,
+			   ".",
+			   ".",
+			   0,
+			   ".",
+			   ".",
+			   ".") . "\n";
+	    }
 	}
     }
     ##### No match on one end, multiple matches on other #####
@@ -366,39 +463,47 @@ for(my $i=0;$i<@leftend;$i++) {
 	$tmp=~tr/A-Z/a-z/;
 	if($beststrand=~m/^RC_/i) {
 	    print join("\t",
-		       $left{'line'},
-		       "U$allowed",
-		       $lsequence,
-		       $left{'coord'},
-		       substr($reference{"$tmp-seq"}, $left{'coord'}-1, $readsize+2),
-		       $score,
-		       "\n");
+		       $tmp,
+		       "pair_align",
+		       $left{'line'} . ":" . $lsequence,
+		       $reference{$tmp} - $left{'coord'},
+		       $reference{$tmp} - $left{'coord'} + $readsize,
+		       1,
+		       "+",
+		       ".",
+		       "target=" . substr($reference{"$tmp-seq"}, $left{'coord'}-1, $readsize+2)) . "\n";
 	    print join("\t",
-		       $right{'line'} + @rightend,
-		       "U$allowed",
-		       $rsequence,
-		       ($reference{$tmp}-$bestcoord),
-		       substr($reference{"$tmp-rc"}, $bestcoord-1, $readsize+2),
-		       $score,
-		       "\n");
+		       $tmp,
+		       "pair_align",
+		       $right{'line'} . ":" . $rsequence,
+		       $reference{$tmp} - $bestcoord,
+		       $reference{$tmp} - $bestcoord + $readsize,
+		       1,
+		       "-",
+		       ".",
+		       "target=" . substr($reference{"$tmp-rc"}, $bestcoord-1, $readsize+2)) . "\n";
 	}
 	else {
 	    print join("\t",
-		       $left{'line'},
-		       "U$allowed",
-		       $lsequence,
-		       ($reference{$tmp}-$left{'coord'}),
-		       substr($reference{"$tmp-rc"}, $left{'coord'}-1, $readsize+2),
-		       $score,
-		       "\n");
+		       $tmp,
+		       "pair_align",
+		       $left{'line'} . ":" . $lsequence,
+		       $reference{$tmp} - $left{'coord'},
+		       $reference{$tmp} - $left{'coord'} + $readsize,
+		       1,
+		       "-",
+		       ".",
+		       "target=" . substr($reference{"$tmp-rc"}, $left{'coord'}-1, $readsize+2)) . "\n";
 	    print join("\t",
-		       $right{'line'} + @rightend,
-		       "U$allowed",
-		       $rsequence,
+		       $tmp,
+		       "pair_align",
+		       $right{'line'} . ":" . $rsequence,
 		       $bestcoord,
-		       substr($reference{"$tmp-seq"}, $bestcoord-1, $readsize+2),
-		       $score,
-		       "\n");
+		       $bestcoord + $readsize,
+		       1,
+		       "+",
+		       ".",
+		       "target=" . substr($reference{"$tmp-seq"}, $bestcoord-1, $readsize+2)) . "\n";
 	}
     }
 
@@ -424,42 +529,47 @@ for(my $i=0;$i<@leftend;$i++) {
 	$tmp=~tr/A-Z/a-z/;
 	if($beststrand=~m/^RC_/i) {
 	    print join("\t",
-		       $left{'line'},
-		       "U$allowed",
-		       $lsequence,
-		       ($reference{$tmp}-$bestcoord),
-		       substr($reference{"$tmp-rc"}, $bestcoord-1, $readsize+2),
-		       $score,
-		       "\n");
+		       $tmp,
+		       "pair_align",
+		       $left{'line'} . ":" . $lsequence,
+		       $reference{$tmp} - $bestcoord,
+		       $reference{$tmp} - $bestcoord + $readsize,
+		       1,
+		       "-",
+		       ".",
+		       "target=" . substr($reference{"$tmp-rc"}, $bestcoord-1, $readsize+2)) . "\n";
 	    print join("\t",
-		       $right{'line'} + @rightend,
-		       "U$allowed",
-		       $rsequence,
+		       $tmp,
+		       "pair_align",
+		       $right{'line'} . ":" . $rsequence,
 		       $right{'coord'},
-		       substr($reference{"$tmp-seq"}, $right{'coord'}-1, $readsize+2),
-		       $score,
-		       "\n");
+		       $right{'coord'} + $readsize,
+		       "+",
+		       ".",
+		       "target=" . substr($reference{"$tmp-seq"}, $right{'coord'}-1, $readsize+2)) . "\n";
 	}
 	else {
 	    print join("\t",
-		       $left{'line'},
-		       "U$allowed",
-		       $lsequence,
+		       $tmp,
+		       "pair_align",
+		       $left{'line'} . ":" . $lsequence,
 		       $bestcoord,
-		       substr($reference{"$tmp-seq"}, $bestcoord-1, $readsize+2),
-		       $score,
-		       "\n");
+		       $bestcoord + $readsize,
+		       "+",
+		       ".",
+		       "target=" . substr($reference{"$tmp-seq"}, $bestcoord-1, $readsize+2)) . "\n";
 	    print join("\t",
-		       $right{'line'} + @rightend,
-		       "U$allowed",
-		       $rsequence,
-		       ($reference{$tmp}-$right{'coord'}),
-		       substr($reference{"$tmp-rc"}, $right{'coord'}-1, $readsize+2),
-		       $score,
-		       "\n");
+		       $tmp,
+		       "pair_align",
+		       $right{'line'} . ":" . $rsequence,
+		       $reference{$tmp} - $right{'coord'},
+		       $reference{$tmp} - $right{'coord'} + $readsize,
+		       "-",
+		       ".",
+		       "target=" . substr($reference{"$tmp-rc"}, $right{'coord'}-1, $readsize+2)) . "\n";
 	}
     }
-   #####    One match on one end, multiple matches on other end #####
+    ##### One match on one end, multiple matches on other end #####
 
 
 
@@ -509,39 +619,47 @@ for(my $i=0;$i<@leftend;$i++) {
 	$tmp=~tr/A-Z/a-z/;
 	if($lbeststrand=~m/^RC_/i) {
 	    print join("\t",
-		       $left{'line'},
-		       "U$allowed",
-		       $lsequence,
-		       ($reference{$tmp}-$lbestcoord),
-		       substr($reference{"$tmp-rc"}, $lbestcoord-1, $readsize+2),
-		       $bestscore,
-		       "\n");
+		       $tmp,
+		       "pair_align",
+		       $left{'line'} . ":" . $lsequence,
+		       $reference{$tmp} - $lbestcoord,
+		       $reference{$tmp} - $lbestcoord + $readsize,
+		       1,
+		       "-",
+		       ".",
+		       "target=" . substr($reference{"$tmp-rc"}, $lbestcoord-1, $readsize+2)) . "\n";
 	    print join("\t",
-		       $right{'line'} + @rightend,
-		       "U$allowed",
-		       $rsequence,
+		       $tmp,
+		       "pair_align",
+		       $right{'line'} . ":" . $rsequence,
 		       $rbestcoord,
-		       substr($reference{"$tmp-seq"}, $rbestcoord-1, $readsize+2),
-		       $bestscore,
-		       "\n");
+		       $rbestcoord + $readsize,
+		       1,
+		       "+",
+		       ".",
+		       "target=" . substr($reference{"$tmp-seq"}, $rbestcoord-1, $readsize+2)) . "\n";
 	}
 	else {
 	    print join("\t",
-		       $left{'line'},
-		       "U$allowed",
-		       $lsequence,
+		       $tmp,
+		       "pair_align",
+		       $left{'line'} . ":" . $lsequence,
 		       $lbestcoord,
-		       substr($reference{"$tmp-seq"}, $lbestcoord-1, $readsize+2),
-		       $bestscore,
-		       "\n");
+		       $lbestcoord + $readsize,
+		       1,
+		       "+",
+		       ".",
+		       "target=" . substr($reference{"$tmp-seq"}, $lbestcoord-1, $readsize+2)) . "\n";
 	    print join("\t",
-		       $right{'line'} + @rightend,
-		       "U$allowed",
-		       $rsequence,
-		       ($reference{$tmp}-$rbestcoord),
-		       substr($reference{"$tmp-rc"}, $rbestcoord-1, $readsize+2),
-		       $bestscore,
-		       "\n");
+		       $tmp,
+		       "pair_align",
+		       $right{'line'} . ":" . $rsequence,
+		       $reference{$tmp} - $rbestcoord,
+		       $reference{$tmp} - $rbestcoord + $readsize,
+		       1,
+		       "-",
+		       ".",
+		       "target=" . substr($reference{"$tmp-rc"}, $rbestcoord-1, $readsize+2)) . "\n";
 	}
     }
     ##### Multiple matches on both ends #####
@@ -624,8 +742,10 @@ sub parseEland3Line {
 	$hash{'matches'}=(split ':', $line[2])[0];
     }
 
-    my @all=split(/,/, $line[3]);
-    $hash{'matches'}=scalar(@all);
+    if($hash{'matches'}>1) {
+	my @all=split(/,/, $line[3]);
+	$hash{'matches'}=scalar(@all);
+    }
 
     if($hash{'matches'}==1) {
 	my $tmp=(split ':', $line[3])[0];
@@ -662,4 +782,25 @@ sub reverseComp {
     $shortseq =~ tr/ACGTacgt/TGCAtgca/;
     $shortseq =~ s/\n//;
     return reverse $shortseq;
+}
+
+
+sub usage {
+    if ($usage || @ARGV<5) {
+	print STDERR
+	    "correlatePairedEnds.pl <PARAMETERS> [OPTIONS]
+\t<--left>\t5' raw sequence file
+\t<--right>\t3' raw sequence file
+\t<--reference>\tFasta genome file
+\t<--offset>\tMinimum library size
+\t<--distance>\tMaximum variation from offset
+\t[--output]\tFilename to write results to (default is STDOUT)
+\t[--readsize]\tRaw sequence length
+\t[--repeats]\tPrint reads with multiple matches
+\t[--verbose]\tOutput diagnostic messages
+\t[--usage]\tPrints this
+Takes a paired ends sequencing output (needs to be preprocessed to fit above) 
+and compares each pair to maximize unique alignment matches to a genome.\n";
+	exit 1;
+    }
 }
