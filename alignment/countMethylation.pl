@@ -1,6 +1,7 @@
 #!/usr/bin/env perl
 
 use Data::Dumper;
+use Getopt::Long;
 use strict;
 use warnings;
 use diagnostics;
@@ -12,7 +13,7 @@ my $gfffile = "";
 my $width = 0;
 my $step = 0;
 my $readsize = 0;
-my $output = "";
+my $output = "-";
 my $verbose = 0;
 my $quiet = 0;
 my $usage = 0;
@@ -45,10 +46,10 @@ while(<$GFF>) {
 
     if($record{'score'}!=1){next;}
 
-    $record{'feature'} =~ m/([ACGT]{$readsize})/;
+    $record{'feature'} =~ m/([ACGT]){$readsize}/;
     
     my @methylated = split(//, $1);
-    my @unmethylated = split(//, (split /=/, $record{'attribute'})[1]);
+    my @unmethylated = split(//, (split "=", $record{'attribute'})[1]);
     
     my %HoH=();
 
@@ -70,6 +71,7 @@ while(<$GFF>) {
 		if(join(@methylated[$i..($i+2)]) =~ m/[Cc][^Gg][^Gg]/) {
 		    $HoH{$i}{'chh_count'}++;
 		}
+		print $HoH{$i}{'c_count'}++;
 	    }
 
 	    if($record{'strand'} == '-') {
@@ -91,7 +93,6 @@ while(<$GFF>) {
 	    }
 	}	   
     }  
-    print Data::Dumper->Dump(\%record);
 }
 
 close($GFF);
