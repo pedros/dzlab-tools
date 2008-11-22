@@ -26,8 +26,8 @@ while(my $mutline = <$MUTATED>) {
     chomp($lorigline);
     chomp($rorigline);
 
-    $mutline=~s/[ACGT]{$readsize}/$lorigline/ if($mutline=~m/\t\+\t/);
-    $mutline=~s/[ACGT]{$readsize}/$rorigline/ if($mutline=~m/\t\-\t/);
+    $mutline=~s/[ACGT]{$readsize}/$lorigline/ if($mutline=~m/1:\t[ACGT]{$readsize}/);
+    $mutline=~s/[ACGT]{$readsize}/$rorigline/ if($mutline=~m/2:\t[ACGT]{$readsize}/);
     
     print $mutline;
 }

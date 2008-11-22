@@ -79,7 +79,7 @@ my %reference=();
     my (@idx, @dsc)=();
     for(my $i=0;$i<@fastaseq;$i++) {
 	if($fastaseq[$i] =~ m/^>/) {
-	    $fastaseq[$i] =~ s/[>\n]//g;
+	    $fastaseq[$i] =~ s/>//g;
 	    $fastaseq[$i] = (split '\s', "$fastaseq[$i]")[0];
 	    $fastaseq[$i] =~ tr/A-Z/a-z/;
 	    push @idx, $i;
@@ -95,6 +95,8 @@ my %reference=();
 	$reference{ $dsc[$j] } = length($line);
 	$reference{ "$dsc[$j]-seq" } = $line;
 	$reference{ "$dsc[$j]-rc" } = &reverseComp($line);
+	print STDERR "$dsc[$j]-seq\n";
+	print STDERR "$dsc[$j]-rc\n";
     }
     print STDERR "OK";
 }
@@ -120,8 +122,6 @@ print STDERR "\nCorrelating pairs";
 # goes through left sequences
 for(my $i=0;$i<@leftend;$i++) {
 
-    print STDERR "." if(int(rand(@leftend)<@leftend/1000));
-
     my %left=%{&parseEland3Line($leftend[$i])};
     my %right=%{&parseEland3Line($rightend[$i])};
 
@@ -130,10 +130,6 @@ for(my $i=0;$i<@leftend;$i++) {
 
     my $lsequence=$left{'sequence'};
     my $rsequence=$right{'sequence'};
-
-    my $allowed;
-    $allowed=$left{'allowed'} or $allowed=$right{'allowed'} or $allowed=0;
-
 
 
     ##### NM - NM #####
@@ -169,9 +165,10 @@ for(my $i=0;$i<@leftend;$i++) {
     ##### U0 - U0) #####
     ##### Unique matches on both ends #####
     if($lmatch==1 && $rmatch==1) {
-	$left{'chr0'}=~m/(chr.)/i; # this puts the base chromosome name ('chr.') into $1
+	$left{'chr0'}=~m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
 	my $tmp=$1;
 	$tmp=~tr/A-Z/a-z/;
+	$tmp=~s/rc_//i;
 	my $match=&checkMatch($left{'chr0'}, $right{'chr0'}, $left{'coord'}, $right{'coord'}, $reference{$tmp}, $offset, $distance);
 
 	if($match) {
@@ -252,9 +249,10 @@ for(my $i=0;$i<@leftend;$i++) {
     ##### NM - U0 #####
     ##### No match on one end, 1 match on other #####
     if($lmatch==0 && $rmatch==1) {
-        $right{'chr0'}=~m/(chr.)/i; # this puts the base chromosome name ('chr.') into $1
+        $right{'chr0'}=~m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
         my $tmp=$1;
         $tmp=~tr/A-Z/a-z/;
+	$tmp=~s/rc_//i;
 
 	if($nomatches) {
 	    print join("\t",
@@ -297,10 +295,11 @@ for(my $i=0;$i<@leftend;$i++) {
     }
 
     if($lmatch==1 && $rmatch==0) {
-        $left{'chr0'}=~m/(chr.)/i; # this puts the base chromosome name ('chr.') into $1
+        $left{'chr0'}=~m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
         my $tmp=$1;
         $tmp=~tr/A-Z/a-z/;
-        
+	$tmp=~s/rc_//i;
+
 	if($left{'chr0'}=~m/^RC_/i) {
 	    print join("\t",
 		       $tmp,
@@ -371,9 +370,11 @@ for(my $i=0;$i<@leftend;$i++) {
 		       "targets=");
 
 	    for(my $i=0;$i<$rmatch;$i++) {
-		$right{"chr$i"}=~m/(chr.)/i; # this puts the base chromosome name ('chr.') into $1
+		$right{"chr$i"}=~m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
 		my $tmp=$1;
 		$tmp=~tr/A-Z/a-z/;
+		$tmp=~s/rc_//i;
+
 		if($right{"chr$i"}=~m/^RC_/i) {
 		    print join(":",
 			       $right{"chr$i"},
@@ -404,9 +405,11 @@ for(my $i=0;$i<@leftend;$i++) {
 		       "targets=");
 
 	    for(my $i=0;$i<$lmatch;$i++) {
-		$left{"chr$i"}=~m/(chr.)/i; # this puts the base chromosome name ('chr.') into $1
+		$left{"chr$i"}=~m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
 		my $tmp=$1;
 		$tmp=~tr/A-Z/a-z/;
+		$tmp=~s/rc_//i;
+
 		if($left{"chr$i"}=~m/^RC_/i) {
 		    print join(":",
 			       $left{"chr$i"},
@@ -443,9 +446,10 @@ for(my $i=0;$i<@leftend;$i++) {
 
     ##### One match on one end, multiple matches on other end #####
     if($lmatch==1 && $rmatch>1) {
-	$left{'chr0'}=~m/(chr.)/i; # this puts the base chromosome name ('chr.') into $1
+	$left{'chr0'}=~m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
 	my $tmp=$1;
 	$tmp=~tr/A-Z/a-z/;
+	$tmp=~s/rc_//i;
 
  	my ($bestcoord, $beststrand);
 	my $score=100000000;
@@ -460,9 +464,10 @@ for(my $i=0;$i<@leftend;$i++) {
 	    else {next;}
  	}
 
-	$beststrand=~m/(chr.)/i; # this puts the base chromosome name ('chr.') into $1
+	$beststrand=~m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
 	$tmp=$1;
 	$tmp=~tr/A-Z/a-z/;
+	$tmp=~s/rc_//i;
 	if($beststrand=~m/^RC_/i) {
 	    if($score<=$offset+$distance) {
 		print join("\t",
@@ -537,9 +542,10 @@ for(my $i=0;$i<@leftend;$i++) {
     }
 
     if($lmatch>1 && $rmatch==1) {
-	$right{'chr0'}=~m/(chr.)/i; # this puts the base chromosome name ('chr.') into $1
+	$right{'chr0'}=~m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
 	my $tmp=$1;
 	$tmp=~tr/A-Z/a-z/;
+	$tmp=~s/rc_//i;
 
  	my ($bestcoord, $beststrand);
 	my $score=100000000;
@@ -553,9 +559,11 @@ for(my $i=0;$i<@leftend;$i++) {
 	    }
  	}
 
-	$beststrand=~m/(chr.)/i; # this puts the base chromosome name ('chr.') into $1
+	$beststrand=~m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
 	$tmp=$1;
 	$tmp=~tr/A-Z/a-z/;
+	$tmp=~s/rc_//i;
+
 	if($beststrand=~m/^RC_/i) {
 	    if($score<=$offset+$distance) {
 		print join("\t",
@@ -638,9 +646,10 @@ for(my $i=0;$i<@leftend;$i++) {
 	# loops through each possible target on the left
 	for(my $i=0;$i<$lmatch;$i++) {
 
-	    $left{"chr$i"}=~m/(chr.)/i; # this puts the base chromosome name ('chr.') into $1
+	    $left{"chr$i"}=~m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
 	    my $tmp=$1;
 	    $tmp=~tr/A-Z/a-z/;
+	    $tmp=~s/rc_//i;
 
 	    my ($bestcoord, $beststrand);
 	    my $score=100000000;
@@ -670,9 +679,11 @@ for(my $i=0;$i<@leftend;$i++) {
 	    }
 	}
 
-	$lbeststrand=~m/(chr.)/i; # this puts the base chromosome name ('chr.') into $1
+	$lbeststrand=~m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
 	my $tmp=$1;
 	$tmp=~tr/A-Z/a-z/;
+	$tmp=~s/rc_//i;
+
 	if($lbeststrand=~m/^RC_/i) {
 	    if($bestscore<=$offset+$distance) {
 		print join("\t",
@@ -765,12 +776,12 @@ sub checkMatch {
     my $match=1;
 
     # check chromosome
-    if($lchr=~m/^(chr.)/i) {
+    if($lchr=~m/^([^R][^C][^_])/i) {
 	if(!$rchr=~m/^RC_$1/i) {$match=0;}
     }
     else {
-	if($rchr=~m/^RC_(chr.)/i) {
-	    if(!$lchr=~m/^$1/i) {$match=0;}
+	if($rchr=~m/^RC_(.*)/i) {
+	    if($lchr=~m/^$1/i) {$match=0;}
 	}
     }
 
@@ -790,11 +801,11 @@ sub checkMultMatch {
     my $score;
 
     # check chromosome
-    if($lchr=~m/^(chr.)/i) {
+    if($lchr=~m/^([^R][^C][^_])/i) {
 	if(!$rchr=~m/^RC_$1/i) {$score=-1;}
     }
     else {
-	if($rchr=~m/^RC_(chr.)/i) {
+	if($rchr=~m/^RC_(.*)/i) {
 	    if(!$lchr=~m/^$1/i) {$score=-1;}
 	}
     }
@@ -835,8 +846,7 @@ sub parseEland3Line {
 	$tmp=~s/\n//g;
 	$hash{'chr0'}=$tmp;
 	$tmp=(split ':', $line[3])[1];
-	$tmp=~s/[A-Z]([0-9])$//i;
-	$hash{'allowed'}=$1;
+	$tmp=~s/[A-Z][0-9]$//i;
 	$tmp=~s/\n//g;
 	$hash{'coord'}=$tmp;
     }
