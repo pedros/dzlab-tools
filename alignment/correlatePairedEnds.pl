@@ -95,8 +95,6 @@ my %reference=();
 	$reference{ $dsc[$j] } = length($line);
 	$reference{ "$dsc[$j]-seq" } = $line;
 	$reference{ "$dsc[$j]-rc" } = &reverseComp($line);
-	print STDERR "$dsc[$j]-seq\n";
-	print STDERR "$dsc[$j]-rc\n";
     }
     print STDERR "OK";
 }
@@ -117,7 +115,7 @@ open(my $RIGHT, "<", "$rightendfile");
 my @rightend=<$RIGHT>;
 close($RIGHT);
 
-print STDERR "\nCorrelating pairs";
+print STDERR "\nCorrelating pairs...";
 
 # goes through left sequences
 for(my $i=0;$i<@leftend;$i++) {
@@ -182,7 +180,7 @@ for(my $i=0;$i<@leftend;$i++) {
 			   1,
 			   "-",
 			   ".",
-			   "target=" . substr($reference{"$tmp-rc"}, $left{'coord'}-1, $readsize+2)) . "\n";
+			   "target=" . substr($reference{"$tmp-rc"}, $left{'coord'}-3, $readsize+4)) . "\n";
 		print join("\t",
 			   $tmp,
 			   "pair_align",
@@ -192,7 +190,7 @@ for(my $i=0;$i<@leftend;$i++) {
 			   1,
 			   "+",
 			   ".",
-			   "target=" . substr($reference{"$tmp-seq"}, $right{'coord'}-1, $readsize+2)) . "\n";			   
+			   "target=" . substr($reference{"$tmp-seq"}, $right{'coord'}-3, $readsize+4)) . "\n";			   
 	    }
 	    else {
 		print join("\t",
@@ -204,7 +202,7 @@ for(my $i=0;$i<@leftend;$i++) {
 			   1,
 			   "+",
 			   ".",
-			   "target=" . substr($reference{"$tmp-seq"}, $left{'coord'}-1, $readsize+2)) . "\n";
+			   "target=" . substr($reference{"$tmp-seq"}, $left{'coord'}-3, $readsize+4)) . "\n";
 		print join("\t",
 			   $tmp,
 			   "pair_align",
@@ -214,7 +212,7 @@ for(my $i=0;$i<@leftend;$i++) {
 			   1,
 			   "-",
 			   ".",
-			   "target=" . substr($reference{"$tmp-rc"}, $right{'coord'}-1, $readsize+2)) . "\n";
+			   "target=" . substr($reference{"$tmp-rc"}, $right{'coord'}-3, $readsize+4)) . "\n";
 	    }
 	}
 	else {
@@ -277,7 +275,7 @@ for(my $i=0;$i<@leftend;$i++) {
 		       1,
 		       "-",
 		       ".",
-		       "target=" . substr($reference{"$tmp-rc"}, $right{'coord'}-1, $readsize+2)) . "\n";
+		       "target=" . substr($reference{"$tmp-rc"}, $right{'coord'}-3, $readsize+4)) . "\n";
         }
         else {
 	    print join("\t",
@@ -289,7 +287,7 @@ for(my $i=0;$i<@leftend;$i++) {
 		       1,
 		       "+",
 		       ".",
-		       "target=" . substr($reference{"$tmp-seq"}, $right{'coord'}-1, $readsize+2)) . "\n";
+		       "target=" . substr($reference{"$tmp-seq"}, $right{'coord'}-3, $readsize+4)) . "\n";
         }
     
     }
@@ -310,7 +308,7 @@ for(my $i=0;$i<@leftend;$i++) {
 		       1,
 		       "-",
 		       ".",
-		       "target=" . substr($reference{"$tmp-rc"}, $left{'coord'}-1, $readsize+2)) . "\n";
+		       "target=" . substr($reference{"$tmp-rc"}, $left{'coord'}-3, $readsize+4)) . "\n";
         }
         else {
 	    print join("\t",
@@ -322,7 +320,7 @@ for(my $i=0;$i<@leftend;$i++) {
 		       1,
 		       "+",
 		       ".",
-		       "target=" . substr($reference{"$tmp-seq"}, $left{'coord'}-1, $readsize+2)) . "\n";
+		       "target=" . substr($reference{"$tmp-seq"}, $left{'coord'}-3, $readsize+4)) . "\n";
         }
         
 	if($nomatches) {
@@ -379,13 +377,13 @@ for(my $i=0;$i<@leftend;$i++) {
 		    print join(":",
 			       $right{"chr$i"},
 			       $reference{$tmp} - $right{"coord$i"},
-			       substr($reference{"$tmp-rc"}, $right{"coord$i"}-1, $readsize+2));
+			       substr($reference{"$tmp-rc"}, $right{"coord$i"}-3, $readsize+4));
 		}
 		else {
 		    print join(":",
 			       $right{"chr$i"},
 			       $right{"coord$i"},
-			       substr($reference{"$tmp-seq"}, $right{"coord$i"}-1, $readsize+2));
+			       substr($reference{"$tmp-seq"}, $right{"coord$i"}-3, $readsize+4));
 		}
 		print ",";
 	    }
@@ -414,13 +412,13 @@ for(my $i=0;$i<@leftend;$i++) {
 		    print join(":",
 			       $left{"chr$i"},
 			       $reference{$tmp} - $left{"coord$i"},
-			       substr($reference{"$tmp-rc"}, $left{"coord$i"}-1, $readsize+2));
+			       substr($reference{"$tmp-rc"}, $left{"coord$i"}-3, $readsize+4));
 		}
 		else {
 		    print join(":",
 			       $left{"chr$i"},
 			       $left{"coord$i"},
-			       substr($reference{"$tmp-seq"}, $left{"coord$i"}-1, $readsize+2));
+			       substr($reference{"$tmp-seq"}, $left{"coord$i"}-3, $readsize+4));
 		}
 		print ",";
 	    }
@@ -479,7 +477,7 @@ for(my $i=0;$i<@leftend;$i++) {
 			   1,
 			   "+",
 			   ".",
-			   "target=" . substr($reference{"$tmp-seq"}, $left{'coord'}-1, $readsize+2)) . "\n";
+			   "target=" . substr($reference{"$tmp-seq"}, $left{'coord'}-3, $readsize+4)) . "\n";
 		print join("\t",
 			   $tmp,
 			   "pair_align",
@@ -489,7 +487,7 @@ for(my $i=0;$i<@leftend;$i++) {
 			   1,
 			   "-",
 			   ".",
-			   "target=" . substr($reference{"$tmp-rc"}, $bestcoord-1, $readsize+2)) . "\n";
+			   "target=" . substr($reference{"$tmp-rc"}, $bestcoord-3, $readsize+4)) . "\n";
 	    }
 	    else {
 		print join("\t",
@@ -501,7 +499,7 @@ for(my $i=0;$i<@leftend;$i++) {
 			   1,
 			   "-",
 			   ".",
-			   "target=" . substr($reference{"$tmp-rc"}, $left{'coord'}-1, $readsize+2)) . "\n";
+			   "target=" . substr($reference{"$tmp-rc"}, $left{'coord'}-3, $readsize+4)) . "\n";
 		print join("\t",
 			   $tmp,
 			   "pair_align",
@@ -511,7 +509,7 @@ for(my $i=0;$i<@leftend;$i++) {
 			   1,
 			   "+",
 			   ".",
-			   "target=" . substr($reference{"$tmp-seq"}, $bestcoord-1, $readsize+2)) . "\n";
+			   "target=" . substr($reference{"$tmp-seq"}, $bestcoord-3, $readsize+4)) . "\n";
 	    }
 	}
 	else {
@@ -575,16 +573,17 @@ for(my $i=0;$i<@leftend;$i++) {
 			   1,
 			   "-",
 			   ".",
-			   "target=" . substr($reference{"$tmp-rc"}, $bestcoord-1, $readsize+2)) . "\n";
+			   "target=" . substr($reference{"$tmp-rc"}, $bestcoord-3, $readsize+4)) . "\n";
 		print join("\t",
 			   $tmp,
 			   "pair_align",
 			   $right{'line'} . ":" . $rsequence,
 			   $right{'coord'},
 			   $right{'coord'} + $readsize,
+			   1,
 			   "+",
 			   ".",
-			   "target=" . substr($reference{"$tmp-seq"}, $right{'coord'}-1, $readsize+2)) . "\n";
+			   "target=" . substr($reference{"$tmp-seq"}, $right{'coord'}-3, $readsize+4)) . "\n";
 	    }
 	    else {
 		print join("\t",
@@ -595,7 +594,7 @@ for(my $i=0;$i<@leftend;$i++) {
 			   $bestcoord + $readsize,
 			   "+",
 			   ".",
-			   "target=" . substr($reference{"$tmp-seq"}, $bestcoord-1, $readsize+2)) . "\n";
+			   "target=" . substr($reference{"$tmp-seq"}, $bestcoord-3, $readsize+4)) . "\n";
 		print join("\t",
 			   $tmp,
 			   "pair_align",
@@ -604,7 +603,7 @@ for(my $i=0;$i<@leftend;$i++) {
 			   $reference{$tmp} - $right{'coord'} + $readsize,
 			   "-",
 			   ".",
-			   "target=" . substr($reference{"$tmp-rc"}, $right{'coord'}-1, $readsize+2)) . "\n";
+			   "target=" . substr($reference{"$tmp-rc"}, $right{'coord'}-3, $readsize+4)) . "\n";
 	    }
 	}
 	else {
@@ -695,7 +694,7 @@ for(my $i=0;$i<@leftend;$i++) {
 			   1,
 			   "-",
 			   ".",
-			   "target=" . substr($reference{"$tmp-rc"}, $lbestcoord-1, $readsize+2)) . "\n";
+			   "target=" . substr($reference{"$tmp-rc"}, $lbestcoord-3, $readsize+4)) . "\n";
 		print join("\t",
 			   $tmp,
 			   "pair_align",
@@ -705,7 +704,7 @@ for(my $i=0;$i<@leftend;$i++) {
 			   1,
 			   "+",
 			   ".",
-			   "target=" . substr($reference{"$tmp-seq"}, $rbestcoord-1, $readsize+2)) . "\n";
+			   "target=" . substr($reference{"$tmp-seq"}, $rbestcoord-3, $readsize+4)) . "\n";
 	    }
 	    else {
 		print join("\t",
@@ -717,7 +716,7 @@ for(my $i=0;$i<@leftend;$i++) {
 			   1,
 			   "+",
 			   ".",
-			   "target=" . substr($reference{"$tmp-seq"}, $lbestcoord-1, $readsize+2)) . "\n";
+			   "target=" . substr($reference{"$tmp-seq"}, $lbestcoord-3, $readsize+4)) . "\n";
 		print join("\t",
 			   $tmp,
 			   "pair_align",
@@ -727,7 +726,7 @@ for(my $i=0;$i<@leftend;$i++) {
 			   1,
 			   "-",
 			   ".",
-			   "target=" . substr($reference{"$tmp-rc"}, $rbestcoord-1, $readsize+2)) . "\n";
+			   "target=" . substr($reference{"$tmp-rc"}, $rbestcoord-3, $readsize+4)) . "\n";
 	    }
 	}
 	else {

@@ -8,14 +8,12 @@ unless (@ARGV == 1) {
     exit(-1);
 }
 my $fastafile = "$ARGV[0]";
-my @fastaseq=();
 
 open(FAS,"<$fastafile") or die "Can't read input file";
 while(my $line = <FAS>) {
     if($line !~ m/^>/) {
 	$line =~ tr/Cc/Tt/;
-    }
-    push @fastaseq, $line;
+    }  
+    print $line;
 }
 close(FAS);
-print @fastaseq;

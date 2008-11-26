@@ -1,17 +1,14 @@
-#!/usr/bin/env perl
+#!/usr/bin/perl
 
 use Data::Dumper;
 use Getopt::Long;
 use strict;
 use warnings;
 use diagnostics;
-#disable diagnostics;
-#no warnings;
+disable diagnostics;
 
 # Globals, passed as command line options
 my $gfffile = "";
-my $width = 0;
-my $step = 0;
 my $readsize = 0;
 my $output = "-";
 my $verbose = 0;
@@ -23,12 +20,10 @@ my $usage = 0;
 
 my $result = GetOptions (
     "gff|f=s" => \$gfffile,
-    "width|w=i" => \$width,
-    "step|s=i" => \$step,
     "readsize|r=i" => \$readsize,
     "output|o:s" => \$output,
     "verbose|v" => sub {enable diagnostics;use warnings;},
-    "quiet|q" => sub {no warnings;disable diagnostics;},
+    "quiet|q" => sub {disable diagnostics;no warnings;},
     "usage|help|h" => \&usage
     );
 
@@ -40,60 +35,104 @@ if(!($output eq '-')) {
     open(STDOUT, ">", "$output") or die("Can't redirect STDOUT to file: $output");
 }
 
+my %HoH=();
 while(<$GFF>) {
     chomp($_);
     my %record = %{&readGFF($_)};
 
-    if($record{'score'}!=1){next;}
-
-    $record{'feature'} =~ m/([ACGT]){$readsize}/;
-    
+    next if($record{'score'} > 1);
+    $record{'feature'} =~ m/([ACGTN]{$readsize})/;
     my @methylated = split(//, $1);
     my @unmethylated = split(//, (split "=", $record{'attribute'})[1]);
     
-    my %HoH=();
-
     for(my $i=$record{'start'};$i<$record{'end'};$i++) {
-	if($unmethylated[$i] =~ m/[CcGg]/) {
-	    if($record{'strand'} == '+') {
-		if($methylated[$i] =~ m/[Cc]/) {
-		    $HoH{$i}{'c_count'}++;
-		}
-		if($methylated[$i] =~ m/[Tt]/) {
-		    $HoH{$i}{'t_count'}++;
-		}
-		if(join(@methylated[$i..($i+1)]) =~ m/[Cc][Gg]/) {
-		    $HoH{$i}{'cg_count'}++;
-		}
-		if(join(@methylated[$i..($i+2)]) =~ m/[Cc][^Gg][Gg]/) {
-		    $HoH{$i}{'chg_count'}++;
-		}
-		if(join(@methylated[$i..($i+2)]) =~ m/[Cc][^Gg][^Gg]/) {
-		    $HoH{$i}{'chh_count'}++;
-		}
-		print $HoH{$i}{'c_count'}++;
+	my $j = $i - $record{'start'};
+
+	if($record{'feature'} =~ m/\/1:[ACGTN]{$readsize}/ && $unmethylated[$j+2] =~ m/[Cc]/) {
+
+	    if($methylated[$j] =~ m/[Cc]/) {
+		$HoH{$i}{'c_count'}++;
+	    }
+	    elsif($methylated[$j] =~ m/[Tt]/) {
+		$HoH{$i}{'t_count'}++;
 	    }
 
-	    if($record{'strand'} == '-') {
-		if($methylated[$i] =~ m/[Gg]/) {
-		    $HoH{$i}{'c_count'}++;
-		}
-		if($methylated[$i] =~ m/[Aa]/) {
-		    $HoH{$i}{'t_count'}++;
-		}
-		if(join(@methylated[$i..($i+1)]) =~ m/[Cc][Gg]/) {
-		    $HoH{$i}{'cg_count'}++;
-		}
-		if(join(@methylated[$i..($i+2)]) =~ m/[Cc][^Gg][Gg]/) {
-		    $HoH{$i}{'chg_count'}++;
-		}
-		if(join(@methylated[$i..($i+2)]) =~ m/[^Cc][^Cc][Gg]/) {
-		    $HoH{$i}{'chh_count'}++;
-		}
+	    if($unmethylated[$j+3] =~ m/[Gg]/) {
+		$HoH{$i}{'cg_count'}++;
 	    }
-	}	   
-    }  
+	    elsif(join("",@unmethylated[($j+3)..($j+4)]) =~ m/[^Gg][Gg]/) {
+		$HoH{$i}{'chg_count'}++;
+	    }
+	    elsif(join("",@unmethylated[($j+3)..($j+4)]) =~ m/[^Gg][^Gg]/) {
+		$HoH{$i}{'chh_count'}++;
+	    }
+
+	    $HoH{$i}{'coord'}=$i;
+	    $HoH{$i}{'chr'}=$record{'seqname'};
+	    $HoH{$i}{'strand'}=$record{'strand'};
+	}
+	
+# 	elsif($record{'feature'} =~ m/\/2:[ACGTN]{$readsize}/ && $unmethylated[$j+2] =~ m/[Gg]/) {
+	    
+# 	    if($methylated[$j] =~ m/[Gg]/) {
+# 		$HoH{$i}{'c_count'}++;
+# 	    }
+# 	    elsif($methylated[$j] =~ m/[Aa]/) {
+# 		$HoH{$i}{'t_count'}++;
+# 	    }
+
+# 	    if($unmethylated[$j+1] =~ m/[Gg]/) {
+# 		$HoH{$i}{'cg_count'}++;
+# 	    }
+# 	    elsif(join("",@unmethylated[$j..($j+1)]) =~ m/[Cc][^Cc]/) {
+# 		$HoH{$i}{'chg_count'}++;
+# 	    }
+# 	    elsif(join("",@unmethylated[$j..($j+1)]) =~ m/[^Cc][^Cc]/) {
+# 		$HoH{$i}{'chh_count'}++;
+# 	    }
+
+# 	    $HoH{$i}{'coord'}=$i;
+# 	    $HoH{$i}{'chr'}=$record{'seqname'};
+# 	}
+    }
 }
+
+for my $i (sort keys %HoH) {
+    if(!exists $HoH{$i}{'c_count'} && !exists $HoH{$i}{'t_count'}) {
+	$HoH{$i}{'score'} = 0;
+    }
+    else {
+	$HoH{$i}{'score'} = $HoH{$i}{'c_count'}/($HoH{$i}{'c_count'}+$HoH{$i}{'t_count'});
+    }
+
+    my $context = ".";
+    if($HoH{$i}{'cg_count'}>$HoH{$i}{'chg_count'} && $HoH{$i}{'g_count'}>$HoH{$i}{'chh_count'}) {
+	$context = "CG";
+    }
+    elsif($HoH{$i}{'chh_count'}>$HoH{$i}{'chg_count'}) {
+	$context = "CHH";
+    }
+    elsif($HoH{$i}{'chg_count'}>0) {
+	$context = "CHG";
+    }
+
+    print join("\t",
+	       $HoH{$i}{'chr'},
+	       "dz_cm",
+	       $context,
+	       $HoH{$i}{'coord'},
+	       $HoH{$i}{'coord'},
+	       sprintf("%.3f", $HoH{$i}{'score'}),
+	       $HoH{$i}{'strand'},
+	       ".",
+	       join(";", "c=$HoH{$i}{'c_count'}", "t=$HoH{$i}{'t_count'}")
+	), "\n";
+}
+
+#print Dumper(\%HoH);
+
+
+
 
 close($GFF);
 close(STDOUT);
@@ -133,18 +172,17 @@ sub readGFF {
 # }
 
 sub usage {
-    if ($usage || @ARGV<4) {
+    if ($usage || @ARGV<2) {
 	print STDERR
 	    "countMethylation.pl <PARAMETERS> [OPTIONS]
 \t<--gff>\tGFF alignment input file
-\t<--width>\tSliding window width
-\t<--step>\tSlidting window step size
 \t<--readsize>\tNo. of bps per read
 \t[--output]\tFilename to write results to (default is STDOUT)
 \t[--verbose]\tOutput perl's diagnostic and warning messages
 \t[--quiet]\tSupress perl's diagnostic and warning messages
 \t[--usage]\tPrint this information
-Takes a GFF-formatted input file with alignment information and calculates methylation levels.
+Takes a GFF-formatted input file with alignment information.
+Calculates methylation levels and contexts for each cytosine in scaffold.
 Methylated sequence is assumed to be in last field of 'feature' column.
 Original reference sequence is assumed to be in the 'attribute' column.
 ";
