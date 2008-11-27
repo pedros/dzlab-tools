@@ -6,8 +6,6 @@ use diagnostics;
 
 use List::Util qw(max);
 
-die("Usage:\tcount_methylation.pl <gff alignment file> <read size>") unless @ARGV==2;
-
 open(my $GFF, "<", $ARGV[0]);
 my $readsize = $ARGV[1];
 
@@ -26,8 +24,8 @@ print join("\t",
 while(<$GFF>) {
     chomp($_);
     my %record = %{&readGFF($_)};
-    next if($record{'score'} > 1);
 
+    next if($record{'score'} > 1);
     if($record{'score'} > 1) {
     print join("\t",
 	       $record{'seqname'},
@@ -42,87 +40,99 @@ while(<$GFF>) {
     next;
     }
 
-    $record{'feature'} =~ m/([ACGTN]{$readsize})/;   
+    $record{'feature'} =~ m/([ACGTN]{$readsize})/;
     my @methylated = split(//, $1);
     my @unmethylated = split(//, (split "=", $record{'attribute'})[1]);
     my ($c_count, $t_count, $cg_count, $chg_count, $chh_count, $tg_count, $thg_count, $thh_count, $ratio) = (0,0,0,0,0,0,0,0,0);
 
-    for(my $i=$record{'start'};$i<$record{'end'}+2;$i++) {
+    for(my $i=$record{'start'};$i<$record{'end'};$i++) {
 	my $j = $i - $record{'start'};
-	print STDERR $j, "\n";
 
-	if($j > 1 && $record{'feature'} =~ m/\/1:[ACGTN]{$readsize}/ && $unmethylated[$j] =~ m/[Cc]/) {
+	if($record{'feature'} =~ m/\/1:[ACGTN]{$readsize}/ && $unmethylated[$j+2] =~ m/[Cc]/) {
 
-	    if($methylated[$j-2] =~ m/[Cc]/) {
+	    if($methylated[$j] =~ m/[Cc]/) {
 		$c_count++;
+		if($unmethylated[$j+3] =~ m/[Gg]/) {
+		    $cg_count++;
+		}
+		elsif(join("",@unmethylated[($j+3)..($j+4)]) =~ m/[^Gg][Gg]/) {
+		    $chg_count++;
+		}
+		elsif(join("",@unmethylated[($j+3)..($j+4)]) =~ m/[^Gg][^Gg]/) {
+		    $chh_count++;
+		}
 	    }
-	    if($methylated[$j-2] =~ m/[Tt]/) {
+	    elsif($methylated[$j] =~ m/[Tt]/) {
 		$t_count++;
+		if($unmethylated[$j+3] =~ m/[Gg]/) {
+		    $tg_count++;
+		}
+		elsif(join("",@unmethylated[($j+3)..($j+4)]) =~ m/[^Gg][Gg]/) {
+		    $thg_count++;
+		}
+		elsif(join("",@unmethylated[($j+3)..($j+4)]) =~ m/[^Gg][^Gg]/) {
+		    $thh_count++;
+		}
 	    }
-
-	    if(join("",@unmethylated[$j..($j+1)]) =~ m/[Cc][Gg]/) {
-		$cg_count++;
-	    }
-	    if(join("",@unmethylated[$j..($j+2)]) =~ m/[Cc][^Gg][Gg]/) {
-		$chg_count++;
-	    }
-	    if(join("",@unmethylated[$j..($j+2)]) =~ m/[Cc][^Gg][^Gg]/) {
-		$chh_count++;
-	    }
-
-	    if(join("",@unmethylated[$j..($j+1)]) =~ m/[Tt][Gg]/) {
-		$tg_count++;
-	    }
-	    if(join("",@unmethylated[$j..($j+2)]) =~ m/[Tt][^Gg][Gg]/) {
-		$thg_count++;
-	    }
-	    if(join("",@unmethylated[$j..($j+2)]) =~ m/[Tt][^Gg][^Gg]/) {
-		$thh_count++;
-	    }
-
 	}
 
-	if($j < $record{'end'} && $record{'feature'} =~ m/\/2:[ACGTN]{$readsize}/ && $unmethylated[$j] =~ m/[Gg]/) {
+	elsif($record{'feature'} =~ m/\/2:[ACGTN]{$readsize}/ && $unmethylated[$j+2] =~ m/[Gg]/) {
 
-	    if($j > 1 && $methylated[$j-2] =~ m/[Gg]/) {
+	    if($methylated[$j] =~ m/[Gg]/) {
 		$c_count++;
+		if($unmethylated[$j+1] =~ m/[Cc]/) {
+		    $cg_count++;
+		}
+		elsif(join("",@unmethylated[$j..($j+1)]) =~ m/[Cc][^Cc]/) {
+		    $chg_count++;
+		}
+		elsif(join("",@unmethylated[$j..($j+1)]) =~ m/[^Cc][^Cc]/) {
+		    $chh_count++;
+		}
+		
 	    }
-	    if($j > 1 && $methylated[$j-2] =~ m/[Aa]/) {
+	    elsif($methylated[$j] =~ m/[Aa]/) {
 		$t_count++;
-	    }
-
-	    if($j > 0 && join("",@unmethylated[$j..($j+1)]) =~ m/[Cc][Gg]/) {
-		$cg_count++;
-	    }
-	    if(join("",@unmethylated[$j..($j+2)]) =~ m/[Cc][^Cc][Gg]/) {
-		$chg_count++;
-	    }
-	    if(join("",@unmethylated[$j..($j+2)]) =~ m/[^Cc][^Cc][Gg]/) {
-		$chh_count++;
-	    }
-
-	    if($j > 0 && join("",@unmethylated[$j..($j+1)]) =~ m/[Cc][Aa]/) {
-		$tg_count++;
-	    }
-	    if(join("",@unmethylated[$j..($j+2)]) =~ m/[Cc][^Cc][Aa]/) {
-		$thg_count++;
-	    }
-	    if(join("",@unmethylated[$j..($j+2)]) =~ m/[^Cc][^Cc][Aa]/) {
-		$thh_count++;
-	    }
+		if($unmethylated[$j+1] =~ m/[Cc]/) {
+		    $tg_count++;
+		}
+		elsif(join("",@unmethylated[$j..($j+1)]) =~ m/[Cc][^Cc]/) {
+		    $thg_count++;
+		}
+		elsif(join("",@unmethylated[$j..($j+1)]) =~ m/[^Cc][^Cc]/) {
+		    $thh_count++;
+		}
+	    }    
 	}
     }
     
-    my $context = ".";
-    if($cg_count>$chg_count && $cg_count>$chh_count) {
-	$context = "CG";
-    }
-    elsif($chh_count>$chg_count) {
-	$context = "CHH";
-    }
-    elsif($chg_count>0) {
-	$context = "CHG";
-    }
+    my %contexts=();
+    $contexts{'cg_count'}=$cg_count;
+    $contexts{'chg_count'}=$chg_count;
+    $contexts{'chh_count'}=$chh_count;
+    $contexts{'tg_count'}=$tg_count;
+    $contexts{'thg_count'}=$thg_count;
+    $contexts{'thh_count'}=$thh_count;
+
+    my $maxval = max(values %contexts);
+    %contexts = reverse %contexts;
+    
+    my $context = $contexts{$maxval};
+    $context =~ s/_count//;
+    $context =~ tr/a-z/A-Z/;
+
+
+#     my ($context, $c_context, $t_context);
+#     if($cg_count>$chg_count && $cg_count>$chh_count) {$c_context = "cg";}
+#     elsif($chh_count>$chg_count) {$c_context = "chh";}
+#     elsif($chg_count>0) {$c_context = "chg";}
+
+#     if($cg_count>$chg_count && $cg_count>$chh_count) {$t_context = "tg";}
+#     elsif($chh_count>$chg_count) {$t_context = "thh";}
+#     elsif($chg_count>0) {$t_context = "thg";}
+
+#     if("${c_context}_count" >  "${t_context}_count") {$context = $c_context;}
+#     else {$context = $t_count;}
     
     if($c_count == 0 && $t_count == 0) {
 	$ratio = 0;
@@ -139,7 +149,7 @@ while(<$GFF>) {
 	       $record{'end'},
 	       sprintf("%.5f", $ratio),
 	       $record{'strand'},
-	       $context,
+	       $context ,
 	       join(";",
 		    "c=$c_count",
 		    "t=$t_count",
