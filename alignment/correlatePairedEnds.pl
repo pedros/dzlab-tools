@@ -592,6 +592,7 @@ for(my $i=0;$i<@leftend;$i++) {
 			   $left{'line'} . ":" . $lsequence,
 			   $bestcoord,
 			   $bestcoord + $readsize,
+			   1,
 			   "+",
 			   ".",
 			   "target=" . substr($reference{"$tmp-seq"}, $bestcoord-3, $readsize+4)) . "\n";
@@ -601,6 +602,7 @@ for(my $i=0;$i<@leftend;$i++) {
 			   $right{'line'} . ":" . $rsequence,
 			   $reference{$tmp} - $right{'coord'},
 			   $reference{$tmp} - $right{'coord'} + $readsize,
+			   1,
 			   "-",
 			   ".",
 			   "target=" . substr($reference{"$tmp-rc"}, $right{'coord'}-3, $readsize+4)) . "\n";

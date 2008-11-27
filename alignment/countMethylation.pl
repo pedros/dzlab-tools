@@ -105,7 +105,7 @@ while(<$GFF>) {
 
 	    # grab some necessary information into the data structure
 	    # we will print this information later
-	    $HoH{$i}{'coord'}=$i;
+	    $HoH{$i}{'coord'}=$i+1;
 	    $HoH{$i}{'chr'}=$record{'seqname'};
 	    $HoH{$i}{'strand'}=$record{'strand'};
 	}
@@ -139,7 +139,7 @@ while(<$GFF>) {
 
 	    # grab some necessary information into the data structure
 	    # we will print this information later
-	    $HoH{$i}{'coord'}=$i;
+	    $HoH{$i}{'coord'}=$i+1;
 	    $HoH{$i}{'chr'}=$record{'seqname'};
 	    $HoH{$i}{'strand'}=$record{'strand'};
 	}
@@ -181,10 +181,12 @@ for my $i (sort {$a <=> $b} keys %HoH) {
 	       ".",
 	       join(";", "c=$HoH{$i}{'c_count'}", "t=$HoH{$i}{'t_count'}", "cg=$HoH{$i}{'cg_count'}", "chg=$HoH{$i}{'chg_count'}", "chh=$HoH{$i}{'chh_count'}")
 	), "\n";
+
+    delete $HoH{$i};
 }
 
 # debugging information
-#print STDERR Dumper(\%HoH);
+#print Dumper(\%HoH);
 
 close($GFF);
 close(STDOUT);
