@@ -1,4 +1,26 @@
 #!/usr/bin/perl
+#
+# Last edited 2008-12-02
+# Copyright 2008 Pedro Silva <psilva@dzlab.pmb.berkeley.edu/>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#
+
+=head1 Synopsis
+Takes a paired ends alignment output in gff form (from correlatePairedEnds.pl) and 
+outputs a gff file in which each record is an individual cytosin bp in the scaffold sequence.
+=cut
 
 use Data::Dumper;
 use Getopt::Long;
@@ -46,7 +68,7 @@ print join("\t",
 	   "Ratio",
 	   "Strand",
 	   "Frame",
-	   "C;T;CG;CHG;CHH;TG;THG;THH",
+	   "'C' count; 'T' count",
     ), "\n";
 
 # declare and initialize a hash of hashes, where each inner hash's key is a 'C' coordinate
@@ -79,6 +101,9 @@ while(<$GFF>) {
 	# sets $k to $record{'end'} for reverse strand coordinates
 	my $k = $record{'end'} - $j;
 
+	# Since the input coordinates are absolute (ie. from the forward strand)
+	# if a particular read maps to the reverse strand, the coordinates for any
+	# 'c's hit need to be reversed
 	my $coord = $i;
 	$coord = $k if($record{'strand'} eq '-');
 
@@ -113,8 +138,7 @@ while(<$GFF>) {
 	    # we will print this information later
 	    $HoH{$coord}{'coord'} = $coord;
 	    $HoH{$coord}{'chr'} = $record{'seqname'};
-	    $HoH{$coord}{'strand'} .= $record{'strand'};
-	    $HoH{$coord}{'end'} .= "/1";	
+	    $HoH{$coord}{'strand'} = $record{'strand'};
 	}
 	
 	# checks that we're looking at a right/2 sequence AND current character is a 'C'
@@ -149,8 +173,7 @@ while(<$GFF>) {
 	    # we will print this information later
 	    $HoH{$coord}{'coord'} = $coord;
 	    $HoH{$coord}{'chr'} = $record{'seqname'};
-	    $HoH{$coord}{'strand'} .= $record{'strand'};
-	    $HoH{$coord}{'end'} .= "/2";
+	    $HoH{$coord}{'strand'} = $record{'strand'};
 	}
     }
 }
@@ -178,9 +201,11 @@ for my $i (sort {$a <=> $b} keys %HoH) {
     elsif($HoH{$i}{'chh_count'}>$HoH{$i}{'chg_count'}) {$context = "CHH";}
     elsif($HoH{$i}{'chg_count'}>0) {$context = "CHG";}
 
+    # checks that the context for any given 'c' is determinable
+    # if not just output a '.' in its place
     if(($HoH{$i}{'cg_count'} > 0 && $HoH{$i}{'chg_count'} > 0) ||
        ($HoH{$i}{'cg_count'} > 0 && $HoH{$i}{'chh_count'} > 0) ||
-       ($HoH{$i}{'chg_count'} > 0 && $HoH{$i}{'chh_count'} > 0)) {$context=$HoH{$i}{'end'};}
+       ($HoH{$i}{'chg_count'} > 0 && $HoH{$i}{'chh_count'} > 0)) {$context = ".";}
 
     # prints a single gff record
     print join("\t",
@@ -192,7 +217,7 @@ for my $i (sort {$a <=> $b} keys %HoH) {
 	       sprintf("%.3f", $HoH{$i}{'score'}),
 	       $HoH{$i}{'strand'},
 	       ".",
-	       join(";", "c=$HoH{$i}{'c_count'}", "t=$HoH{$i}{'t_count'}", "cg=$HoH{$i}{'cg_count'}", "chg=$HoH{$i}{'chg_count'}", "chh=$HoH{$i}{'chh_count'}")
+	       join(";", "c=$HoH{$i}{'c_count'}", "t=$HoH{$i}{'t_count'}")
 	), "\n";
 
     delete $HoH{$i};
