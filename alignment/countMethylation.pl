@@ -61,7 +61,7 @@ while(<$GFF>) {
     my %record = %{&readGFF($_)};
 
     # skips records with non-unique matches
-    next if($record{'score'} > 1);
+    next if($record{'score'} != 1);
 
     # grabs methylated sequence from gff file
     # assumes sequence is exactly $readsize bps long
@@ -74,74 +74,83 @@ while(<$GFF>) {
     
     # loops through each character in current sequences
     for(my $i=$record{'start'};$i<$record{'end'};$i++) {
-	# sets $j to 0
+	# sets $j to 0 for forward strand coordinates
 	my $j = $i - $record{'start'};
+	# sets $k to $record{'end'} for reverse strand coordinates
+	my $k = $record{'end'} - $j;
+
+	my $coord = $i;
+	$coord = $k if($record{'strand'} eq '-');
 
 	# checks that we're looking at a left/1 sequence AND current character is a 'C'
 	# this regex is adapted to the Solexa sequences we have, so it might change in the future
 	# we're looking 2 characters ahead in the scaffold because it has 2 extra chars in the beginning
-	if($record{'feature'} =~ m/\/1:[ACGTN]{$readsize}/ && $unmethylated[$j+2] =~ m/[Cc]/) {
+ 	if($unmethylated[$j+2] =~ m/[Cc]/ && 
+ 	   $record{'feature'} =~ m/\/1:[ACGTN]{$readsize}/) {
 
 	    # checks what happened in the methylated sequence
 	    # and updates the appropriate 'c' or 't' count
 	    if($methylated[$j] =~ m/[Cc]/) {
-		$HoH{$i}{'c_count'}++;
+		$HoH{$coord}{'c_count'}++;
 	    }
 	    elsif($methylated[$j] =~ m/[Tt]/) {
-		$HoH{$i}{'t_count'}++;
+		$HoH{$coord}{'t_count'}++;
 	    }
 
 	    # checks the context by looking ahead +3 or +3..+4 bps
 	    # because the scaffold read is displaced by 2 bps
 	    if($unmethylated[$j+3] =~ m/[Gg]/) {
-		$HoH{$i}{'cg_count'}++;
+		$HoH{$coord}{'cg_count'}++;
 	    }
 	    elsif(join("",@unmethylated[($j+3)..($j+4)]) =~ m/[^Gg][Gg]/) {
-		$HoH{$i}{'chg_count'}++;
+		$HoH{$coord}{'chg_count'}++;
 	    }
 	    elsif(join("",@unmethylated[($j+3)..($j+4)]) =~ m/[^Gg][^Gg]/) {
-		$HoH{$i}{'chh_count'}++;
+		$HoH{$coord}{'chh_count'}++;
 	    }
 
 	    # grab some necessary information into the data structure
 	    # we will print this information later
-	    $HoH{$i}{'coord'}=$i+1;
-	    $HoH{$i}{'chr'}=$record{'seqname'};
-	    $HoH{$i}{'strand'}=$record{'strand'};
+	    $HoH{$coord}{'coord'} = $coord;
+	    $HoH{$coord}{'chr'} = $record{'seqname'};
+	    $HoH{$coord}{'strand'} .= $record{'strand'};
+	    $HoH{$coord}{'end'} .= "/1";	
 	}
 	
 	# checks that we're looking at a right/2 sequence AND current character is a 'C'
 	# this regex is adapted to the Solexa sequences we have, so it might change in the future
 	# we're looking 2 characters before in the scaffold because it has 2 extra chars in the beginning
 	# AND we're looking in the reverse strand, so the context goes right-to-left
-	elsif($record{'feature'} =~ m/\/2:[ACGTN]{$readsize}/ && $unmethylated[$j+2] =~ m/[Gg]/) {
-	    
+	elsif($unmethylated[$j+2] =~ m/[Gg]/ && 
+	      $record{'feature'} =~ m/\/2:[ACGTN]{$readsize}/) {
+
 	    # checks what happened in the methylated sequence
 	    # and updates the appropriate 'c' or 't' count
 	    if($methylated[$j] =~ m/[Gg]/) {
-		$HoH{$i}{'c_count'}++;
+		$HoH{$coord}{'c_count'}++;
 	    }
 	    elsif($methylated[$j] =~ m/[Aa]/) {
-		$HoH{$i}{'t_count'}++;
+		$HoH{$coord}{'t_count'}++;
 	    }
 
 	    # checks the context by looking behind +1 or +0..+1 bps
 	    # because the scaffold read is displaced by 2 bps
 	    if($unmethylated[$j+1] =~ m/[Cc]/) {
-		$HoH{$i}{'cg_count'}++;
+		$HoH{$coord}{'cg_count'}++;
 	    }
 	    elsif(join("",@unmethylated[$j..($j+1)]) =~ m/[Cc][^Cc]/) {
-		$HoH{$i}{'chg_count'}++;
+		$HoH{$coord}{'chg_count'}++;
 	    }
 	    elsif(join("",@unmethylated[$j..($j+1)]) =~ m/[^Cc][^Cc]/) {
-		$HoH{$i}{'chh_count'}++;
+		$HoH{$coord}{'chh_count'}++;
 	    }
 
 	    # grab some necessary information into the data structure
 	    # we will print this information later
-	    $HoH{$i}{'coord'}=$i+1;
-	    $HoH{$i}{'chr'}=$record{'seqname'};
-	    $HoH{$i}{'strand'}=$record{'strand'};
+	    $HoH{$coord}{'coord'} = $coord;
+	    $HoH{$coord}{'chr'} = $record{'seqname'};
+	    $HoH{$coord}{'strand'} .= $record{'strand'};
+	    $HoH{$coord}{'end'} .= "/2";
 	}
     }
 }
@@ -168,6 +177,10 @@ for my $i (sort {$a <=> $b} keys %HoH) {
     if($HoH{$i}{'cg_count'}>$HoH{$i}{'chg_count'} && $HoH{$i}{'cg_count'}>$HoH{$i}{'chh_count'}) {$context = "CG";}
     elsif($HoH{$i}{'chh_count'}>$HoH{$i}{'chg_count'}) {$context = "CHH";}
     elsif($HoH{$i}{'chg_count'}>0) {$context = "CHG";}
+
+    if(($HoH{$i}{'cg_count'} > 0 && $HoH{$i}{'chg_count'} > 0) ||
+       ($HoH{$i}{'cg_count'} > 0 && $HoH{$i}{'chh_count'} > 0) ||
+       ($HoH{$i}{'chg_count'} > 0 && $HoH{$i}{'chh_count'} > 0)) {$context=$HoH{$i}{'end'};}
 
     # prints a single gff record
     print join("\t",
