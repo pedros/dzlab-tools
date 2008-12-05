@@ -50,13 +50,13 @@ my $result = GetOptions (
     "usage|help|h" => \&usage
     );
 
-# opens gff file
-open(my $GFF, "<", $gfffile) or die("Can't read file: $gfffile");
-
 # redirects STDOUT to file if specified by user
 if(!($output eq '-')) {
     open(STDOUT, ">", "$output") or die("Can't redirect STDOUT to file: $output");
 }
+
+# opens gff file
+open(my $GFF, "<", $gfffile) or die("Can't read file: $gfffile");
 
 # prints out a commented line with header fields
 print join("\t",
@@ -177,6 +177,8 @@ while(<$GFF>) {
 	}
     }
 }
+close($GFF);
+
 
 # loops through every initialized key in main hash
 # keys are sorted, so the output is going to be sorted by starting coordinate
@@ -226,7 +228,6 @@ for my $i (sort {$a <=> $b} keys %HoH) {
 # debugging information
 #print Dumper(\%HoH);
 
-close($GFF);
 close(STDOUT);
 # done
 
