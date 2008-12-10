@@ -53,36 +53,44 @@ print join("\t",
 	   "'C' count; 'T' count",
     ), "\n";
 
-
-my %context = ();
-
-while(<$GFF>) {
-    my %record = %{&readGFF($_)};
-    if(!exists $context{$record{'feature'}}) {
-
-    }
-}
-
 my @data = <$GFF>;
 for(my $i = 0; $i < @data;) {
-    next if($data[$i] =~ m/\s*#/);
+
+    my ($c_total, $t_total, $score) = (0, 0, 0);
+    my $start = $record{'start'};
+    my $end = $start + $width;
+    my $chr;
+
+    foreach $line (@data[$i..($i + $width)]) {		
+	chomp($line);
+	next if($line =~ m/\s*#/);
 	
-    my ($c_total, $t_total) = (0, 0);
-    foreach $k (@data[$i..($i + $width)]) {		
-	chomp($k);
+	my %record = %{&readGFF($line)};
+
+	my ($c_tmp, $t_tmp) = split(/;/, $record{'attribute'});
+	$c_tmp =~ m/\d+/;
+	$t_tmp =~ m/\d+/;
+	$chr = $record{'seqname'};
 	
-	my %record = %{&readGFF($_)};
-	
-	my ($c_count, $t_count) = split(/;/, $record{'attribute'});
-	$c_count =~ m/\d+/;
-	$t_count =~ m/\d+/;
-	
-	my $score = $record{'score'};
-	my $start = $record{'start'};
-	
-	
+	$c_count += $c_tmp;
+	$t_count += $t_tmp;
 
     }
+
+    $score = $c_count / ($c_count + $t_count);
+
+    print join("\t",
+	       $chr,
+	       "avg",
+	       ".",
+	       $start,
+	       $end,
+	       $score,
+	       ".",
+	       ".",
+	       "c=$c_count;t=$t_count",
+	), "\n";
+
     $i += $step;
 }
 
