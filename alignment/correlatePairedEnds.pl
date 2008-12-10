@@ -91,7 +91,7 @@ my %reference=();
     for(my $j=0;$j<@idx;$j++) {
 	if($j==scalar(@idx)-1) {$line = join("", @fastaseq[$idx[$j]+1..@fastaseq-1]);}
 	else {$line = join("", @fastaseq[$idx[$j]+1..$idx[$j+1]-1]);}
-	$line=~s/\n//g;
+	$line=~s/[\n\r]//g;
 	$reference{ $dsc[$j] } = length($line);
 	$reference{ "$dsc[$j]-seq" } = $line;
 	$reference{ "$dsc[$j]-rc" } = &reverseComp($line);
@@ -129,6 +129,8 @@ for(my $i=0;$i<@leftend;$i++) {
     my $lsequence=$left{'sequence'};
     my $rsequence=$right{'sequence'};
 
+    $lsequence =~ s/[\r\n]//g;
+    $rsequence =~ s/[\r\n]//g;
 
     ##### NM - NM #####
     ##### No matches on either end #####

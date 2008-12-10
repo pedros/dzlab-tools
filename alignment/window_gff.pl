@@ -53,49 +53,73 @@ print join("\t",
 	   "'C' count; 'T' count",
     ), "\n";
 
+print STDERR "Sorting $gfffile by chromosomes, features, starting and ending coordinates";
 my @data = <$GFF>;
+@data = &gff_sort(@data);
+
+print STDERR @data;exit;
+
+print STDERR "Windowing data at $width bp width with $step bp intervals";
 for(my $i = 0; $i < @data;) {
 
-    my ($c_total, $t_total, $score) = (0, 0, 0);
-    my $start = $record{'start'};
-    my $end = $start + $width;
-    my $chr;
+    my ($c_count, $t_count, $score) = (0, 0, 0);
 
-    foreach $line (@data[$i..($i + $width)]) {		
+    next if($data[$i] =~ m/\s*#/);
+
+    my $start = ${&readGFF($data[$i])}{'start'};
+    print STDERR "START: $start";
+    my $end = $start + $width;
+    my ($chromosome, $context);
+
+    foreach my $line (@data[$i..($i + $width)]) {		
 	chomp($line);
 	next if($line =~ m/\s*#/);
-	
+
 	my %record = %{&readGFF($line)};
+
+	last if( ($record{'seqname'} ne $chromosome) or
+		 ($record{'feature'} ne $context) );
+
+	$chromosome = $record{'seqname'};
+	$context = $record{'feature'};
 
 	my ($c_tmp, $t_tmp) = split(/;/, $record{'attribute'});
 	$c_tmp =~ m/\d+/;
 	$t_tmp =~ m/\d+/;
-	$chr = $record{'seqname'};
-	
 	$c_count += $c_tmp;
 	$t_count += $t_tmp;
-
     }
 
-    $score = $c_count / ($c_count + $t_count);
-
     print join("\t",
-	       $chr,
+	       $chromosome,
 	       "avg",
 	       ".",
 	       $start,
 	       $end,
-	       $score,
+	       $c_count / ($c_count + $t_count),
 	       ".",
 	       ".",
 	       "c=$c_count;t=$t_count",
 	), "\n";
-
     $i += $step;
 }
+print STDERR "Done";
 
 close($GFF);
 close(STDOUT);
+
+
+# gff_sort sorts gff lines by sequence name, feature, start, and end coordinates
+#-----------------sortArray-------------------------------
+# sorts input array at fourth field delimited by tabs (starting coordinates)
+# returns array sorted numerically on the 4th field
+sub gff_sort {
+    return sort {
+	(split '\t', $a)[0] cmp (split '\t', $b)[0] or
+	    (split '\t', $a)[2] cmp (split '\t', $b)[2] or
+	    (split '\t', $a)[3] <=> (split '\t', $b)[3]
+    } @_;
+}
 
 # readGFF reads in a single GFF line, and outputs a hash reference
 sub readGFF {
@@ -113,7 +137,6 @@ sub readGFF {
 	);
     return \%rec;
 }
-
 
 # prints out usage information
 sub usage {

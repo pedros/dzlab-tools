@@ -18,14 +18,12 @@ open(my $MUTATED, "<", "$mutated") or die("Can't open $mutated");
 
 while(my $mutline = <$MUTATED>) {
 
-#    next if((split "\t", $mutline)[5] == 0);
-
     if($mutline =~ m/\/1:[ACGTN]{$readsize}/) {
 	my $lorigline = <$LORIG>;
 	if($lorigline =~ m/^>/) {
 	    $lorigline = <$LORIG>;
 	}
-	chomp($lorigline);
+	$lorigline =~ s/[\n\r]//g;
 	$mutline =~ s/[ACGTN]{$readsize}/$lorigline/ ;
     }
 
@@ -34,7 +32,7 @@ while(my $mutline = <$MUTATED>) {
 	if($rorigline =~ m/^>/) {
 	    $rorigline = <$RORIG>;
 	}
-	chomp($rorigline);
+	$rorigline =~ s/[\n\r]//g;
 	$mutline =~ s/[ACGTN]{$readsize}/$rorigline/ ;    
     }
 
