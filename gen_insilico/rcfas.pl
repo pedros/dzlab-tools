@@ -47,11 +47,11 @@ my (@idx, @dsc, @chr)=();
 # saves line number of each new chromosome in @idx and contents in @dsc
 for(my $i=0;$i<@fastaseq;$i++) {
     if($fastaseq[$i] =~ m/^>/) {
-	$fastaseq[$i] =~ s/\n//g;
+	$fastaseq[$i] =~ s/[\n\r]//g;
 	$fastaseq[$i] = (split '\s', "$fastaseq[$i]")[0];
 	$fastaseq[$i] .= "\n";
 	my $line = $fastaseq[$i];
-	$line =~ s/chr/RC_chr/i;
+	$line =~ s/^>(.+)/>RC_$1/i;
 	push @idx, $i;
 	push @dsc, $line;
     }
@@ -66,7 +66,7 @@ for(my $j=0;$j<@idx;$j++) {
     push @chr, $dsc[$j];
     if($j==scalar(@idx)-1) {$line = join("", @fastaseq[$idx[$j]+1..@fastaseq-1]);}
     else {$line = join("", @fastaseq[$idx[$j]+1..$idx[$j+1]-1]);}
-    $line =~ s/\n//g;
+    $line =~ s/[\n\r]//g;
     $line =~ tr/ACGTacgt/TGCAtgca/;
     $line = reverse $line;
     my $numlines=length($line)/80;

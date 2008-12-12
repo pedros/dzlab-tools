@@ -18,9 +18,10 @@ my $usage = 0;
 
 # Initial check of command line parameters
 &usage;
+my @argv = @ARGV;
 
 # Grabs and parses command line options
-my $result = GetOptions (
+my $result = GetOptions ( 
     "gff|f:s" => \$gfffile,
     "width|w=i" => \$width,
     "step|s=i" => \$step,
@@ -41,14 +42,20 @@ if (!($gfffile eq '-')) {open($GFF, "<", $gfffile) or die("Can't read file: $gff
 else {$GFF = "STDIN";}
 
 # reads in data
-my @data = <$GFF>;
+my @data;
+while (<$GFF>) {
+    chomp;
+    next if ($_ =~ m/^#.*$|^\s*$/);
+    push @data, $_;
+}
 close($GFF) if ($GFF ne "STDIN");
 
 # prints out header fields that contain gff v3 header, generating program, time, and field names
-&gff_print_header ($0);
+&gff_print_header ($0, @argv);
 
 # gets indices for chromosome changes (tracks changes on 0th field - seqname)
-my @locsindex = &gff_find_array ( 0, &gff_sort (@data) );
+@data =  &gff_sort (@data);
+my @locsindex = &gff_find_array ( 0, @data );
 
 for (my $i = 0; $i < @locsindex; $i++) {
 
@@ -65,10 +72,10 @@ for (my $i = 0; $i < @locsindex; $i++) {
 
     for (my $l = 0; $l < @featureindex; $l++) {
 	if ($l+1<@featureindex) {
-	    	&gff_sliding_window ( $width, $step, &array_split ($featureindex[$l], $featureindex[$l+1], @subdata) );
+	    &gff_sliding_window ( $width, $step, &array_split ($featureindex[$l], $featureindex[$l+1], @subdata) );
 	}
 	else {
-	    	&gff_sliding_window ( $width, $step, &array_split ($featureindex[$l], scalar(@subdata), @subdata) );
+	    &gff_sliding_window ( $width, $step, &array_split ($featureindex[$l], scalar(@subdata), @subdata) );
 	}
     }
 }
@@ -79,38 +86,53 @@ close(STDOUT);
 sub gff_sliding_window {
     my ($width, $step, @data) = @_;
 
+    print STDERR "windowing data on sequence ${&gff_read ($data[scalar(@data)-1])}{'seqname'} and context ${&gff_read ($data[scalar(@data)-1])}{'feature'} with $width bp width and $step bp step...\n";
+
     my $lastcoord = ${&gff_read ($data[scalar(@data)-1])}{'end'};
+    my $lastrecord = 0;
 
     for (my $i = 1; $i < $lastcoord; $i++) {
 	
-	my ($c_count, $t_count, $score) = (0, 0, 0);
+	my ($c_count, $t_count, $score) = (0, 0, -0.1);
 	
-	my @range = &gff_filter_by_coord ($i, $i + $width, @data);
+	my @range = &gff_filter_by_coord ($i, $i + $width, @data[$lastrecord..scalar(@data)]);
+
+	$lastrecord = shift (@range);
+
+	my ($seqname, $context);
 	
 	foreach my $k (@range) {
-	    my %record = &gff_read ($k);
+	    my %record = %{&gff_read ($k)};
 	    my ($c_tmp, $t_tmp) = split(/;/, $record{'attribute'});
-	    $c_tmp =~ m/\d+/;
-	    $t_tmp =~ m/\d+/;
-	    $c_count += $c_tmp;
-	    $t_count += $t_tmp;
+	    $c_tmp =~ m/(\d+)/;
+	    $c_count += $1;
+	    $t_tmp =~ m/(\d+)/;
+	    $t_count += $1;
+	    $seqname = $record{'seqname'};
+	    $context = $record{'feature'};
 	}
 
 	if ($c_count + $t_count != 0) {
-	    $score = ( $c_count / ($c_count + $t_count) ) / $width;
-	
+	    $score = $c_count / ($c_count + $t_count);
+	} else {$score = -0.1}
+
+	my $attribute = "c=$c_count;t=$t_count";
+
+	if (scalar(@range) == 0) {
+	    $attribute = ".";
+	    $score = 0;
 	}
 
 	print join("\t",
-		   ${&gff_read ($data[$i])}{'seqname'},
+		   $seqname,
 		   "avg",
-		   ${&gff_read ($data[$i])}{'feature'},
+		   $context,
 		   $i,
-		   $i + $width,
-		   $score,
+		   $i + $width - 1,
+		   sprintf("%.3f", $score),
 		   ".",
 		   ".",
-		   "c=$c_count;t=$t_count",
+		   $attribute,
 	    ), "\n";
 	$i += $step - 1;
     }
@@ -118,6 +140,7 @@ sub gff_sliding_window {
 
 # gff_sort sorts gff lines by sequence feature and start coordinate
 sub gff_sort {
+    print STDERR "sorting data...\n";
     return sort {
 	(split '\t', $a)[2] cmp (split '\t', $b)[2] or (split '\t', $a)[3] <=> (split '\t', $b)[3]
     } @_;
@@ -142,15 +165,18 @@ sub gff_read {
 
 
 sub gff_filter_by_coord {
-
     my ($lower, $upper, @data) = @_;
-
-    my @filtered;
-    foreach my $i (@data) {
-	my %record = %{&gff_read ($i)};
-	push @filtered, $i if ( $record{'start'} >= $lower);
+    my (@filtered, $last);
+    for (my $i; $i < @data; $i++) {
+	my %record = %{&gff_read ($data[$i])};
+	if ( $record{'start'} >= $lower && $record{'start'} <= $upper) {
+	    push @filtered, $data[$i];
+	    $last = $i;
+	}
 	last if ( $record{'start'} > $upper);
     }
+    print STDERR $last, " ";
+    unshift (@filtered, $last);
     return @filtered;
 }
 
@@ -162,31 +188,31 @@ sub gff_filter_by_coord {
 sub gff_find_array {
     my ($field, @array) = @_;
 
+    print STDERR "finding indices...\n";
+
     # @index contains a list of locations where array should be split
     # $previousid and $currentid are scalars containing the previous and current IDs (chr1, 2, etc)
     # $chrcount is just a counter for the number of different types of IDs
-    my (@index, $previousid, $currentid);
-    my $chrcount=0;
+    my (@index, $previous, $current);
+    my $chrcount = 0;
     
     # goes through full gene file
-    for (my $k=0;$k<@array;$k++) {
+    for (my $i = 0; $i <@array ; $i++) {
 
 	# gets current starting coordinate
-	$currentid=(split '\t', $array[$k])[$field]; #chr1, chr2, etc
-	
+	$current = (split '\t', $array[$i])[$field]; #chr1, chr2, etc
+
 	# if we're at beginning of file if doesn't make sense to look for changes already
 	# gets previous starting coordinate
-	if ($k != 0) {$previousid = (split '\t', $array[$k-1])[$field];}	
-	else {$previousid = $currentid;}
+	if ($i != 0) {$previous = (split '\t', $array[$i-1])[$field];}	
+	else {$previous = $current;}
 	
 	# keeps track of number of different types of records
 	# also stores each record type change in @index
 	# ignores pound (#) characters if they're the first printing character in the record
-	if ( ($currentid ne $previousid && $currentid !~ m/^\s*#/) || $k==0 )  {
-	    if($currentid !~ m/^\s*#/) {
-		$index[$chrcount]=$k;
-		$chrcount++;
-	    }
+	if ( ($current ne $previous) || ($i == 0) )  {
+	    $index[$chrcount] = $i;
+	    $chrcount++;
 	}
     }
     return @index;
@@ -229,9 +255,12 @@ for each step, generating a GFF file with N/y lines (N=number of input 'c's).
 # prints out a commented line with header fields
 sub gff_print_header {
     print "##gff-version 3\n";
-    print "# ", shift, ": ";
+    print join(" ",
+	       "#",
+	       @_,
+	       "\n");
     my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = localtime (time);
-    printf "%4d-%02d-%02d %02d:%02d:%02d\n", $year+1900, $mon+1, $mday, $hour, $min, $sec;
+    printf "# %4d-%02d-%02d %02d:%02d:%02d\n", $year+1900, $mon+1, $mday, $hour, $min, $sec;
     print join("\t",
 	       "# SEQNAME",
 	       "SOURCE",
