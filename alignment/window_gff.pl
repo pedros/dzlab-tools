@@ -57,6 +57,8 @@ close($GFF) if ($GFF ne "STDIN");
 @data =  &gff_sort (@data);
 my @locsindex = &gff_find_array ( 0, @data );
 
+#print STDERR join("\n", @locsindex);exit;
+
 for (my $i = 0; $i < @locsindex; $i++) {
 
     my @subdata;
@@ -86,20 +88,21 @@ close(STDOUT);
 sub gff_sliding_window {
     my ($width, $step, @data) = @_;
 
-    print STDERR "windowing data on sequence ${&gff_read ($data[scalar(@data)-1])}{'seqname'} and context ${&gff_read ($data[scalar(@data)-1])}{'feature'} with $width bp width and $step bp step...\n";
+    print STDERR
+	"windowing data on sequence ${&gff_read ($data[scalar(@data)-1])}{'seqname'} and context ${&gff_read ($data[scalar(@data)-1])}{'feature'} with $width bp width and $step bp step...\n";
 
     my $lastcoord = ${&gff_read ($data[scalar(@data)-1])}{'end'};
+    my $seqname = ${&gff_read ($data[scalar(@data)-1])}{'seqname'};
+    my $context = ${&gff_read ($data[scalar(@data)-1])}{'feature'};
     my $lastrecord = 0;
 
     for (my $i = 1; $i < $lastcoord; $i++) {
 	
 	my ($c_count, $t_count, $score) = (0, 0, -0.1);
-	
-	my @range = &gff_filter_by_coord ($i, $i + $width, @data[$lastrecord..scalar(@data)]);
+
+	my @range = &gff_filter_by_coord ($i, $i + $width, $lastrecord, \@data);
 
 	$lastrecord = shift (@range);
-
-	my ($seqname, $context);
 	
 	foreach my $k (@range) {
 	    my %record = %{&gff_read ($k)};
@@ -113,8 +116,8 @@ sub gff_sliding_window {
 	}
 
 	if ($c_count + $t_count != 0) {
-	    $score = $c_count / ($c_count + $t_count);
-	} else {$score = -0.1}
+	    $score = $c_count / ($c_count + $t_count) unless $c_count == 0;
+	}
 
 	my $attribute = "c=$c_count;t=$t_count";
 
@@ -142,7 +145,9 @@ sub gff_sliding_window {
 sub gff_sort {
     print STDERR "sorting data...\n";
     return sort {
-	(split '\t', $a)[2] cmp (split '\t', $b)[2] or (split '\t', $a)[3] <=> (split '\t', $b)[3]
+	(split '\t', $a)[0] cmp (split '\t', $b)[0] or
+	(split '\t', $a)[2] cmp (split '\t', $b)[2] or
+	(split '\t', $a)[3] <=> (split '\t', $b)[3]
     } @_;
 }
 
@@ -165,17 +170,17 @@ sub gff_read {
 
 
 sub gff_filter_by_coord {
-    my ($lower, $upper, @data) = @_;
-    my (@filtered, $last);
-    for (my $i; $i < @data; $i++) {
+    my ($lower, $upper, $last, $dataref) = @_;
+    my (@data, @filtered) = @{$dataref};
+
+    for (my $i = $last; $i < @data; $i++) {
 	my %record = %{&gff_read ($data[$i])};
-	if ( $record{'start'} >= $lower && $record{'start'} <= $upper) {
+	if ($record{'start'} >= $lower && $record{'start'} <= $upper) {
 	    push @filtered, $data[$i];
 	    $last = $i;
 	}
 	last if ( $record{'start'} > $upper);
     }
-    print STDERR $last, " ";
     unshift (@filtered, $last);
     return @filtered;
 }
