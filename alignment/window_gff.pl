@@ -63,10 +63,10 @@ for (my $i = 0; $i < @locsindex; $i++) {
 
     my @subdata;
     if ($i+1<@locsindex) {
-	 @subdata = &array_split ($locsindex[$i], $locsindex[$i+1], @data);
+	@subdata = @data[$locsindex[$i]..$locsindex[$i+1]];
     }
     else {
-	 @subdata = &array_split ($locsindex[$i], scalar(@data), @data);
+	@subdata = @data[$locsindex[$i]..scalar(@data) - 1];
     }
 
     # gets indices for context changes (tracks changes on 2th field - feature)
@@ -74,10 +74,10 @@ for (my $i = 0; $i < @locsindex; $i++) {
 
     for (my $l = 0; $l < @featureindex; $l++) {
 	if ($l+1<@featureindex) {
-	    &gff_sliding_window ( $width, $step, &array_split ($featureindex[$l], $featureindex[$l+1], @subdata) );
+	    &gff_sliding_window ( $width, $step, @subdata[$featureindex[$l]..$featureindex[$l+1]]);
 	}
 	else {
-	    &gff_sliding_window ( $width, $step, &array_split ($featureindex[$l], scalar(@subdata), @subdata) );
+	    &gff_sliding_window ( $width, $step, @subdata[$featureindex[$l]..scalar(@subdata) - 1]);
 	}
     }
 }
@@ -221,15 +221,6 @@ sub gff_find_array {
 	}
     }
     return @index;
-}
-
-#----------Split into multiple arrays----------------#
-# takes an input index array
-# returns split array
-sub array_split {
-    my ($start, $end)=($_[0], $_[1]);
-    my @array=@_[2..@_];
-    return @array[$start..$end-1];
 }
 
 # prints out usage information
