@@ -17,7 +17,9 @@ my $quiet = 0;
 my $usage = 0;
 
 # Initial check of command line parameters
-&usage;
+if ($usage || @ARGV<2) {
+    &usage;
+}
 my @argv = @ARGV;
 
 # Grabs and parses command line options
@@ -54,7 +56,7 @@ close($GFF) if ($GFF ne "STDIN");
 &gff_print_header ($0, @argv);
 
 # gets indices for chromosome changes (tracks changes on 0th field - seqname)
-@data =  &gff_sort (@data);
+@data =  &gff_sort (\@data);
 my @locsindex = &gff_find_array ( 0, @data );
 
 #print STDERR join("\n", @locsindex);exit;
@@ -107,10 +109,8 @@ sub gff_sliding_window {
 	foreach my $k (@range) {
 	    my %record = %{&gff_read ($k)};
 	    my ($c_tmp, $t_tmp) = split(/;/, $record{'attribute'});
-	    $c_tmp =~ m/(\d+)/;
-	    $c_count += $1;
-	    $t_tmp =~ m/(\d+)/;
-	    $t_count += $1;
+	    $c_count += $c_tmp =~ m/(\d+)/;
+	    $t_count += $t_tmp =~ m/(\d+)/;
 	    $seqname = $record{'seqname'};
 	    $context = $record{'feature'};
 	}
@@ -139,17 +139,22 @@ sub gff_sliding_window {
 	    ), "\n";
 	$i += $step - 1;
     }
+    return 0;
 }
 
 # gff_sort sorts gff lines by sequence feature and start coordinate
 sub gff_sort {
+    my $dataref = @_;
+
     print STDERR "sorting data...\n";
+
     return sort {
 	(split '\t', $a)[0] cmp (split '\t', $b)[0] or
 	(split '\t', $a)[2] cmp (split '\t', $b)[2] or
 	(split '\t', $a)[3] <=> (split '\t', $b)[3]
-    } @_;
+    } @{$dataref};
 }
+
 
 # readGFF reads in a single GFF line, and outputs a hash reference
 sub gff_read {
@@ -183,6 +188,23 @@ sub gff_filter_by_coord {
     }
     unshift (@filtered, $last);
     return @filtered;
+}
+
+
+sub map_to_range {
+    my ($coord, $step) = @_;
+
+    if ($coord =< $step) {return 1}
+    elsif ($coord % $step) {
+	my $key[0] = int($coord/$step);
+	$key[1] = $key[0] = 1;
+	return @key;
+    }
+    else {
+	my $key[0] = int($coord/$step) - 1;
+	$key[1] = $key[0] + 1;
+	return @key;
+    }
 }
 
 
@@ -225,26 +247,22 @@ sub gff_find_array {
 
 # prints out usage information
 sub usage {
-    if ($usage || @ARGV<2) {
-	print STDERR
-	    "countMethylation.pl <PARAMETERS> [OPTIONS]
-\t<--gff>\tGFF alignment input file
-\t<--width>\tWidth size of sliding window in bp
-\t<--step>\tStep interval of sliding window in bp
-\t[--output]\tFilename to write results to (default is STDOUT)
-\t[--verbose]\tOutput perl's diagnostic and warning messages
-\t[--quiet]\tSupress perl's diagnostic and warning messages
-\t[--usage]\tPrint this information
-Takes a GFF-formatted input file with methylation information.
-Each line corresponds to a single 'c' in the genome that was sequenced.
-Assumes that:
-    1) input GFF file is sorted by starting coordinate AND by context
-    2) input GFF file contains a single sequence id (ie. single chromosome)
-Runs a sliding window of width x and step interval y and averages the score
-for each step, generating a GFF file with N/y lines (N=number of input 'c's).
-";
-	exit 1;
-    }
+    print STDERR << EOF;
+    countMethylation.pl <PARAMETERS> [OPTIONS]
+	t<--gff>        GFF alignment input file
+	<--width>       Width size of sliding window in bp
+	<--step>        Step interval of sliding window in bp
+	[--output]      Filename to write results to (default is STDOUT)
+	[--verbose]     Output perl\'s diagnostic and warning messages
+        [--quiet]       Supress perl\'s diagnostic and warning messages
+	[--usage]       Print this information
+    Takes a GFF-formatted input file with methylation information.
+    Each line corresponds to a single \'c\' in the genome that was sequenced.
+    The input file may contain multiple sequence id\'s and features\/contexts.
+    Runs a sliding window of width x and step interval \y and averages the score
+    for each step, generating a GFF file with N/y lines (N=number of input \'c\'s).
+    EOF
+    exit 1;
 }
 
 
