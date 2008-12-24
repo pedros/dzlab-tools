@@ -71,14 +71,31 @@ while (my $line_a = <$GFFA>) {
     my %rec_b = %{&gff_read ($line_b)};
 
     my $ngram = gff_calculate_statistic (\%rec_a, \%rec_b);
-    my $score = 0 if $ngram == -200;
+#    my $score = 0 if $ngram == -200;
 
-#     if ($threshold && $ngram >= $threshold) {
+     if ($threshold) {
 
-# 	if (@window_buffer == 0) {
-# 	    push @window_buffer, 
-
-#     }
+	 next if ($ngram < $threshold);
+	
+	 if (@window_buffer > 0) {
+	     if ($rec_a{'start'} > $#window_buffer[0]{'start'} and 
+		 $rec_a{'start'} <= ($#window_buffer[0]{'end'} + 1)) {
+		 push $window_buffer[0], %rec_a;
+		 push $window_buffer[1], %rec_b;
+	     }
+	     else {
+		 # flush the buffer and start filling it up again
+		 my $tmp_window_a = gff_concatenate ($window_buffer[0]);
+		 my $tmp_window_b = gff_concatenate ($window_buffer[1]);
+		 my $tmp_ngram = gff_calculate_statistic ($tmp_window_a, $tmp_window_b);
+		 @window_buffer = ();
+		 push $window_buffer[0], %rec_a;
+		 push $window_buffer[1], %rec_b;
+		 %rec_a = %{$tmp_window_a};
+		 %rec_b = %{$tmp_window_b};
+		 $ngram = $tmp_ngram;
+	     }
+	 }
 
     if ($operation eq 'sub') {$score = $rec_a{'score'} - $rec_b{'score'};}
     elsif ($operation eq 'div' && 
@@ -169,9 +186,11 @@ sub gff_concatenate {
     my ($c_count, $t_count) = (0, 0);
     for my $x (0..$#contig_windows) {
 
-	my $line = $contig_windows[$x];
-	chomp $line;
-	my %rec = %{gff_read ($line)};	
+# 	my $line = $contig_windows[$x];
+# 	chomp $line;
+# 	my %rec = %{gff_read ($line)};	
+
+	my %rec = $contig_windows[$x];
 
 	if  ($x > 0) {
 	    if ($seqname ne $rec{'seqname'}
