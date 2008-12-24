@@ -54,7 +54,7 @@ open (my $GFFB, '<', $gff_file_2) or die ("Can't read file: $gff_file_2");
 # prints out header fields that contain gff v3 header, generating program, time, and field names
 gff_print_header ($0, @argv);
 
-my @window_buffer;
+my (@window_buffer_a, @window_buffer_b) = ();
 while (my $line_a = <$GFFA>) {
 
     next if ($line_a =~ m/^#.*$|^\s*$/);
@@ -71,31 +71,33 @@ while (my $line_a = <$GFFA>) {
     my %rec_b = %{&gff_read ($line_b)};
 
     my $ngram = gff_calculate_statistic (\%rec_a, \%rec_b);
-#    my $score = 0 if $ngram == -200;
+    my $score = 0 if $ngram == -200;
 
      if ($threshold) {
 
 	 next if ($ngram < $threshold);
 	
-	 if (@window_buffer > 0) {
-	     if ($rec_a{'start'} > $#window_buffer[0]{'start'} and 
-		 $rec_a{'start'} <= ($#window_buffer[0]{'end'} + 1)) {
-		 push $window_buffer[0], %rec_a;
-		 push $window_buffer[1], %rec_b;
-	     }
-	     else {
-		 # flush the buffer and start filling it up again
-		 my $tmp_window_a = gff_concatenate ($window_buffer[0]);
-		 my $tmp_window_b = gff_concatenate ($window_buffer[1]);
-		 my $tmp_ngram = gff_calculate_statistic ($tmp_window_a, $tmp_window_b);
-		 @window_buffer = ();
-		 push $window_buffer[0], %rec_a;
-		 push $window_buffer[1], %rec_b;
-		 %rec_a = %{$tmp_window_a};
-		 %rec_b = %{$tmp_window_b};
-		 $ngram = $tmp_ngram;
-	     }
-	 }
+	 if (@window_buffer_a == 0 or
+             (@window_buffer_a > 0 and 
+              $rec_a{'start'} > $window_buffer_a[$#window_buffer_a]{'start'} and 
+              $rec_a{'start'} <= $window_buffer_b[$#window_buffer_b]{'end'} + 1)) {
+		 push @window_buffer_a, %rec_a;
+		 push @window_buffer_b, %rec_b;
+                 next;
+         }
+         else {
+             # flush the buffer and start filling it up again
+             my $tmp_window_a = gff_concatenate (@window_buffer_a);
+             my $tmp_window_b = gff_concatenate (@window_buffer_b);
+             my $tmp_ngram = gff_calculate_statistic ($tmp_window_a, $tmp_window_b);
+             (@window_buffer_a, @window_buffer_b) = ();
+             push @window_buffer_a, %rec_a;
+             push @window_buffer_b, %rec_b;
+             %rec_a = %{$tmp_window_a};
+             %rec_b = %{$tmp_window_b};
+             $ngram = $tmp_ngram;
+         }
+     }
 
     if ($operation eq 'sub') {$score = $rec_a{'score'} - $rec_b{'score'};}
     elsif ($operation eq 'div' && 
