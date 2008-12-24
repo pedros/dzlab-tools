@@ -4,6 +4,7 @@ use strict;
 use warnings;
 use diagnostics;
 use Getopt::Long;
+use Data::Dumper;
 use Carp;
 
 # Globals, passed as command line options
@@ -53,26 +54,75 @@ open (my $GFFB, '<', $gff_file_2) or die ("Can't read file: $gff_file_2");
 # prints out header fields that contain gff v3 header, generating program, time, and field names
 gff_print_header ($0, @argv);
 
-my @contiguous_windows;
+my @window_buffer;
 while (my $line_a = <$GFFA>) {
 
-    chomp $line_a;
     next if ($line_a =~ m/^#.*$|^\s*$/);
-
     my $line_b = <$GFFB>;
     last unless defined $line_b;
-    while ($line_b =~ m/^#.*$|^\s*$/) {
-	$line_b = <$GFFB>;
-    }
+    while ($line_b =~ m/^#.*$|^\s*$/) {$line_b = <$GFFB>}
+    chomp $line_a;
+    chomp $line_b;
 
     $line_a =~ s/\r//g;
     $line_b =~ s/\r//g;
 
     my %rec_a = %{&gff_read ($line_a)};
     my %rec_b = %{&gff_read ($line_b)};
+
+    my $ngram = gff_calculate_statistic (\%rec_a, \%rec_b);
+    my $score = 0 if $ngram == -200;
+
+#     if ($threshold && $ngram >= $threshold) {
+
+# 	if (@window_buffer == 0) {
+# 	    push @window_buffer, 
+
+#     }
+
+    if ($operation eq 'sub') {$score = $rec_a{'score'} - $rec_b{'score'};}
+    elsif ($operation eq 'div' && 
+	   $rec_b{'score'} != 0) {$score = $rec_a{'score'} / $rec_b{'score'};}
+
+    if ($ngram > 0 && $ngram != 1) {
+	if ($inverse_log) {$ngram = 1 / (log($ngram) / log($inverse_log));}
+	else {$ngram = 1 / log($ngram);}
+    }
+
+    if($reverse) {
+	my $tmp = $score;
+	$score = $ngram;
+	$ngram = $tmp;
+	$statistic = $operation;
+    }
+
+    my $tmp = substr($gff_file_1, 5, 3) . $operation . substr($gff_file_2, 5, 3);
+
+    print join("\t",
+	       $rec_a{'seqname'},
+	       "cmp",
+	       $tmp,
+	       $rec_a{'start'},
+	       $rec_a{'end'},
+	       sprintf("%.3f", $score),
+	       ".",
+	       ".",
+	       sprintf("$statistic=%.3f", $ngram)), "\n";
+    }
     
-    ($line_a, my $context_a) = split(/;|_/, $rec_a{'feature'});
-    ($line_b, my $context_b) = split(/;|_/, $rec_b{'feature'});
+close ($GFFA);
+close ($GFFB);
+
+exit 0;
+
+
+sub gff_calculate_statistic {
+    my ($rec_a_ref, $rec_b_ref) = @_;
+    my %rec_a = %{$rec_a_ref};
+    my %rec_b = %{$rec_b_ref};
+
+    my ($line_a, $context_a) = split(/;|_/, $rec_a{'feature'});
+    my ($line_b, $context_b) = split(/;|_/, $rec_b{'feature'});
 
     if ($rec_a{'start'} != $rec_b{'start'} or
 	$rec_a{'end'} != $rec_b{'end'} or
@@ -83,12 +133,10 @@ while (my $line_a = <$GFFA>) {
           modified in the future to allow multiple chromosomes and contexts per input file.");
     }
     
-    my ($score, $ngram) = (0, 0);
-
+    my $ngram = 0;
     if ( ($rec_a{'attribute'} =~ m/\./) or
 	 ($rec_b{'attribute'} =~ m/\./) ) {
-	$ngram = -1;
-	$score = 0;
+	$ngram = -200;
     }
     else {
 	my ($n11, $n21) = split(/;/, $rec_a{'attribute'});
@@ -109,70 +157,55 @@ while (my $line_a = <$GFFA>) {
 	    print STDERR $error_code, ": ", getErrorMessage(), "\n";
 	}
     }
-
-    if ($threshold && $ngram >= $threshold) {
-
-
-    }
-
-    if ($operation eq 'sub') {$score = $rec_a{'score'} - $rec_b{'score'};}
-    elsif ($operation eq 'div' && 
-	   $rec_b{'score'} != 0) {$score = $rec_a{'score'} / $rec_b{'score'};}
-
-    if ($ngram > 0 && $ngram != 1) {
-	if ($inverse_log) {$ngram = 1 / (log($ngram) / log($inverse_log));}
-	else {$ngram = 1 / log($ngram);}
-    }
-
-    if($reverse) {
-	my $tmp = $score;
-	$score = $ngram;
-	$ngram = $tmp;
-	$statistic = $operation;
-    }
-
-    print join("\t",
-	       $rec_a{'seqname'},
-	       "cmp",
-	       "${line_a}${operation}${line_b};$context_a",
-	       $rec_a{'start'},
-	       $rec_a{'end'},
-	       sprintf("%.3f", $score),
-	       ".",
-	       ".",
-	       sprintf("$statistic=%.3f", $ngram)), "\n";
-    }
-    
-close ($GFFA);
-close ($GFFB);
-
-exit 0;
+    return $ngram;
+}
 
 
 sub gff_concatenate {
-    my $contig_windows_ref = @_;
+    my $contig_windows_ref = $_[0];
     my @contig_windows = @{$contig_windows_ref};
 
-    my ($start, $end, $score, $c_count, $t_count, $seqname, $source, $feature, $strand, $frame);
-    foreach my $line (@contig_windows) {
-	my %rec = %{gff_read ($line)};
-	$seqname = $rec{'seqname'};
-	$source = $rec{'source'};
-	$feature = $rec{'feature'};
-	$strand = $rec{'strand'};
-	$frame = $rec{'frame'};
+    my ($start, $end, $score, $seqname, $source, $feature, $strand, $frame, $last_end);
+    my ($c_count, $t_count) = (0, 0);
+    for my $x (0..$#contig_windows) {
 
-	$start = $rec{'start'} if ($. == 0);
-	$end = $rec{'end'} if ($. == scalar @contig_windows - 1);
+	my $line = $contig_windows[$x];
+	chomp $line;
+	my %rec = %{gff_read ($line)};	
+
+	if  ($x > 0) {
+	    if ($seqname ne $rec{'seqname'}
+		or $source ne $rec{'source'}
+		or $feature ne $rec{'feature'}
+		or $strand ne $rec{'strand'}
+		or $frame ne $rec{'frame'}
+		or ($end > $rec{'start'} and $end < $rec{'end'}))
+	    {
+		die ("Given records to be merged are inconsistent")
+	    }
+	}
+	else {
+	    $seqname = $rec{'seqname'};
+	    $source = $rec{'source'};
+	    $feature = $rec{'feature'};
+	    $strand = $rec{'strand'};
+	    $frame = $rec{'frame'};
+	}
+
+	$start = $rec{'start'} if ($x == 0);
+	$end = $rec{'end'};
 	$score += $rec{'score'};
 
 	my ($tmp1, $tmp2) = split(/;/, $rec{'attribute'});
-	($c_count) += $tmp1 =~ m/(\d+)/;
-	($t_count) += $tmp2 =~ m/(\d+)/;
+	($tmp1) = $tmp1 =~ m/(\d+)/;
+	($tmp2) = $tmp2 =~ m/(\d+)/;
+	$c_count += $tmp1;
+	$t_count += $tmp2;
     }
-    $score /= scalar @contig_windows;
 
-    return (
+    $score = sprintf ("%.3f", ($c_count/($c_count+$t_count)));
+
+    my %read_hash = (
 	'seqname' => $seqname,
 	'source' => $source,
 	'feature' => $feature,
@@ -183,6 +216,7 @@ sub gff_concatenate {
 	'frame' => $frame,
 	'attribute' => "c=$c_count;t=$t_count"
 	);
+    return \%read_hash;
 }
 
 

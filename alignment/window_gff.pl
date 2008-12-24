@@ -194,14 +194,15 @@ sub gff_filter_by_coord {
 sub map_to_range {
     my ($coord, $step) = @_;
 
-    if ($coord =< $step) {return 1}
+    my @key;
+    if ($coord <= $step) {return 1}
     elsif ($coord % $step) {
-	my $key[0] = int($coord/$step);
+	$key[0] = int($coord/$step);
 	$key[1] = $key[0] = 1;
 	return @key;
     }
     else {
-	my $key[0] = int($coord/$step) - 1;
+	$key[0] = int($coord/$step) - 1;
 	$key[1] = $key[0] + 1;
 	return @key;
     }
@@ -247,9 +248,9 @@ sub gff_find_array {
 
 # prints out usage information
 sub usage {
-    print STDERR << EOF;
+    print STDERR << 'EOF';
     countMethylation.pl <PARAMETERS> [OPTIONS]
-	t<--gff>        GFF alignment input file
+	<--gff>        GFF alignment input file
 	<--width>       Width size of sliding window in bp
 	<--step>        Step interval of sliding window in bp
 	[--output]      Filename to write results to (default is STDOUT)
@@ -261,7 +262,7 @@ sub usage {
     The input file may contain multiple sequence id\'s and features\/contexts.
     Runs a sliding window of width x and step interval \y and averages the score
     for each step, generating a GFF file with N/y lines (N=number of input \'c\'s).
-    EOF
+EOF
     exit 1;
 }
 
