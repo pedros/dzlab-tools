@@ -135,25 +135,23 @@ while (my $line_a = <$GFFA>) {
     # if threshold is defined
     if ($threshold) {
         # filter out records with statistic measures below it
-        next PROCESSING if ($ngram <= $threshold);
+        next PROCESSING if ($ngram > $threshold);
 
         # if our buffers are empty OR
         # if we think the current window is contiguous to the ones already stored
         # push the current windows into the buffers
         # and skip processing for now
         if(@window_buffer_a == 0) {
-            push @window_buffer_a, \%rec_a;
-            push @window_buffer_b, \%rec_b;
+            push @window_buffer_a, $line_a;
+            push @window_buffer_b, $line_b;
             next PROCESSING;
         }
-        elsif ($rec_a{'start'} > $window_buffer_a[-1]{'start'} and
-                   $rec_a{'start'} <= $window_buffer_a[-1]{'end'} + 1)
-            {
-                print STDERR ".";
-                push @window_buffer_a, \%rec_a;
-                push @window_buffer_b, \%rec_b;
-                next PROCESSING;
-            }
+        elsif ($rec_a{'start'} > (split "\t", $window_buffer_a[-1])[3] and
+               $rec_a{'start'} <= (split "\t", $window_buffer_a[-1])[4] + 1) {
+            push @window_buffer_a, $line_a;
+            push @window_buffer_b, $line_b;
+            next PROCESSING;
+        }
         else {
             # if the current window is NOT contiguous with the last buffer entry
             # we flush the buffer, start filling it up again, and overwrite the current
@@ -162,16 +160,17 @@ while (my $line_a = <$GFFA>) {
             my $tmp_window_b_ref = gff_concatenate (\@window_buffer_b);
             my $tmp_ngram = gff_calculate_statistic ($tmp_window_a_ref, $tmp_window_b_ref);
 
-            # filter out records with statistic measures below it
-            # this should never happen because of the preliminary filtering above
-            # I'm leaving it for now for debugging purposes
-            next PROCESSING if ($tmp_ngram < $threshold);
-
             # deletes buffer contents, saves current windows to the buffer
             # and overwrites current windows and ngram score for printing
             (@window_buffer_a, @window_buffer_b) = ();
-            push @window_buffer_a, \%rec_a;
-            push @window_buffer_b, \%rec_b;
+            push @window_buffer_a, $line_a;
+            push @window_buffer_b, $line_b;
+
+            # filter out records with statistic measures below it
+            # this should never happen because of the preliminary filtering above
+            # I'm leaving it for now for debugging purposes
+            next PROCESSING if ($tmp_ngram > $threshold);
+
             %rec_a = %{$tmp_window_a_ref};
             %rec_b = %{$tmp_window_b_ref};
             $ngram = $tmp_ngram;
@@ -205,7 +204,7 @@ while (my $line_a = <$GFFA>) {
 
     ### NOTE: this is temporary: it naively parses the input file names to try to
     # put something meaningful in the 'feature' field
-    my $tmp = substr($gff_file_1, 5, 3) . $operation . substr($gff_file_2, 5, 3);
+    my $tmp = "a/$operation/b";
 
     # prints out the current window (or concatenated windows) as a gff record
     print join("\t",
@@ -217,7 +216,7 @@ while (my $line_a = <$GFFA>) {
                sprintf("%.3f", $score),
                ".",
                ".",
-               sprintf("$statistic=%.3f", $ngram)), "\n";
+               sprintf("$statistic=%.5f", $ngram)), "\n";
 }
 
 close ($GFFA);
@@ -226,8 +225,6 @@ close ($GFFB);
 exit 0;
 
 =head1 Subroutines
-
-=cut
 
 =head2 gff_calculate_statistic()
 
@@ -238,6 +235,8 @@ exit 0;
     Depends on the Text::NSP module by Ted Pedersen <http://search.cpan.org/dist/Text-NSP/>
 
 =cut
+
+
 sub gff_calculate_statistic {
     # unpack arguments
     my ($rec_a_ref, $rec_b_ref) = @_;
@@ -279,13 +278,15 @@ sub gff_calculate_statistic {
         ($n21) = $n21 =~ m/(\d+)/;
         ($n22) = $n22 =~ m/(\d+)/;
 
-        $ngram = calculateStatistic
+        if ($n11 + $n12 + $n21 + $n22) {
+            $ngram = calculateStatistic
             (
                 n11 => $n11,
                 n1p => ($n11 + $n12),
                 np1 => ($n11 + $n21),
                 npp => ($n11 + $n12 + $n21 + $n22)
             );
+        }
 
         if ( my $error_code = getErrorCode() ) {
             print STDERR $error_code, ": ", getErrorMessage(), "\n";
@@ -312,7 +313,7 @@ sub gff_concatenate {
     # loops through every contiguous window
     for my $x (0..$#contig_windows) {
 
-        my %rec = %{$contig_windows[$x]};
+        my %rec = %{gff_read ($contig_windows[$x])};
 
         if ($x > 0) {
             # basic sanity test on whether current line is consistent with previous one
@@ -342,11 +343,13 @@ sub gff_concatenate {
 
         # extract c and t counts from 'attribute' field
         # and update the total counts
-        my ($tmp1, $tmp2) = split(/;/, $rec{'attribute'});
-        ($tmp1) = $tmp1 =~ m/(\d+)/;
-        ($tmp2) = $tmp2 =~ m/(\d+)/;
-        $c_count += $tmp1;
-        $t_count += $tmp2;
+        if ($rec{'attribute'} ne '.') {
+            my ($tmp1, $tmp2) = split(/;/, $rec{'attribute'});
+            ($tmp1) = $tmp1 =~ m/(\d+)/;
+            ($tmp2) = $tmp2 =~ m/(\d+)/;
+            $c_count += $tmp1;
+            $t_count += $tmp2;
+        }
     }
 
     if ($c_count + $t_count == 0) {
@@ -411,7 +414,7 @@ sub gff_read {
 
 =cut
 sub gff_print_header {
-    my @call_and_args = shift;
+    my @call_and_args = @_;
     print "##gff-version 3\n";
     print join(' ',
                '#',
@@ -472,3 +475,4 @@ EOF
 
 #  LocalWords:  gff GFF indendence Jaccard Loglikelihood Pointwise Filename
 #  LocalWords:  STDOUT Supress
+
