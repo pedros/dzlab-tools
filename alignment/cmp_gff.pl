@@ -47,7 +47,8 @@ my $operation = 'sub';
 my $statistic = 'Fisher::right';
 my $inverse_log = -1;
 my $reverse = 0;
-my $threshold = 0;
+my @threshold = ();
+my $debug = 0;
 my $output = '-';
 my $verbose = 0;
 my $quiet = 0;
@@ -68,11 +69,14 @@ my $result = GetOptions (
     "inverse-log|ilog|i:i" => \$inverse_log,
     'reverse-score|rev|r' => \$reverse,
     'output|o:s' => \$output,
-    'threshold|t=f' => \$threshold,
+    'threshold|t=f{2}' => \@threshold,
+    'debug|d' => \$debug,
     'verbose|v' => sub {enable diagnostics;use warnings;},
     'quiet|q' => sub {disable diagnostics;no warnings;},
     'usage|help|h' => \&usage
 );
+
+#difference ($gff_file_1, $gff_file_2);exit;
 
 # use the appropriate statistic measure based on user input
 eval "use Text::NSP::Measures::2D::$statistic";
@@ -130,12 +134,11 @@ while (my $line_a = <$GFFA>) {
     # return value is -200 if a record doesn't have coverage (ie. attribute field eq '.')
     my $ngram = gff_calculate_statistic (\%rec_a, \%rec_b);
     my $score = 0;
-    #if ($ngram == -200)
 
     # if threshold is defined
-    if ($threshold) {
+    if ($threshold[0]) {
         # filter out records with statistic measures below it
-        next PROCESSING if ($ngram > $threshold);
+        next PROCESSING if ( $ngram > $threshold[0] );
 
         # if our buffers are empty OR
         # if we think the current window is contiguous to the ones already stored
@@ -169,7 +172,7 @@ while (my $line_a = <$GFFA>) {
             # filter out records with statistic measures below it
             # this should never happen because of the preliminary filtering above
             # I'm leaving it for now for debugging purposes
-            next PROCESSING if ($tmp_ngram > $threshold);
+            next PROCESSING if ($tmp_ngram > $threshold[1]);
 
             %rec_a = %{$tmp_window_a_ref};
             %rec_b = %{$tmp_window_b_ref};
@@ -178,6 +181,8 @@ while (my $line_a = <$GFFA>) {
     }
 
     # calculates the appropriate result on the scores of both windows
+    if ($rec_a{'score'} == -0.1) {$rec_a{'score'} = 0}
+    if ($rec_b{'score'} == -0.1) {$rec_b{'score'} = 0}
     if ($operation eq 'sub') {
         $score = $rec_a{'score'} - $rec_b{'score'};
     } elsif ($operation eq 'div' && 
@@ -204,19 +209,30 @@ while (my $line_a = <$GFFA>) {
 
     ### NOTE: this is temporary: it naively parses the input file names to try to
     # put something meaningful in the 'feature' field
-    my $tmp = "a/$operation/b";
+    my $feature = "$rec_a{'feature'};a:$operation:b";
+
+    $statistic =~ tr/A-Z/a-z/;
+
+    my $attribute = sprintf("$statistic=%.5f", $ngram);
+
+    if ($debug) {
+        $rec_a{'attribute'} =~ s/([ct]=)/a_$1/g;
+        $rec_b{'attribute'} =~ s/([ct]=)/b_$1/g;
+        $attribute .=  ';' . $rec_a{'attribute'} . ';' . $rec_b{'attribute'};
+    }
 
     # prints out the current window (or concatenated windows) as a gff record
     print join("\t",
                $rec_a{'seqname'},
-               "cmp",
-               $tmp,
+               'cmp_gff.pl',
+               $feature,
                $rec_a{'start'},
                $rec_a{'end'},
                sprintf("%.3f", $score),
                ".",
                ".",
-               sprintf("$statistic=%.5f", $ngram)), "\n";
+               $attribute), "\n";
+
 }
 
 close ($GFFA);
@@ -243,24 +259,19 @@ sub gff_calculate_statistic {
     my %rec_a = %{$rec_a_ref};
     my %rec_b = %{$rec_b_ref};
 
-    # naively tries to parse the 'feature' field into the line/organism
-    # and the context. assumes it is in the form $LINE[;_]$CONTEXT
-    my ($line_a, $context_a) = split(/;|_/, $rec_a{'feature'});
-    my ($line_b, $context_b) = split(/;|_/, $rec_b{'feature'});
-
     # basic sanity test for matching coordinates, chromosome and context
     if ($rec_a{'start'} != $rec_b{'start'} or
-            $rec_a{'end'} != $rec_b{'end'} or
-                $rec_a{'seqname'} ne $rec_b{'seqname'} or
-                    $context_a ne $context_b) {
-        Croak ("Can't match windows in input files. Make sure these are sorted by starting coordinate and that each input file contains only one chromosome and one context. This will be modified in the future to allow multiple chromosomes and contexts per input file.");
+        $rec_a{'end'} != $rec_b{'end'} or
+        $rec_a{'seqname'} ne $rec_b{'seqname'} or
+        $rec_a{'feature'} ne $rec_b{'feature'}) {
+        print STDERR Dumper (\%rec_a, \%rec_b);
+        croak ("Can't match windows in input files. Make sure these are sorted by starting coordinate and that each input file contains only one chromosome and one context. This will be modified in the future to allow multiple chromosomes and contexts per input file.");
     }
 
     # checks for no coverage in the windows (ie. 'attribute' field eq ".")
     my $ngram = 0;
-    if ( ($rec_a{'attribute'} =~ m/\./) or
-             ($rec_b{'attribute'} =~ m/\./) ) {
-        $ngram = -200;
+    if ( ($rec_a{'attribute'} =~ m/\./) or ($rec_b{'attribute'} =~ m/\./) ) {
+        $ngram = 0;
     } else {
         # contigency table:
         #
@@ -271,8 +282,8 @@ sub gff_calculate_statistic {
         # t| n21  | n22  |
         #  |------|------|----
         #  | np1  |      | npp 
-        my ($n11, $n21) = split(/;/, $rec_a{'attribute'});
-        my ($n12, $n22) = split(/;/, $rec_b{'attribute'});
+        my ($n11, $n21, undef, undef) = split(/;/, $rec_a{'attribute'});
+        my ($n12, $n22, undef, undef) = split(/;/, $rec_b{'attribute'});
         ($n11) = $n11 =~ m/(\d+)/;
         ($n12) = $n12 =~ m/(\d+)/;
         ($n21) = $n21 =~ m/(\d+)/;
@@ -318,11 +329,11 @@ sub gff_concatenate {
         if ($x > 0) {
             # basic sanity test on whether current line is consistent with previous one
             if ($seqname ne $rec{'seqname'}
-                    or $source ne $rec{'source'}
-                        or $feature ne $rec{'feature'}
-                            or $strand ne $rec{'strand'}
-                                or $frame ne $rec{'frame'}
-                                    or $end + 1 < $rec{'start'}) {
+                or $source ne $rec{'source'}
+                or $feature ne $rec{'feature'}
+                or $strand ne $rec{'strand'}
+                or $frame ne $rec{'frame'}
+                or $end + 1 < $rec{'start'}) {
                 croak ("Given records to be merged are inconsistent")
             }
         }
@@ -344,11 +355,19 @@ sub gff_concatenate {
         # extract c and t counts from 'attribute' field
         # and update the total counts
         if ($rec{'attribute'} ne '.') {
-            my ($tmp1, $tmp2) = split(/;/, $rec{'attribute'});
-            ($tmp1) = $tmp1 =~ m/(\d+)/;
-            ($tmp2) = $tmp2 =~ m/(\d+)/;
-            $c_count += $tmp1;
-            $t_count += $tmp2;
+            my ($non_over_c, $non_over_t, $over_c, $over_t) = split(/;/, $rec{'attribute'});
+            ($non_over_c) = $non_over_c =~ m/(\d+)/;
+            ($non_over_t) = $non_over_t =~ m/(\d+)/;
+            if (defined $over_c and defined $over_t) {
+                ($over_c) = $over_c =~ m/(\d+)/;
+                ($over_t) = $over_t =~ m/(\d+)/;
+            }
+            else {
+                $over_c = 0;
+                $over_t = 0;
+            }
+            $c_count += ($non_over_c - $over_c);
+            $t_count += ($non_over_t - $over_t);
         }
     }
 
@@ -449,22 +468,22 @@ countMethylation.pl <REQUIRED> [OPTIONS]
     <--gff-b          -b>    Second GFF alignment input file
     [--operation      -p]    Arithmetic operation on scores from a and b ('sub' or 'div')
     [--statistic      -s]    Type of indendence/significance statistic to use
-                      Statistics options: (run 'pellet's Text::NSP' for more information)
-                      CHI::phi                 Phi coefficient measure 
-		      CHI::tscore              T-score measure of association 
-		      CHI::x2                  Pearson's chi squared measure of association 
-		      Dice::dice               Dice coefficient 
+                      Statistics options: (run 'perldoc Text::NSP' for more information)
+                      CHI::phi                 Phi coefficient measure
+		      CHI::tscore              T-score measure of association
+		      CHI::x2                  Pearson's chi squared measure of association
+		      Dice::dice               Dice coefficient
 		      Dice::jaccard            Jaccard coefficient
 		      Fisher::left             Left sided Fisher's exact test
 		      Fisher::right            Right sided Fisher's exact test
 		      Fisher::twotailed        Two-sided Fisher's exact test
-		      MI::ll                   Loglikelihood measure of association 
+		      MI::ll                   Loglikelihood measure of association
 		      MI::pmi                  Pointwise Mutual Information
 		      MI::ps                   Poisson-Stirling measure of association
 		      MI::tmi                  True Mutual Information
     [--inverse-log    -i]    Step interval of sliding window in BS
-    [--reverse-score  -r]    Output scores in attributes field and statistics in scores field 
-    [--threshold      -t]    Minimum threshold for filtering out windows
+    [--reverse-score  -r]    Output scores in attributes field and statistics in scores field
+    [--threshold      -t]    Maximum threshold for filtering out windows. Takes 1 (coarse filtering) or 2 (fine filtering) decimal values.
     [--output         -o]    Filename to write results to (default is STDOUT)
     [--verbose        -v]    Output Pall's diagnostic and warning messages
     [--quiet          -q]    Supress Pail's diagnostic and warning messages
@@ -473,6 +492,25 @@ EOF
     exit 0;
 }
 
-#  LocalWords:  gff GFF indendence Jaccard Loglikelihood Pointwise Filename
-#  LocalWords:  STDOUT Supress
 
+
+sub difference {
+    my @A = split '', (split '/', shift)[-1];
+    my @B = split '', (split '/', shift)[-1];
+
+    # assume @A and @B are already loaded
+    my %seen = ();                  # lookup table to test membership of B
+    my @aonly = ();                 # answer
+
+    # build lookup table
+    foreach my $item (@B) { $seen{$item} = 1 }
+
+    # find only elements in @A and not in @B
+    foreach my $item (@A) {
+        unless ($seen{$item}) {
+            # it's not in %seen, so add to @aonly
+            push(@aonly, $item);
+        }
+    }
+    print STDERR join(' ', @aonly), "\n";
+}

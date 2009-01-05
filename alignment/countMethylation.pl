@@ -18,8 +18,10 @@
 #
 
 =head1 Synopsis
+
 Takes a paired ends alignment output in gff form (from correlatePairedEnds.pl) and 
 outputs a gff file in which each record is an individual cytosin bp in the scaffold sequence.
+
 =cut
 
 use Data::Dumper;

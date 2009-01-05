@@ -49,6 +49,7 @@
     < --width       -w >    Width size of sliding window in bp
     [ --step        -s ]    Step interval of sliding window in bp
     [ --no-sort     -n ]    Assumes input gff file is pre-sorted by sequence, feature, and coordinate
+    [ --batch       -b ]    Takes any number of filenames as arguments and windows them in batch mode
     [ --output      -o ]    Filename to write results to (default is STDOUT)
     [ --verbose     -v ]    Output perl's diagnostic and warning messages
     [ --quiet       -q ]    Supress perl's diagnostic and warning messages
@@ -70,6 +71,7 @@ my $gff_file = '-';
 my $width = 0;
 my $step = 0;
 my $no_sort = 0;
+my @batch = ();
 my $output = '-';
 my $verbose = 0;
 my $quiet = 0;
@@ -83,6 +85,7 @@ my $result = GetOptions (
     'step|s=i' => \$step,
     'no-sort|n' => \$no_sort,
     'output|o:s' => \$output,
+    'batch|b=s{,}' => \@batch,
     'verbose|v' => sub {enable diagnostics;use warnings;},
     'quiet|q' => sub {disable diagnostics;no warnings;},
     'help|usage|h' => sub {pod2usage(-verbose => 1);},
@@ -94,67 +97,81 @@ unless ($width > 0) {
     pod2usage(-verbose => 1);
 }
 
+BATCH:
+while (@batch or $gff_file) {
+    if (@batch) {
+        print STDERR "Running in batch mode: all input files will have \'.avg\' appended to form the output name.\n";
+        $gff_file = shift @batch;
+        $output = $gff_file . "_w${width}_s${step}.avg";
+    }
+
 # redirects STDOUT to file if specified by user
-if ($output ne '-') {
-    open(STDOUT, '>', "$output") or croak("Can't redirect STDOUT to file: $output");
-}
-
-# opens gff file or STDIN
-my $GFF;
-if ($gff_file ne '-') {
-    open($GFF, '<', $gff_file) or croak("Can't read file: $gff_file");
-}
-else {$GFF = 'STDIN';}
-
-# reads in data
-my @data;
-while (<$GFF>) {
-    chomp;
-    next if ($_ =~ m/^#.*$|^\s*$/);
-    push @data, $_;
-}
-close($GFF) if ($GFF ne 'STDIN');
-
-# prints out header fields that contain gff v3 header, generating program, time, and field names
-gff_print_header($0, @argv);
-
-# sort databy sequence name, feature, and starting coordinates
-unless ($no_sort) {@data =  gff_sort ( \@data )}
-
-# gets indices for chromosome changes (tracks changes on 0th field - seqname)
-my @locsindex = gff_find_array ( 0, \@data );
-
-# for each chromosome
-for (my $i = 0; $i < @locsindex; $i++) {
-
-    # get an array slice with only that chromosome
-    my @subdata;
-    if ($i + 1 <@locsindex) {
-	@subdata = @data[$locsindex[$i]..$locsindex[$i+1]];
-    }
-    else {
-	@subdata = @data[$locsindex[$i]..$#data]; # prevents array pointer out of bounds
+    if ($output ne '-') {
+        open(STDOUT, '>', "$output") or croak("Can't redirect STDOUT to file: $output");
     }
 
-    # gets indices for context changes (tracks changes on 2th field - feature)
-    my @featureindex = gff_find_array ( 2, \@subdata );
-
-    # for each feature/context
-    for (my $l = 0; $l < @featureindex; $l++) {
-
-        # get an array slice containing just that feature/chromosome
-        # and feed it to the sliding window routine
-	if ($l + 1 < @featureindex) {
-	    gff_sliding_window ( $width, $step, @subdata[$featureindex[$l]..$featureindex[$l + 1] - 1]);
-	}
-	else {
-	    gff_sliding_window ( $width, $step, @subdata[$featureindex[$l]..$#subdata]);
-	}
+    # opens gff file or STDIN
+    my $GFF;
+    if ($gff_file ne '-') {
+        open($GFF, '<', $gff_file) or croak("Can't read file: $gff_file");
+    } else {
+        $GFF = 'STDIN';
     }
+
+    # reads in data
+    my @data;
+    while (<$GFF>) {
+        chomp;
+        next if ($_ =~ m/^#.*$|^\s*$/);
+        push @data, $_;
+    }
+    close($GFF) if ($GFF ne 'STDIN');
+
+    # prints out header fields that contain gff v3 header, generating program, time, and field names
+    gff_print_header($0, @argv);
+
+    # sort databy sequence name, feature, and starting coordinates
+    unless ($no_sort) {
+        @data =  gff_sort ( \@data );
+    }
+
+    # gets indices for chromosome changes (tracks changes on 0th field - seqname)
+    my @locsindex = gff_find_array ( 0, \@data );
+
+    # for each chromosome
+    for (my $i = 0; $i < @locsindex; $i++) {
+
+        # get an array slice with only that chromosome
+        my @subdata;
+        if ($i + 1 <@locsindex) {
+            @subdata = @data[$locsindex[$i]..$locsindex[$i+1]];
+        } else {
+            @subdata = @data[$locsindex[$i]..$#data]; # prevents array pointer out of bounds
+        }
+
+        # gets indices for context changes (tracks changes on 2th field - feature)
+        my @featureindex = gff_find_array ( 2, \@subdata );
+
+        # for each feature/context
+        for (my $l = 0; $l < @featureindex; $l++) {
+
+            # get an array slice containing just that feature/chromosome
+            # and feed it to the sliding window routine
+            if ($l + 1 < @featureindex) {
+                gff_sliding_window ( $width, $step, @subdata[$featureindex[$l]..$featureindex[$l + 1] - 1]);
+            } else {
+                gff_sliding_window ( $width, $step, @subdata[$featureindex[$l]..$#subdata]);
+            }
+        }
+    }
+    $gff_file = 0;
 }
 
 close(STDOUT);
 exit 0;
+
+
+
 
 
 =head1 Subroutines
@@ -182,11 +199,11 @@ sub gff_sliding_window {
     for (my $i = 1; $i < $lastcoord; $i++) {
 
 	my ($c_count, $t_count, $score) = (0, 0, -0.1);
+        my ($overlap_c, $overlap_t) = (0, 0);
 
 	my @range = @{ gff_filter_by_coord ($i, $i + $width, $lastrecord, \@data) };
 
 	$lastrecord = shift @range;
-
 	foreach my $k (@range) {
 	    my %current_rec = %{&gff_read ($k)};
 	    my ($c_tmp, $t_tmp) = split(/;/, $current_rec{'attribute'});
@@ -196,6 +213,11 @@ sub gff_sliding_window {
             $t_count += $t_tmp;
 	    $seqname = $current_rec{'seqname'};
 	    $context = $current_rec{'feature'};
+
+            if ($current_rec{'start'} > $i + $step) {
+                $overlap_c += $c_tmp;
+                $overlap_t += $t_tmp;
+            }
 	}
 
 	if ($c_count + $t_count != 0) {
@@ -203,6 +225,7 @@ sub gff_sliding_window {
 	}
 
 	my $attribute = "c=$c_count;t=$t_count";
+        if ($step) {$attribute .= ";over_c=$overlap_c;over_t=$overlap_t"}
 
 	if (scalar(@range) == 0) {
 	    $attribute = '.';
@@ -340,7 +363,7 @@ sub gff_find_array {
     Prints a commented line with header fields based on the GFF v3 spec
 
 =cut
-sub gff_header {
+sub gff_print_header {
     my @call_args = @_;
     print '##gff-version 3\n';
     print join(' ',
