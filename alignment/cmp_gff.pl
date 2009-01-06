@@ -128,8 +128,24 @@ while (my $line_a = <$GFFA>) {
     my %rec_a = %{&gff_read ($line_a)};
     my %rec_b = %{&gff_read ($line_b)};
 
+
+    while ($rec_a{'feature'} ne $rec_b{'feature'}) {
+        if ($rec_a{'start'} > $rec_b{'start'}) {
+            $line_a = <$GFFA>;
+            chomp $line_a;
+            $line_a =~ s/\r//g;
+            %rec_a = %{&gff_read ($line_a)};
+        }
+        elsif ($rec_a{'start'} < $rec_b{'start'}) {
+            $line_b = <$GFFB>;
+            chomp $line_b;
+            $line_b =~ s/\r//g;
+            %rec_b = %{&gff_read ($line_b)};
+        }
+    }
+
     # is threshold is given, this is a preliminary statistic to filter out
-    # records less than it. if no threshold is given, this is the final calculation
+    # records more than it. if no threshold is given, this is the final calculation
     # gff_calculate_statistic will call the Text::NSP module
     # return value is -200 if a record doesn't have coverage (ie. attribute field eq '.')
     my $ngram = gff_calculate_statistic (\%rec_a, \%rec_b);
