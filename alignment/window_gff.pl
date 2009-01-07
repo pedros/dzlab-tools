@@ -105,7 +105,7 @@ while (@batch or $gff_file) {
         $output = $gff_file . "_w${width}_s${step}.avg";
     }
 
-# redirects STDOUT to file if specified by user
+    # redirects STDOUT to file if specified by user
     if ($output ne '-') {
         open(STDOUT, '>', "$output") or croak("Can't redirect STDOUT to file: $output");
     }
@@ -204,6 +204,7 @@ sub gff_sliding_window {
 	my @range = @{ gff_filter_by_coord ($i, $i + $width, $lastrecord, \@data) };
 
 	$lastrecord = shift @range;
+
 	foreach my $k (@range) {
 	    my %current_rec = %{&gff_read ($k)};
 	    my ($c_tmp, $t_tmp) = split(/;/, $current_rec{'attribute'});

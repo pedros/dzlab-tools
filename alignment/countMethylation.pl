@@ -81,6 +81,9 @@ my %HoH=();
 while(<$GFF>) {
     chomp($_);
 
+    # skips comments ('#') and blank lines
+    next if ($_ =~ m/^#.*$|^\s*$/);
+
     # parses each record line into a simple hash
     my %record = %{&readGFF($_)};
 
@@ -95,7 +98,7 @@ while(<$GFF>) {
     # grabs scaffold sequence from gff file
     # assumes sequence is in the 'attribute' field, separated from extraneous information by a '='
     my @unmethylated = split(//, (split "=", $record{'attribute'})[1]);
-    
+
     # loops through each character in current sequences
     for(my $i=$record{'start'};$i<$record{'end'};$i++) {
 	# sets $j to 0 for forward strand coordinates
