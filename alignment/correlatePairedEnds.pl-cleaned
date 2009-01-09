@@ -123,10 +123,10 @@ open my $LEFT,  '<', $leftendfile  or croak "Can't open file: $leftendfile";
 open my $RIGHT, '<', $rightendfile or croak "Can't open file: $rightendfile";
 
 # loops through left sequences (left and right files should have same number of sequences)
-while (<$LEFT>) {
+while (my $leftend = <$LEFT>) {
 
     # reads single sequence from each file
-    my $leftend  = <$LEFT>;
+#    my $leftend  = <$LEFT>;
     my $rightend = <$RIGHT>;
 
     # parses each line into hash
@@ -153,11 +153,11 @@ while (<$LEFT>) {
     ) = ( '.', 'pair_align', '.', 0, 0, 0, '.', '.', '.' );
 
 
-    
+
     ##### START POSSIBLE CASES HERE #####
 
 
-    
+
     ##### No matches on either end #####
     if ( $lmatch == 0 && $rmatch == 0 ) {
         $l_feature = $left{'line'} . q{:} . $lsequence;
@@ -165,8 +165,8 @@ while (<$LEFT>) {
     }
     ##### No matches on either end #####
 
-    
-    
+
+
     ##### Unique matches on both ends #####
     if ( $lmatch == 1 && $rmatch == 1 ) {
 
@@ -238,7 +238,6 @@ while (<$LEFT>) {
                         $readsize + 4
                     );
             }
-            
         }
         else { # if sequences don't match
             $l_feature = $left{'line'} . q{:} . $lsequence;
@@ -249,8 +248,7 @@ while (<$LEFT>) {
     ##### Unique matches on both ends #####
 
 
-    
-    
+
     ##### No match on one end, 1 match on other #####
 
     # 0 matches on left sequence
@@ -337,32 +335,32 @@ while (<$LEFT>) {
     }
     ##### No match on one end, 1 match on other #####
 
-    
 
-    
+
+
     ##### No match on one end, multiple matches on other #####
 
     # multiple matches on right sequence
     if ( $lmatch == 0 && $rmatch > 1 ) {
-        
+
         $l_feature = $left{'line'} . q{:} . $lsequence;
 
         $r_feature   = $right{'line'} . q{:} . $rsequence;
         $r_score     = $rmatch;
         $r_attribute = 'targets=';
- 
+
         # gets all possible matches and appends them to $r_attribute
-    NM_MM_LOOP_RIGHT:
+      NM_MM_LOOP_RIGHT:
         for my $i ( 0 .. $rmatch - 1 ) {
-            
+
             # gets the current chromosome
             $right{"chr$i"} =~ m/(.*)/i;
             my $tmp = $1;
             $tmp =~ tr/A-Z/a-z/;
             $tmp =~ s/rc_//i;
-            
+
             if ( $right{"chr$i"} =~ m/^RC_/i ) { # if right sequence maps to reverse strand
-                
+
                 # appends chromosome name:coordinate:sequence to $r_attribute
                 $r_attribute .= join(
                     q{:},
@@ -374,7 +372,6 @@ while (<$LEFT>) {
                         $readsize + 4
                     )
                 );
-                
             }
             else { # if right sequence maps to forward strand
 
@@ -404,7 +401,7 @@ while (<$LEFT>) {
         $l_attribute = 'targets=';
 
         # gets all possible matches and appends them to $r_attribute
-    NM_MM_LOOP_LEFT:
+      NM_MM_LOOP_LEFT:
         for my $i ( 0 .. $lmatch - 1 ) {
             $left{"chr$i"} =~ m/(.*)/i;
             my $tmp = $1;
@@ -454,7 +451,7 @@ while (<$LEFT>) {
 
     # multiple matches on right sequence
     if ( $lmatch == 1 && $rmatch > 1 ) {
-        
+
         # gets the left chromosome
         $left{'chr0'} =~ m/(.*)/i;
         my $tmp = $1;
@@ -464,7 +461,7 @@ while (<$LEFT>) {
         # loops through every possible match
         my ( $bestcoord, $beststrand );
         my $score = 100000000; # arbitrary large number; lower is better
-    U0_MM_LOOP_RIGHT:
+      U0_MM_LOOP_RIGHT:
         for my $i ( 0 .. $rmatch - 1 ) {
 
             # checks best match
@@ -494,7 +491,7 @@ while (<$LEFT>) {
 
             # if right sequence maps to reverse strand
             if ( $beststrand =~ m/^RC_/i ) {
-                
+
                 $l_seqname   = $tmp;
                 $l_feature   = $left{'line'} . q{:} . $lsequence;
                 $l_start     = $left{'coord'};
@@ -564,12 +561,12 @@ while (<$LEFT>) {
         $tmp =~ tr/A-Z/a-z/;
         $tmp =~ s/rc_//i;
 
-        # loops through every possible left match        
+        # loops through every possible left match
         my ( $bestcoord, $beststrand );
         my $score = 100000000; # arbitrary large number; lower is better
     U0_MM_LOOP_LEFT:
         for my $i ( 0 .. $lmatch - 1 ) {
-            
+
             # checks best match
             my $tmpscore =
                 checkMultMatch ($left{"chr$i"}, $right{'chr0'}, $left{"coord$i"},
@@ -594,7 +591,7 @@ while (<$LEFT>) {
 
         # if left sequence is distanced from right sequence within given range
         if ( $score >= $offset and $score <= $offset + $distance ) {
-            
+
             # if left sequence maps to reverse strand
             if ( $beststrand =~ m/^RC_/i ) {
 
@@ -609,7 +606,7 @@ while (<$LEFT>) {
                               $bestcoord - 3,
                               $readsize + 4
                     );
-                
+
                 $r_seqname   = $tmp;
                 $r_feature   = $right{'line'} . q{:} . $rsequence;
                 $r_start     = $right{'coord'};
@@ -622,7 +619,7 @@ while (<$LEFT>) {
                         $right{'coord'} - 3,
                         $readsize + 4
                     );
-                
+
             }
             else { # if left sequence maps to forward strand
 
@@ -663,7 +660,7 @@ while (<$LEFT>) {
 
 
 
-    
+
     ##### Multiple matches on both ends #####
     if ( $lmatch > 1 && $rmatch > 1 ) {
 
@@ -720,7 +717,7 @@ while (<$LEFT>) {
         $tmp =~ tr/A-Z/a-z/;
         $tmp =~ s/rc_//i;
 
-        # if right sequence is distanced from left sequence within given range        
+        # if right sequence is distanced from left sequence within given range
         if ( $bestscore >= $offset and $bestscore <= $offset + $distance ) {
 
             # if the left sequence maps to the reverse strand
@@ -793,23 +790,23 @@ while (<$LEFT>) {
 
     ##### END POSSIBLE CASES HERE #####
 
-    
+
     # print both ends
     # only print no matches if explicitly indicated or if there are matches
     # only print multiple matches if explicitly indicated
-    if ( $nomatches or $l_score == 1 or ($l_score > 1 and $repeats) ) {
+#    if ( $nomatches or $l_score == 1 or ($l_score > 1 and $repeats) ) {
         print join( "\t",
                     $l_seqname, $l_source, $l_feature, $l_start, $l_end,
                     $l_score,   $l_strand, $l_strand,  $l_attribute ),
                         "\n";
-    }
+#    }
 
-    if ( $nomatches or $r_score == 1 or ($r_score > 1 and $repeats)  ) {
+#    if ( $nomatches or $r_score == 1 or ($r_score > 1 and $repeats)  ) {
         print join( "\t",
                     $r_seqname, $r_source, $r_feature, $r_start, $r_end,
                     $r_score,   $r_strand, $r_strand,  $r_attribute ),
                         "\n";
-    }
+#    }
 }
 
 # end for loop through all sequences

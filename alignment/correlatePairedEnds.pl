@@ -663,8 +663,8 @@ while (<$LEFT>) {
 	$tmp = $1;
 	$tmp =~ tr/A-Z/a-z/;
 	$tmp =~ s/rc_//i;
-	if ($beststrand =~ m/^RC_/i) {
-	    if ($score <= $offset + $distance) {
+	if ($score <= $offset + $distance) {
+	    if ($beststrand =~ m/^RC_/i) {
 
                 $l_seqname   = $tmp;
                 $l_feature   = $left{'line'} . q{:} . $lsequence;
@@ -804,8 +804,8 @@ while (<$LEFT>) {
 	$tmp =~ tr/A-Z/a-z/;
 	$tmp =~ s/rc_//i;
 
-	if ($beststrand =~ m/^RC_/i) {
-	    if ($score <= $offset + $distance) {
+	if ($score <= $offset + $distance) {
+	    if ($beststrand =~ m/^RC_/i) {
 
                 $l_seqname   = $tmp;
                 $l_feature   = $left{'line'} . q{:} . $lsequence;
