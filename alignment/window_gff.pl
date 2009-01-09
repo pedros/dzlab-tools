@@ -285,10 +285,10 @@ __END__
 
 =head1 VERSION
 
- $Rev::                                     $: Revision of last commit
- $Author::                                  $: Author of last commit
- $Date::                                    $: Date of last commit
- $HeadURL::                                 $: URL to last version in repository
+ $Rev::                                                     $: Revision of last commit
+ $Author::                                                  $: Author of last commit
+ $Date::                                                    $: Date of last commit
+ $HeadURL::                                                 $: URL to last version in repository
  $Id$:
 
 =head1 USAGE

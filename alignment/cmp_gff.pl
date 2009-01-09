@@ -44,7 +44,7 @@ use Carp;
 my $gff_file_1 = '';
 my $gff_file_2 = '';
 my $operation = 'sub';
-my $statistic = 'Fisher::right';
+my $statistic = 'Fisher::twotailed';
 my $inverse_log = -1;
 my $reverse = 0;
 my @threshold = ();
