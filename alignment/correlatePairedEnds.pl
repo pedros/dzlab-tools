@@ -18,37 +18,39 @@
 #
 
 =head1 Synopsis
-Takes a paired ends sequencing output (needs to be preprocessed to fit above)
-and compares each pair to maximize unique alignment matches to a genome.
-Considers the following occurrences:
-(1) both sides of pair have 0 matches; (2) one side of the pair has unique match;
-(3) one side of the pair has multiple matches; (4) both sides of the pair have unique matches;
-(5) one side of the pair has unique match, other has multiple matches; (6) both sides of the pair have multiple matches.
-Considers the following criteria:
-(a) Each side of a pair matches to a reverse complement chromosome of its own;
-(b) The distance between potential pairs in the case of multiple matches must be larger than $offset and smaller than $offset+$distance
+
+ Takes a paired ends sequencing output (needs to be preprocessed to fit above)
+ and compares each pair to maximize unique alignment matches to a genome.
+ Considers the following occurrences:
+ (1) both sides of pair have 0 matches; (2) one side of the pair has unique match;
+ (3) one side of the pair has multiple matches; (4) both sides of the pair have unique matches;
+ (5) one side of the pair has unique match, other has multiple matches; (6) both sides of the pair have multiple matches.
+ Considers the following criteria:
+ (a) Each side of a pair matches to a reverse complement chromosome of its own;
+ (b) The distance between potential pairs in the case of multiple matches must be larger than $offset and smaller than $offset+$distance
+
 =cut
 
 use Getopt::Long;
 use strict;
 use warnings;
-use diagnostics;
-disable diagnostics;
+use diagnostics;disable diagnostics;
+use Carp;
 
 # Globals, passed as command line options
-my $leftendfile   = ""; # left end sequences file in eland 3 format
-my $rightendfile = ""; # right end sequences file in eland 3 format
-my $referencefile = ""; # unmodified reference genome file in fasta format
-my $distance = 150; # maximum (random) range distance beyond offset.
-my $offset = 50; # minimum distance between left and right sequences of a pair.
-my $output = '-'; # output mode. standard output by default
+my $leftendfile; # left end sequences file in eland 3 format
+my $rightendfile; # right end sequences file in eland 3 format
+my $referencefile; # unmodified reference genome file in fasta format
+my $distance = 300; # maximum (random) range distance beyond offset.
+my $offset = 0; # minimum distance between left and right sequences of a pair.
+my $output = q{-}; # output mode. standard output by default
 my $readsize = 45; # length of each read
 my $repeats = 0; # print ambiguous reads
 my $nomatches = 0; # print unmatched reads
 my $usage = 0; # print usage and exit
 
 # Initial check of command line parameters
-&usage;
+usage ();
 
 # Parse command line arguments
 my $result = GetOptions (
@@ -71,8 +73,8 @@ my %reference=();
 
 # begins limited scope for extracting names and lengths of chromosomes in reference file
 {
-    print STDERR ("Indexing reference file...");
-    open(my $REF, "<", "$referencefile");
+    print STDERR 'Indexing reference file...';
+    open my $REF, '<', "$referencefile" or croak "Can't open file: $referencefile";
     my @fastaseq=<$REF>;
     close($REF);
 
@@ -106,44 +108,60 @@ if(!($output eq '-')) {
 }
 
 # reads left end sequences
-open(my $LEFT, "<", "$leftendfile");
-my @leftend=<$LEFT>;
-close($LEFT);
+open my $LEFT, '<', $leftendfile or croak "Can't open file: $leftendfile";
+#my @leftend=<$LEFT>;
+#close($LEFT);
 
 # reads right end sequences
-open(my $RIGHT, "<", "$rightendfile");
-my @rightend=<$RIGHT>;
-close($RIGHT);
+open my $RIGHT, '<', $rightendfile  or croak "Can't open file: $rightendfile";
+#my @rightend=<$RIGHT>;
+#close($RIGHT);
 
 print STDERR "\nCorrelating pairs...";
 
 # goes through left sequences
-for(my $i=0;$i<@leftend;$i++) {
+while (<$LEFT>) {
 
-    my %left=%{&parseEland3Line($leftend[$i])};
-    my %right=%{&parseEland3Line($rightend[$i])};
+    my $leftend = <$LEFT>;
+    my $rightend = <$RIGHT>;
 
-    my $lmatch=$left{'matches'};
-    my $rmatch=$right{'matches'};
+    my %left=%{&parseEland3Line($leftend)};
+    my %right=%{&parseEland3Line($rightend)};
 
-    my $lsequence=$left{'sequence'};
-    my $rsequence=$right{'sequence'};
+# for(my $i=0;$i<@leftend;$i++) {
+
+#     my %left=%{&parseEland3Line($leftend[$i])};
+#     my %right=%{&parseEland3Line($rightend[$i])};
+
+    my $lmatch = $left{'matches'};
+    my $rmatch = $right{'matches'};
+
+    my $lsequence = $left{'sequence'};
+    my $rsequence = $right{'sequence'};
 
     $lsequence =~ s/[\r\n]//g;
     $rsequence =~ s/[\r\n]//g;
 
+    my ($l_seqname, $l_source, $l_feature, $l_start, $l_end, $l_score, $l_strand, $l_frame, $l_attribute) = ('.', 'pair_align', '.', 0, 0, 0, '.', '.', '.');
+    my ($r_seqname, $r_source, $r_feature, $r_start, $r_end, $r_score, $r_strand, $r_frame, $r_attribute) = ('.', 'pair_align', '.', 0, 0, 0, '.', '.', '.');
+
     ##### NM - NM #####
     ##### No matches on either end #####
-    if($nomatches) {
-	if($lmatch==0 && $rmatch==0) {
+    if ($nomatches) {
+	if ($lmatch == 0 && $rmatch == 0) {
+
+            $l_feature   = $left{'line'} . ':' . $lsequence;
+            $r_feature   = $right{'line'} . ':' . $rsequence;
+
+            ### to delete
 	    print join("\t",
-		       ".",
-		       "pair_align",
-		       $left{'line'} . ":" . $lsequence,
-		       ".",
-		       ".",
+		       '.',
+		       'pair_align',
+		       $left{'line'} . ':' . $lsequence,
+		       '.',
+		       '.',
 		       0,
-		       ".",
+		       '.',
 		       ".",
 		       ".") . "\n";
 	    print join("\t",
@@ -156,6 +174,7 @@ for(my $i=0;$i<@leftend;$i++) {
 		       ".",
 		       ".",
 		       ".") . "\n";
+            ### to delete
 	}
     }
     ##### No matches on either end #####
@@ -164,16 +183,34 @@ for(my $i=0;$i<@leftend;$i++) {
 
     ##### U0 - U0) #####
     ##### Unique matches on both ends #####
-    if($lmatch==1 && $rmatch==1) {
-	$left{'chr0'}=~m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
-	my $tmp=$1;
-	$tmp=~tr/A-Z/a-z/;
-	$tmp=~s/rc_//i;
-	my $match=&checkMatch($left{'chr0'}, $right{'chr0'}, $left{'coord'}, $right{'coord'}, $reference{$tmp}, $offset, $distance);
+    if ($lmatch == 1 && $rmatch == 1) {
+	$left{'chr0'} =~ m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
+	my $tmp = $1;
+	$tmp =~ tr/A-Z/a-z/;
+	$tmp =~ s/rc_//i;
+	my $match = checkMatch ($left{'chr0'}, $right{'chr0'}, $left{'coord'}, $right{'coord'}, $reference{$tmp}, $offset, $distance);
 
 	if($match) {
-	    if($left{'chr0'}=~/^RC_/i) {
-		print join("\t",
+	    if ($left{'chr0'} =~ /^RC_/i) {
+
+                $l_seqname   = $tmp ;
+                $l_feature   = $left{'line'} . q{:} . $lsequence;
+                $l_start     = $reference{$tmp} + 1 - $left{'coord'};
+                $l_end       = $reference{$tmp} + 1 - $left{'coord'} + $readsize;
+                $l_score     = 1;
+                $l_strand    = q{-};
+                $l_attribute = 'target=' . substr ($reference{"$tmp-rc"}, $left{'coord'} - 3, $readsize + 4);
+
+                $r_seqname   = $tmp;
+                $r_feature   = $right{'line'} . q{:} . $rsequence;
+                $r_start     = $right{'coord'};
+                $r_end       = $right{'coord'} + $readsize;
+                $r_score     = 1;
+                $r_strand    = q{+};
+                $r_attribute = 'target=' . substr ($reference{"$tmp-seq"}, $right{'coord'} - 3, $readsize + 4);
+
+                ### TO DELETE
+                print join("\t",
 			   $tmp,
 			   "pair_align",
 			   $left{'line'} . ":" . $lsequence,
@@ -192,10 +229,29 @@ for(my $i=0;$i<@leftend;$i++) {
 			   1,
 			   "+",
 			   ".",
-			   "target=" . substr($reference{"$tmp-seq"}, $right{'coord'}-3, $readsize+4)) . "\n";			   
+			   "target=" . substr($reference{"$tmp-seq"}, $right{'coord'}-3, $readsize+4)) . "\n";
+                ### TO DELETE
 	    }
 	    else {
-		print join("\t",
+
+                $l_seqname   = $tmp ;
+                $l_feature   = $left{'line'} . q{:} . $lsequence;
+                $l_start     = $left{'coord'};
+                $l_end       = $left{'coord'} + $readsize;
+                $l_score     = 1;
+                $l_strand    = q{+};
+                $l_attribute = 'target=' . substr ($reference{"$tmp-seq"}, $left{'coord'} - 3, $readsize + 4);
+
+                $r_seqname   = $tmp;
+                $r_feature   = $right{'line'} . q{:} . $rsequence;
+                $r_start     = $reference{$tmp} + 1 - $right{'coord'};
+                $r_end       = $reference{$tmp} + 1 - $right{'coord'} + $readsize;
+                $r_score     = 1;
+                $r_strand    = q{-};
+                $r_attribute = 'target=' . substr ($reference{"$tmp-rc"}, $right{'coord'} - 3, $readsize + 4);
+
+                ### TO DELETE
+                print join("\t",
 			   $tmp,
 			   "pair_align",
 			   $left{'line'} . ":" . $lsequence,
@@ -215,10 +271,16 @@ for(my $i=0;$i<@leftend;$i++) {
 			   "-",
 			   ".",
 			   "target=" . substr($reference{"$tmp-rc"}, $right{'coord'}-3, $readsize+4)) . "\n";
+                ### TO DELETE
 	    }
 	}
-	else {
-	    if($nomatches) {
+	else { # if not match
+	    if ($nomatches) {
+
+                $l_feature   = $left{'line'} . q{:} . $lsequence;
+                $r_feature   = $right{'line'} . q{:} . $rsequence;
+
+                ### TO DELETE
 		print join("\t",
 			   ".",
 			   "pair_align",
@@ -239,6 +301,7 @@ for(my $i=0;$i<@leftend;$i++) {
 			   ".",
 			   ".",
 			   ".") . "\n";
+                ### TO DELETE
 	    }
 	}
     }
@@ -248,13 +311,17 @@ for(my $i=0;$i<@leftend;$i++) {
 
     ##### NM - U0 #####
     ##### No match on one end, 1 match on other #####
-    if($lmatch==0 && $rmatch==1) {
+    if ($lmatch == 0 && $rmatch == 1) {
         $right{'chr0'}=~m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
         my $tmp=$1;
         $tmp=~tr/A-Z/a-z/;
 	$tmp=~s/rc_//i;
 
-	if($nomatches) {
+	if ($nomatches) {
+
+            $l_feature   = $left{'line'} . q{:} . $lsequence;
+
+            ### TO DELETE
 	    print join("\t",
 		       ".",
 		       "pair_align",
@@ -265,9 +332,20 @@ for(my $i=0;$i<@leftend;$i++) {
 		       ".",
 		       ".",
 		       ".") . "\n";
+            ### TO DELETE
 	}
-	
-        if($right{'chr0'}=~m/^RC_/i) { # checks that this maps to reverse strand
+
+        if ($right{'chr0'} =~ m/^RC_/i) { # checks that this maps to reverse strand
+
+            $r_seqname   = $tmp;
+            $r_feature   = $right{'line'} . q{:} . $rsequence;
+            $r_start     = $reference{$tmp} + 1 - $right{'coord'};
+            $r_end       = $reference{$tmp} + 1 - $right{'coord'} + $readsize;
+            $r_score     = 1;
+            $r_strand    = q{-};
+            $r_attribute = 'target=' . substr ($reference{"$tmp-rc"}, $right{'coord'} - 3, $readsize + 4);
+
+            ### TO DELETE
 	    print join("\t",
 		       $tmp,
 		       "pair_align",
@@ -278,8 +356,19 @@ for(my $i=0;$i<@leftend;$i++) {
 		       "-",
 		       ".",
 		       "target=" . substr($reference{"$tmp-rc"}, $right{'coord'}-3, $readsize+4)) . "\n";
+            ### TO DELETE
         }
         else {
+
+            $r_seqname   = $tmp;
+            $r_feature   = $right{'line'} . q{:} . $rsequence;
+            $r_start     = $right{'coord'};
+            $r_end       = $right{'coord'} + $readsize;
+            $r_score     = 1;
+            $r_strand    = q{+};
+            $r_attribute = 'target=' . substr ($reference{"$tmp-seq"}, $right{'coord'} - 3, $readsize + 4);
+
+            ### TO DELETE
 	    print join("\t",
 		       $tmp,
 		       "pair_align",
@@ -290,18 +379,28 @@ for(my $i=0;$i<@leftend;$i++) {
 		       "+",
 		       ".",
 		       "target=" . substr($reference{"$tmp-seq"}, $right{'coord'}-3, $readsize+4)) . "\n";
+            ### TO DELETE
         }
-    
     }
 
-    if($lmatch==1 && $rmatch==0) {
-        $left{'chr0'}=~m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
-        my $tmp=$1;
-        $tmp=~tr/A-Z/a-z/;
-	$tmp=~s/rc_//i;
+    if ($lmatch == 1 && $rmatch == 0) {
+        $left{'chr0'} =~ m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
+        my $tmp = $1;
+        $tmp =~ tr/A-Z/a-z/;
+	$tmp =~ s/rc_//i;
 
 	if($left{'chr0'}=~m/^RC_/i) {
-	    print join("\t",
+
+            $l_seqname   = $tmp;
+            $l_feature   = $left{'line'} . q{:} . $lsequence;
+            $l_start     = $reference{$tmp} + 1 - $left{'coord'};
+            $l_end       = $reference{$tmp} + 1 - $left{'coord'} + $readsize;
+            $l_score     = 1;
+            $l_strand    = q{-};
+            $l_attribute = 'target=' . substr ($reference{"$tmp-rc"}, $left{'coord'} - 3, $readsize + 4);
+
+            ### TO DELETE
+            print join("\t",
 		       $tmp,
 		       "pair_align",
 		       $left{'line'} . ":" . $lsequence,
@@ -311,9 +410,20 @@ for(my $i=0;$i<@leftend;$i++) {
 		       "-",
 		       ".",
 		       "target=" . substr($reference{"$tmp-rc"}, $left{'coord'}-3, $readsize+4)) . "\n";
+            ### TO DELETE
         }
         else {
-	    print join("\t",
+
+            $l_seqname   = $tmp;
+            $l_feature   = $left{'line'} . q{:} . $lsequence;
+            $l_start     = $left{'coord'};
+            $l_end       = $left{'coord'} + $readsize;
+            $l_score     = 1;
+            $l_strand    = q{+};
+            $l_attribute = 'target=' . substr ($reference{"$tmp-seq"}, $left{'coord'} - 3, $readsize + 4);
+
+            ### TO DELETE
+            print join("\t",
 		       $tmp,
 		       "pair_align",
 		       $left{'line'} . ":" . $lsequence,
@@ -323,9 +433,14 @@ for(my $i=0;$i<@leftend;$i++) {
 		       "+",
 		       ".",
 		       "target=" . substr($reference{"$tmp-seq"}, $left{'coord'}-3, $readsize+4)) . "\n";
+            ### TO DELETE
         }
-        
-	if($nomatches) {
+
+	if ($nomatches) {
+
+            $r_feature   = $right{'line'} . q{:} . $rsequence;
+
+            ### TO DELETE
 	    print join("\t",
 		       ".",
 		       "pair_align",
@@ -336,6 +451,7 @@ for(my $i=0;$i<@leftend;$i++) {
 		       ".",
 		       ".",
 		       ".") . "\n";
+            ### TO DELETE
 	}
     }
     ##### No match on one end, 1 match on other #####
@@ -344,10 +460,14 @@ for(my $i=0;$i<@leftend;$i++) {
 
     ##### NM - R0 #####
     ##### No match on one end, multiple matches on other #####
-    if($repeats) {
-	if($lmatch==0 && $rmatch>1) {
-	    if($nomatches) {
-		print join("\t",
+    if ($repeats) {
+	if ($lmatch == 0 && $rmatch > 1) {
+	    if ($nomatches) {
+
+                $l_feature   = $left{'line'} . q{:} . $lsequence;
+
+                ### TO DELETE
+                print join("\t",
 			   ".",
 			   "pair_align",
 			   $left{'line'} . ":" . $lsequence,
@@ -357,8 +477,15 @@ for(my $i=0;$i<@leftend;$i++) {
 			   ".",
 			   ".",
 			   ".") . "\n";
+                ### TO DELETE
 	    }
-	    print join("\t",
+
+            $r_feature   = $right{'line'} . q{:} . $rsequence;
+            $r_score     = $rmatch;
+            $r_attribute = 'targets=';
+
+            ### TO DELETE
+            print join("\t",
 		       ".",
 		       "pair_align",
 		       $right{'line'} . ":" . $rsequence,
@@ -368,31 +495,65 @@ for(my $i=0;$i<@leftend;$i++) {
 		       ".",
 		       ".",
 		       "targets=");
+            ### TO DELETE
 
-	    for(my $i=0;$i<$rmatch;$i++) {
-		$right{"chr$i"}=~m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
-		my $tmp=$1;
-		$tmp=~tr/A-Z/a-z/;
-		$tmp=~s/rc_//i;
+	    for my $i (0 .. $rmatch - 1) {
+		$right{"chr$i"} =~ m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
+		my $tmp = $1;
+		$tmp =~ tr/A-Z/a-z/;
+		$tmp =~ s/rc_//i;
 
-		if($right{"chr$i"}=~m/^RC_/i) {
+		if ($right{"chr$i"} =~ m/^RC_/i) {
+
+                    $r_attribute .= join(q{:},
+                                         $right{"chr$i"},
+                                         $reference{$tmp} + 1 - $right{"coord$i"},
+                                         substr ($reference{"$tmp-rc"}, $right{"coord$i"} - 3, $readsize + 4)
+                                     );
+                    ### TO DELETE
 		    print join(":",
 			       $right{"chr$i"},
 			       $reference{$tmp} + 1 - $right{"coord$i"},
 			       substr($reference{"$tmp-rc"}, $right{"coord$i"}-3, $readsize+4));
+                    ### TO DELETE
 		}
 		else {
-		    print join(":",
+
+                    $r_attribute .= join(q{:},
+                                         $right{"chr$i"},
+                                         $right{"coord$i"},
+                                         substr ($reference{"$tmp-seq"}, $right{"coord$i"} - 3, $readsize + 4)
+                                     );
+
+                    ### TO DELETE
+                    print join(":",
 			       $right{"chr$i"},
 			       $right{"coord$i"},
 			       substr($reference{"$tmp-seq"}, $right{"coord$i"}-3, $readsize+4));
+                    ### TO DELETE
 		}
-		print ",";
+
+                $r_attribute .= q{,};
+
+                ### TO DELETE
+                print ",";
+                ### TO DELETE
 	    }
-	    print "\b\n";
+
+            $r_attribute .= "\b\n";
+
+            ### TO DELETE
+            print "\b\n";
+            ### TO DELETE
 	}
 
-	if($lmatch>1 && $rmatch==0) {
+	if ($lmatch > 1 && $rmatch == 0) {
+
+            $l_feature   = $left{'line'} . q{:} . $lsequence;
+            $l_score     = $lmatch;
+            $l_attribute = 'targets=';
+
+            ### TO DELETE
 	    print join("\t",
 		       ".",
 		       "pair_align",
@@ -403,31 +564,64 @@ for(my $i=0;$i<@leftend;$i++) {
 		       ".",
 		       ".",
 		       "targets=");
+            ### TO DELETE
 
-	    for(my $i=0;$i<$lmatch;$i++) {
+	    for my $i (0..$lmatch - 1) {
 		$left{"chr$i"}=~m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
 		my $tmp=$1;
 		$tmp=~tr/A-Z/a-z/;
 		$tmp=~s/rc_//i;
 
 		if($left{"chr$i"}=~m/^RC_/i) {
-		    print join(":",
+
+                    $l_attribute .= join(q{:},
+                                         $left{"chr$i"},
+                                         $reference{$tmp} + 1 - $left{"coord$i"},
+                                         substr ($reference{"$tmp-rc"}, $left{"coord$i"} - 3, $readsize + 4)
+                                     );
+
+                    ### TO DELETE
+                    print join(":",
 			       $left{"chr$i"},
 			       $reference{$tmp} + 1 - $left{"coord$i"},
 			       substr($reference{"$tmp-rc"}, $left{"coord$i"}-3, $readsize+4));
+                    ### TO DELETE
 		}
 		else {
-		    print join(":",
+
+                    $l_attribute .= join(q{:},
+                                         $left{"chr$i"},
+                                         $left{"coord$i"},
+                                         substr ($reference{"$tmp-seq"}, $left{"coord$i"} - 3, $readsize + 4)
+                                     );
+
+                    ### TO DELETE
+                    print join(":",
 			       $left{"chr$i"},
 			       $left{"coord$i"},
 			       substr($reference{"$tmp-seq"}, $left{"coord$i"}-3, $readsize+4));
+                    ### TO DELETE
 		}
-		print ",";
-	    }
-	    print "\b\n";
 
-	    if($nomatches) {
-		print join("\t",
+                $l_attribute .= q{,};
+
+                ### TO DELETE
+		print ",";
+                ### TO DELETE
+	    }
+
+            $l_attribute .= "\b\n";
+
+            ### TO DELETE
+	    print "\b\n";
+            ### TO DELETE
+
+	    if ($nomatches) {
+
+                $r_feature   = $right{'line'} . q{:} . $rsequence;
+
+                ### TO DELETE
+                print join("\t",
 			   ".",
 			   "pair_align",
 			   $right{'line'} . ":" . $rsequence,
@@ -437,6 +631,7 @@ for(my $i=0;$i<@leftend;$i++) {
 			   ".",
 			   ".",
 			   ".") . "\n";
+                ### TO DELETE
 	    }
 	}
     }
@@ -445,32 +640,50 @@ for(my $i=0;$i<@leftend;$i++) {
 
 
     ##### One match on one end, multiple matches on other end #####
-    if($lmatch==1 && $rmatch>1) {
-	$left{'chr0'}=~m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
-	my $tmp=$1;
-	$tmp=~tr/A-Z/a-z/;
-	$tmp=~s/rc_//i;
+    if ($lmatch == 1 && $rmatch > 1) {
+	$left{'chr0'} =~ m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
+	my $tmp = $1;
+	$tmp =~ tr/A-Z/a-z/;
+	$tmp =~ s/rc_//i;
 
  	my ($bestcoord, $beststrand);
-	my $score=100000000;
- 	for(my $i=0;$i<$rmatch;$i++) {
-	    my $tmpscore=&checkMultMatch($left{'chr0'}, $right{"chr$i"}, $left{'coord'}, $right{"coord$i"}, $reference{$tmp}, $offset, $distance);
-	    if($tmpscore==-1) {next;}
+	my $score = 100000000;
+ 	for my $i (0..$rmatch - 1) {
+	    my $tmpscore = checkMultMatch ($left{'chr0'}, $right{"chr$i"}, $left{'coord'}, $right{"coord$i"}, $reference{$tmp}, $offset, $distance);
+	    if($tmpscore == -1) {next}
 	    if($tmpscore < $score) {
-		$score=$tmpscore;
-		$bestcoord=$right{"coord$i"};
-		$beststrand=$right{"chr$i"};
+		$score = $tmpscore;
+		$bestcoord = $right{"coord$i"};
+		$beststrand = $right{"chr$i"};
 	    }
-	    else {next;}
+	    else {next}
  	}
 
-	$beststrand=~m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
-	$tmp=$1;
-	$tmp=~tr/A-Z/a-z/;
-	$tmp=~s/rc_//i;
-	if($beststrand=~m/^RC_/i) {
-	    if($score<=$offset+$distance) {
-		print join("\t",
+	$beststrand =~ m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
+	$tmp = $1;
+	$tmp =~ tr/A-Z/a-z/;
+	$tmp =~ s/rc_//i;
+	if ($beststrand =~ m/^RC_/i) {
+	    if ($score <= $offset + $distance) {
+
+                $l_seqname   = $tmp;
+                $l_feature   = $left{'line'} . q{:} . $lsequence;
+                $l_start     = $left{'coord'};
+                $l_end       = $left{'coord'} + $readsize;
+                $l_score     = 1;
+                $l_strand    = q{+};
+                $l_attribute = 'target=' . substr ($reference{"$tmp-seq"}, $left{'coord'} - 3, $readsize + 4);
+
+                $r_seqname   = $tmp;
+                $r_feature   = $right{'line'} . q{:} . $rsequence;
+                $r_start     = $reference{$tmp} + 1 - $bestcoord;
+                $r_end       = $reference{$tmp} + 1 - $bestcoord + $readsize;
+                $r_score     = 1;
+                $r_strand    = q{-};
+                $r_attribute = 'target=' . substr ($reference{"$tmp-rc"}, $bestcoord - 3, $readsize + 4);
+
+                ### TO DELETE
+                print join("\t",
 			   $tmp,
 			   "pair_align",
 			   $left{'line'} . ":" . $lsequence,
@@ -490,9 +703,28 @@ for(my $i=0;$i<@leftend;$i++) {
 			   "-",
 			   ".",
 			   "target=" . substr($reference{"$tmp-rc"}, $bestcoord-3, $readsize+4)) . "\n";
+                ### TO DELETE
 	    }
 	    else {
-		print join("\t",
+
+                $l_seqname   = $tmp;
+                $l_feature   = $left{'line'} . q{:} . $lsequence;
+                $l_start     = $reference{$tmp} + 1 - $left{'coord'};
+                $l_end       = $reference{$tmp} + 1 - $left{'coord'} + $readsize;
+                $l_score     = 1;
+                $l_strand    = q{-};
+                $l_attribute = 'target=' . substr ($reference{"$tmp-rc"}, $left{'coord'} - 3, $readsize + 4);
+
+                $r_seqname   = $tmp;
+                $r_feature   = $right{'line'} . q{:} . $rsequence;
+                $r_start     = $bestcoord;
+                $r_end       = $bestcoord + $readsize;
+                $r_score     = 1;
+                $r_strand    = q{+};
+                $r_attribute = 'target=' . substr ($reference{"$tmp-seq"}, $bestcoord - 3, $readsize + 4);
+
+                ### TO DELETE
+                print join("\t",
 			   $tmp,
 			   "pair_align",
 			   $left{'line'} . ":" . $lsequence,
@@ -512,10 +744,16 @@ for(my $i=0;$i<@leftend;$i++) {
 			   "+",
 			   ".",
 			   "target=" . substr($reference{"$tmp-seq"}, $bestcoord-3, $readsize+4)) . "\n";
+                ### TO DELETE
 	    }
 	}
 	else {
-	    if($nomatches) {
+	    if ($nomatches) {
+
+                $l_feature  = $left{'line'} . q{:} . $lsequence;
+                $r_feature  = $right{'line'} . q{:} . $rsequence;
+
+                ### TO DELETE
 		print join("\t",
 			   ".",
 			   "pair_align",
@@ -526,7 +764,7 @@ for(my $i=0;$i<@leftend;$i++) {
 			   ".",
 			   ".",
 			   ".") . "\n";
-		
+
 		print join("\t",
 			   ".",
 			   "pair_align",
@@ -537,35 +775,55 @@ for(my $i=0;$i<@leftend;$i++) {
 			   ".",
 			   ".",
 			   ".") . "\n";
+                ### TO DELETE
 	    }
 	}
     }
 
-    if($lmatch>1 && $rmatch==1) {
-	$right{'chr0'}=~m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
-	my $tmp=$1;
-	$tmp=~tr/A-Z/a-z/;
-	$tmp=~s/rc_//i;
+    if ($lmatch > 1 && $rmatch == 1) {
+	$right{'chr0'} =~ m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
+	my $tmp = $1;
+	$tmp =~ tr/A-Z/a-z/;
+	$tmp =~ s/rc_//i;
 
  	my ($bestcoord, $beststrand);
-	my $score=100000000;
- 	for(my $i=0;$i<$lmatch;$i++) {
-	    my $tmpscore=&checkMultMatch($left{"chr$i"}, $right{"chr0"}, $left{"coord$i"}, $right{"coord"}, $reference{$tmp}, $offset, $distance);
-	    if($tmpscore==-1) {next;}
-	    if($tmpscore < $score) {
-		$score=$tmpscore;
-		$bestcoord=$left{"coord$i"};
-		$beststrand=$left{"chr$i"};
+	my $score = 100000000;
+ 	for my $i (0..$lmatch - 1) {
+	    my $tmpscore = checkMultMatch ($left{"chr$i"}, $right{'chr0'}, $left{"coord$i"}, $right{'coord'}, $reference{$tmp}, $offset, $distance);
+	    if ($tmpscore == -1) {next}
+	    if ($tmpscore < $score) {
+		$score = $tmpscore;
+		$bestcoord = $left{"coord$i"};
+		$beststrand = $left{"chr$i"};
 	    }
+            else {next}
  	}
 
-	$beststrand=~m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
-	$tmp=$1;
-	$tmp=~tr/A-Z/a-z/;
-	$tmp=~s/rc_//i;
+	$beststrand =~ m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
+	$tmp = $1;
+	$tmp =~ tr/A-Z/a-z/;
+	$tmp =~ s/rc_//i;
 
-	if($beststrand=~m/^RC_/i) {
-	    if($score<=$offset+$distance) {
+	if ($beststrand =~ m/^RC_/i) {
+	    if ($score <= $offset + $distance) {
+
+                $l_seqname   = $tmp;
+                $l_feature   = $left{'line'} . q{:} . $lsequence;
+                $l_start     = $reference{$tmp} + 1 - $bestcoord;
+                $l_end       = $reference{$tmp} + 1 - $bestcoord + $readsize;
+                $l_score     = 1;
+                $l_strand    = q{-};
+                $l_attribute = 'target=' . substr ($reference{"$tmp-rc"}, $bestcoord - 3, $readsize + 4);
+
+                $r_seqname   = $tmp;
+                $r_feature   = $right{'line'} . q{:} . $rsequence;
+                $r_start     = $right{'coord'};
+                $r_end       = $right{'coord'} + $readsize;
+                $r_score     = 1;
+                $r_strand    = q{+};
+                $r_attribute = 'target=' . substr ($reference{"$tmp-seq"}, $right{'coord'} - 3, $readsize + 4);
+
+                ### TO DELETE
 		print join("\t",
 			   $tmp,
 			   "pair_align",
@@ -586,9 +844,28 @@ for(my $i=0;$i<@leftend;$i++) {
 			   "+",
 			   ".",
 			   "target=" . substr($reference{"$tmp-seq"}, $right{'coord'}-3, $readsize+4)) . "\n";
+                ### TO DELETE
 	    }
 	    else {
-		print join("\t",
+
+                $l_seqname   = $tmp;
+                $l_feature   = $left{'line'} . q{:} . $lsequence;
+                $l_start     = $bestcoord;
+                $l_end       = $bestcoord + $readsize;
+                $l_score     = 1;
+                $l_strand    = q{+};
+                $l_attribute = 'target=' . substr ($reference{"$tmp-seq"}, $bestcoord - 3, $readsize + 4);
+
+                $r_seqname   = $tmp;
+                $r_feature   = $right{'line'} . q{:} . $rsequence;
+                $r_start     = $reference{$tmp} + 1 - $right{'coord'};
+                $r_end       = $reference{$tmp} + 1 - $right{'coord'} + $readsize;
+                $r_score     = 1;
+                $r_strand    = q{-};
+                $r_attribute = 'target=' . substr ($reference{"$tmp-rc"}, $right{'coord'} - 3, $readsize + 4);
+
+                ### TO DELETE
+                print join("\t",
 			   $tmp,
 			   "pair_align",
 			   $left{'line'} . ":" . $lsequence,
@@ -608,10 +885,16 @@ for(my $i=0;$i<@leftend;$i++) {
 			   "-",
 			   ".",
 			   "target=" . substr($reference{"$tmp-rc"}, $right{'coord'}-3, $readsize+4)) . "\n";
+                ### TO DELETE
 	    }
 	}
 	else {
-	    if($nomatches) {
+	    if ($nomatches) {
+
+                $l_feature = $left{'line'} . ":" . $lsequence;
+                $r_feature = $right{'line'} . ":" . $rsequence;
+
+                ### TO DELETE
 		print join("\t",
 			   ".",
 			   "pair_align",
@@ -622,7 +905,7 @@ for(my $i=0;$i<@leftend;$i++) {
 			   ".",
 			   ".",
 			   ".") . "\n";
-		
+
 		print join("\t",
 			   ".",
 			   "pair_align",
@@ -633,6 +916,7 @@ for(my $i=0;$i<@leftend;$i++) {
 			   ".",
 			   ".",
 			   ".") . "\n";
+                ### TO DELETE
 	    }
 	}
     }
@@ -642,54 +926,72 @@ for(my $i=0;$i<@leftend;$i++) {
 
     ##### R0 - R0 #####
     ##### Multiple matches on both ends #####
-    if($lmatch>1 && $rmatch>1) {
+    if ($lmatch > 1 && $rmatch > 1) {
 	my ($lbestcoord, $rbestcoord, $lbeststrand, $rbeststrand);
-	my $bestscore=100000000;
+	my $bestscore = 100000000;
 
 	# loops through each possible target on the left
-	for(my $i=0;$i<$lmatch;$i++) {
+	for my $i (0..$lmatch - 1) {
 
-	    $left{"chr$i"}=~m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
-	    my $tmp=$1;
-	    $tmp=~tr/A-Z/a-z/;
-	    $tmp=~s/rc_//i;
+	    $left{"chr$i"} =~ m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
+	    my $tmp = $1;
+	    $tmp =~ tr/A-Z/a-z/;
+	    $tmp =~ s/rc_//i;
 
 	    my ($bestcoord, $beststrand);
-	    my $score=100000000;
+	    my $score = 100000000;
 
 	    # loops through each possible target on the right
-	    for(my $j=0;$j<$rmatch;$j++) {
+	    for my $j (0..$rmatch - 1) {
 
-		my $tmpscore=&checkMultMatch($left{"chr$i"}, $right{"chr$j"}, $left{"coord$i"}, $right{"coord$j"}, $reference{$tmp}, $offset, $distance);
+		my $tmpscore = checkMultMatch($left{"chr$i"}, $right{"chr$j"}, $left{"coord$i"}, $right{"coord$j"}, $reference{$tmp}, $offset, $distance);
 
-		if($tmpscore==-1) {next;}
+		if($tmpscore == -1) {next}
 		if($tmpscore < $score) {
-		    $score=$tmpscore;
-		    $bestcoord=$right{"coord$j"};
-		    $beststrand=$right{"chr$j"};
+		    $score = $tmpscore;
+		    $bestcoord = $right{"coord$j"};
+		    $beststrand = $right{"chr$j"};
 		}
 	    }
 
 	    # if no good matches on right side, skip this left sequence
-	    if($bestcoord==-1 && $beststrand==-1) {next;}
+	    if($bestcoord == -1 && $beststrand == -1) {next}
 
 	    if($score < $bestscore) {
-		$bestscore=$score;
-		$lbestcoord=$left{"coord$i"};
-		$lbeststrand=$left{"chr$i"};
-		$rbestcoord=$bestcoord;
-		$rbeststrand=$beststrand;
+		$bestscore = $score;
+		$lbestcoord = $left{"coord$i"};
+		$lbeststrand = $left{"chr$i"};
+		$rbestcoord = $bestcoord;
+		$rbeststrand = $beststrand;
 	    }
 	}
 
-	$lbeststrand=~m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
-	my $tmp=$1;
-	$tmp=~tr/A-Z/a-z/;
-	$tmp=~s/rc_//i;
+	$lbeststrand =~ m/(.*)/i; # this puts the base chromosome name ('chr.') into $1
+	my $tmp = $1;
+	$tmp =~ tr/A-Z/a-z/;
+	$tmp =~ s/rc_//i;
 
-	if($lbeststrand=~m/^RC_/i) {
-	    if($bestscore<=$offset+$distance) {
-		print join("\t",
+	if ($lbeststrand =~ m/^RC_/i) {
+	    if ($bestscore <= $offset + $distance) {
+
+                $l_seqname   = $tmp;
+                $l_feature   = $left{'line'} . q{:} . $lsequence;
+                $l_start     = $reference{$tmp} + 1 - $lbestcoord;
+                $l_end       = $reference{$tmp} + 1 - $lbestcoord + $readsize;
+                $l_score     = 1;
+                $l_strand    = q{-};
+                $l_attribute = 'target=' . substr ($reference{"$tmp-rc"}, $lbestcoord - 3, $readsize + 4);
+
+                $r_seqname   = $tmp;
+                $r_feature   = $right{'line'} . q{:} . $rsequence;
+                $r_start     = $rbestcoord;
+                $r_end       = $rbestcoord + $readsize;
+                $r_score     = 1;
+                $r_strand    = q{+};
+                $r_attribute = 'target=' . substr ($reference{"$tmp-seq"}, $rbestcoord - 3, $readsize + 4);
+
+                ### TO DELETE
+                print join("\t",
 			   $tmp,
 			   "pair_align",
 			   $left{'line'} . ":" . $lsequence,
@@ -709,8 +1011,27 @@ for(my $i=0;$i<@leftend;$i++) {
 			   "+",
 			   ".",
 			   "target=" . substr($reference{"$tmp-seq"}, $rbestcoord-3, $readsize+4)) . "\n";
+                ### TO DELETE
 	    }
 	    else {
+
+                $l_seqname   = $tmp;
+                $l_feature   = $left{'line'} . q{:} . $lsequence;
+                $l_start     = $lbestcoord;
+                $l_end       = $lbestcoord + $readsize;
+                $l_score     = 1;
+                $l_strand    = q{+};
+                $l_attribute = 'target=' . substr ($reference{"$tmp-seq"}, $lbestcoord - 3, $readsize + 4);
+
+                $r_seqname   = $tmp;
+                $r_feature   = $right{'line'} . q{:} . $rsequence;
+                $r_start     = $reference{$tmp} + 1 - $rbestcoord;
+                $r_end       = $reference{$tmp} + 1 - $rbestcoord + $readsize;
+                $r_score     = 1;
+                $r_strand    = q{-};
+                $r_attribute = 'target=' . substr ($reference{"$tmp-rc"}, $rbestcoord - 3, $readsize + 4);
+
+                ### TO DELETE
 		print join("\t",
 			   $tmp,
 			   "pair_align",
@@ -731,11 +1052,17 @@ for(my $i=0;$i<@leftend;$i++) {
 			   "-",
 			   ".",
 			   "target=" . substr($reference{"$tmp-rc"}, $rbestcoord-3, $readsize+4)) . "\n";
+                ### TO DELETE
 	    }
 	}
 	else {
-	    if($nomatches) {
-		print join("\t",
+	    if ($nomatches) {
+
+                $l_feature = $left{'line'} . ":" . $lsequence;
+                $r_feature = $right{'line'} . ":" . $rsequence;
+
+                ### TO DELETE
+                print join("\t",
 			   ".",
 			   "pair_align",
 			   $left{'line'} . ":" . $lsequence,
@@ -745,7 +1072,6 @@ for(my $i=0;$i<@leftend;$i++) {
 			   ".",
 			   ".",
 			   ".") . "\n";
-		
 		print join("\t",
 			   ".",
 			   "pair_align",
@@ -756,6 +1082,7 @@ for(my $i=0;$i<@leftend;$i++) {
 			   ".",
 			   ".",
 			   ".") . "\n";
+                ### TO DELETE
 	    }
 	}
     }
@@ -763,8 +1090,9 @@ for(my $i=0;$i<@leftend;$i++) {
 }
 # end for loop through all sequences
 print STDERR "done!\n";
-close(STDOUT);
-
+close STDOUT;
+close $LEFT;
+close $RIGHT;
 # main program finished
 
 
