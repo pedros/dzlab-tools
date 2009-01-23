@@ -3,19 +3,20 @@
 use warnings;
 use strict;
 use diagnostics;
+use Smart::Comments;
 
 my $loriginal=$ARGV[0];
 my $roriginal=$ARGV[1];
 my $mutated=$ARGV[2];
 my $readsize=$ARGV[3];
 
-die("usage: </1 fastafile> </2 fastafile> <gff align file> <read size>") unless @ARGV=4;
+die("usage: </1 fastafile> </2 fastafile> <gff align file> <read size>") unless @ARGV = 4;
 
 open(my $LORIG, "<", "$loriginal") or die("Can't open $loriginal");
 open(my $RORIG, "<", "$roriginal") or die("Can't open $roriginal");
 open(my $MUTATED, "<", "$mutated") or die("Can't open $mutated");
 
-while(my $mutline = <$MUTATED>) {
+while(my $mutline = <$MUTATED>) { ### Replacing...   % done
 
     if($mutline =~ m/\/1:[ACGTN]{$readsize}/) {
 	my $lorigline = <$LORIG>;

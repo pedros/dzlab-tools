@@ -67,7 +67,7 @@ while (@batch or $gff_file) {
     # prints out header fields that contain gff v3 header, generating program, time, and field names
     gff_print_header ($0, @argv);
 
-    # sort databy sequence name, feature, and starting coordinates
+    # sort data by sequence name, feature, and starting coordinates
     unless ($no_sort) {
         @data =  gff_sort ( \@data );
     }
@@ -162,7 +162,7 @@ sub gff_sliding_window {
 		   $context,
 		   $i,
 		   $i + $width - 1,
-		   sprintf('%.3f', $score),
+		   sprintf("%e", $score),
 		   '.',
 		   '.',
 		   $attribute,
