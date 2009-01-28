@@ -11,7 +11,7 @@ use Pod::Usage;
 # Globals, passed as command line options
 my $gff_file = q{-};
 my $width = 0;
-my $step = 0;
+my $step = $width;
 my $no_sort = 0;
 my @batch = ();
 my $output = q{-};
@@ -149,7 +149,7 @@ sub gff_sliding_window {
 	}
 
 	my $attribute = "c=$c_count;t=$t_count";
-        if ($step) {$attribute .= ";over_c=$overlap_c;over_t=$overlap_t"}
+        if ($step != $width) {$attribute .= ";over_c=$overlap_c;over_t=$overlap_t"}
 
 	if (scalar(@range) == 0) {
 	    $attribute = '.';

@@ -124,7 +124,7 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
 
     $leftend =~ s/[\r\n]//g;
     $rightend =~ s/[\r\n]//g;
-    
+
     # parses each line into hash
     my %left  = %{ parseEland3Line($leftend) };
     my %right = %{ parseEland3Line($rightend) };
@@ -155,6 +155,8 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
     if ( $lmatch == 0 && $rmatch == 0 ) {
         $l_feature = $left{'line'} . q{:} . $lsequence;
         $r_feature = $right{'line'} . q{:} . $rsequence;
+        $l_source  = 'NM/NM';
+        $r_source  = 'NM/NM';
     }
     ##### No matches on either end #####
 
@@ -162,6 +164,9 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
 
     ##### Unique matches on both ends #####
     if ( $lmatch == 1 && $rmatch == 1 ) {
+
+        $l_source  = 'U/U';
+        $r_source  = 'U/U';
 
         # gets chromosome name into $tmp
         $left{'chr0'} =~ m/(.*)/i;
@@ -175,7 +180,8 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
                         $right{'coord'}, $reference{$tmp}, $offset, $distance );
 
         # if both sequences match
-        if ($match) {
+        if ($match) { 
+
             if ( $left{'chr0'} =~ /^RC_/i ) { # if left sequence maps to reverse strand
                 $l_seqname = $tmp;
                 $l_feature = $left{'line'} . q{:} . $lsequence;
@@ -202,7 +208,6 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
                         $right{'coord'} - 1,
                         $readsize + 4
                     );
-
             }
             else {         # if left sequence maps to forward strand
                 $l_seqname   = $tmp;
@@ -247,6 +252,9 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
     # 0 matches on left sequence
     if ( $lmatch == 0 && $rmatch == 1 ) {
 
+        $l_source  = 'NM/U';
+        $r_source  = 'NM/U';
+
         # gets chromosome name into $tmp
         $right{'chr0'} =~ m/(.*)/i;
         my $tmp = $1;
@@ -287,6 +295,9 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
 
     # 0 matches on right sequence
     if ( $lmatch == 1 && $rmatch == 0 ) {
+
+        $l_source  = 'U/NM';
+        $r_source  = 'U/NM';
 
         # gets chromosome name into $tmp
         $left{'chr0'} =~ m/(.*)/i;
@@ -335,6 +346,9 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
 
     # multiple matches on right sequence
     if ( $lmatch == 0 && $rmatch > 1 ) {
+
+        $l_source  = "NM/R";
+        $r_source  = "NM/R";;
 
         $l_feature = $left{'line'} . q{:} . $lsequence;
 
@@ -388,6 +402,8 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
 
     # multiple matches on left sequence
     if ( $lmatch > 1 && $rmatch == 0 ) {
+        $l_source = "R/NM";
+        $r_source = "R/NM";
 
         $l_feature   = $left{'line'} . q{:} . $lsequence;
         $l_score     = $lmatch;
@@ -445,6 +461,9 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
     # multiple matches on right sequence
     if ( $lmatch == 1 && $rmatch > 1 ) {
 
+        $l_source  = 'U/R';
+        $r_source  = 'U/R';
+
         # gets the left chromosome
         $left{'chr0'} =~ m/(.*)/i;
         my $tmp = $1;
@@ -483,7 +502,8 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
         # loops through every possible match
         my ( $bestcoord, $beststrand );
         my $score = 100000000; # arbitrary large number; lower is better
-      U0_MM_LOOP_RIGHT:
+
+        U0_MM_LOOP_RIGHT:
         for my $i ( 0 .. $rmatch - 1 ) {
 
             # checks best match
@@ -552,6 +572,9 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
     # multiple matches on left sequence
     if ( $lmatch > 1 && $rmatch == 1 ) {
 
+        $l_source  = 'R/U';
+        $r_source  = 'R/U';
+
         # gets the right chromosome
         $right{'chr0'} =~ m/(.*)/i;
         my $tmp = $1;
@@ -590,6 +613,7 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
         # loops through every possible left match
         my ( $bestcoord, $beststrand );
         my $score = 100000000; # arbitrary large number; lower is better
+
         U0_MM_LOOP_LEFT:
         for my $i ( 0 .. $lmatch - 1 ) {
 
@@ -660,6 +684,9 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
     ##### Multiple matches on both ends #####
     if ( $lmatch > 1 && $rmatch > 1 ) {
 
+        $l_source  = 'R/R';
+        $r_source  = 'R/R';
+
         # loops through each possible target on the left
         my ( $lbestcoord, $rbestcoord, $lbeststrand, $rbeststrand );
         my $bestscore = 100000000; # arbitrary large number; lower is better
@@ -675,6 +702,7 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
             # loops through each possible target on the right
             my ( $bestcoord, $beststrand );
             my $score = 100000000; # arbitrary large number; lower is better
+            
             MM_LOOP_RIGHT:
             for my $j ( 0 .. $rmatch - 1 ) {
 
@@ -777,6 +805,9 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
             }
         }
         else { # if right sequence is distanced from left sequence outside given range
+            $l_source = "R/R";
+            $r_source = "R/R";
+
             $l_feature = $left{'line'} . q{:} . $lsequence;
             $r_feature = $right{'line'} . q{:} . $rsequence;
         }
@@ -884,49 +915,41 @@ sub checkMultMatch {
 # Returns reference to hash with following keys:
 # 'line', 'sequence', 'matches', 'chr[0-#matches-1]', 'coord[0-#matches-1]'
 sub parseEland3Line {
-    my (@line) = ( split( /\t/, shift ) );
+    my $tmp_eland_line = shift;
+    $tmp_eland_line =~ s/[\n\r]//g;
+    my @eland_line = (split /\t/, $tmp_eland_line);
 
     my %hash = ();
+    $hash{'line'}     = $eland_line[0];
+    $hash{'sequence'} = $eland_line[1];
 
-    $hash{'line'}     = $line[0];
-    $hash{'sequence'} = $line[1];
-
-    if ( $line[2] =~ 'NM' ) {
+    if ($eland_line[2] =~ m/NM/) {
         $hash{'matches'} = 0;
     }
-    else {
-        $hash{'matches'} = ( split ':', $line[2] )[0];
+
+    elsif ($eland_line[2] =~ m/^[0-9]+$/) {
+        $hash{'matches'} = $eland_line[2];
     }
 
-    if ( $hash{'matches'} > 1 ) {
-        my @all = split( /,/, $line[3] );
-        $hash{'matches'} = scalar(@all);
+    elsif ($eland_line[2] =~ m/:/) {
+        my @all_matches = split /,/, $eland_line[3];
+        $hash{'matches'} = scalar @all_matches;
     }
 
-    if ( $hash{'matches'} == 1 ) {
-        my $tmp = ( split ':', $line[3] )[0];
-        $tmp =~ s/\n//g;
-        $hash{'chr0'} = $tmp;
-        $tmp = ( split ':', $line[3] )[1];
-        $tmp =~ s/[A-Z][0-9]$//i;
-        $tmp =~ s/\n//g;
-        $hash{'coord'} = $tmp;
-    }
+    if ($hash{'matches'} > 1) {
+        my @all_reads = split /,/, $eland_line[3];
 
-    if ( $hash{'matches'} > 1 ) {
-        my @all = split( /,/, $line[3] );
-        $hash{'matches'} = scalar(@all);
-        for ( my $i = 0 ; $i < @all ; $i++ ) {
-            my $tmp = ( split ':', $all[$i] )[0];
-            $tmp =~ s/\n//g;
-            $hash{"chr$i"} = $tmp;
-            $tmp = ( split ':', $all[$i] )[1];
-            $tmp =~ s/[A-Z][0-9]$//i;
-            $tmp =~ s/\n//g;
-            $hash{"coord$i"} = $tmp;
+        for my $i (0..@all_reads - 1) {
+            ($hash{"chr$i"}, $hash{"coord$i"}) = split /:/, $all_reads[$i];
+            $hash{"coord$i"} =~ s/[A-Z]([0-9])$//i;
+            $hash{"mm$i"} = $1;
         }
     }
-
+    elsif ($hash{'matches'} == 1) {
+        ($hash{'chr0'}, $hash{'coord'}) = split /:/, $eland_line[3];
+        $hash{'coord'} =~ s/[A-Z]([0-9])$//i;
+        $hash{'mm'} = $1;
+    }
     return \%hash;
 }
 
