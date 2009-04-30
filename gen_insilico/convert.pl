@@ -13,9 +13,9 @@ my $fastafile = $ARGV[1];
 
 open(FAS,"<$fastafile") or die "Can't read input file";
 while(my $line = <FAS>) {
-    if($line =~ m/[ACGTN]+/i) {
+    if($line =~ m/^[ACGTN]+/i) {
 	$line =~ tr/Cc/Tt/ if $pattern eq 'c2t';
-	$line =~ tr/Cc/Tt/ if $pattern eq 'g2a';
+	$line =~ tr/Gg/Aa/ if $pattern eq 'g2a';
     }
     print $line;
 }
