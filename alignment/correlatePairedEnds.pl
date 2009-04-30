@@ -36,7 +36,10 @@ use strict;
 use warnings;
 use diagnostics;disable diagnostics;
 use Carp;
-use Smart::Comments '###';
+use Data::Dumper;
+#use Smart::Comments '###';
+#use Text::LevenshteinXS qw(distance);
+use List::Util qw(min);
 
 # Globals, passed as command line options
 my $leftendfile;           # left end sequences file in eland 3 format
@@ -46,8 +49,6 @@ my $distance       = 300;  # maximum (random) range distance beyond offset.
 my $offset         = 0;    # minimum distance between left and right sequences of a pair.
 my $output         = q{-}; # output mode. standard output by default
 my $readsize       = 45;   # length of each read
-my $repeats        = 0;    # print ambiguous reads
-my $nomatches      = 0;    # print unmatched reads
 my $usage          = 0;    # print usage and exit
 
 # Initial check of command line parameters
@@ -62,8 +63,6 @@ my $result = GetOptions(
     "offset|t=i"    => \$offset,
     "output|o:s"    => \$output,
     "readsize|s:i"  => \$readsize,
-    "repeats|p"     => sub { $repeats = 1 },
-    "nomatches|n"   => sub { $nomatches = 1 },
     "verbose|v"     => sub { enable diagnostics },
     "quiet|q"       => sub { no warnings  },
     "help|h"        => \&usage
@@ -101,7 +100,7 @@ my %reference = ();
             $line = join( q{}, 'NN', @fastaseq[ $idx[$j] + 1 .. $idx[$j + 1] - 1] , 'NN');
         }
         $line =~ s/[\n\r]//g;
-        $reference{ $dsc[$j] }     = length $line;
+        $reference{ $dsc[$j] }     = (length $line) - 4;
         $reference{"$dsc[$j]-seq"} = $line;
         $reference{"$dsc[$j]-rc"}  = reverseComp ($line);
     }
@@ -116,9 +115,7 @@ if ( $output ne q{-} ) {
 open my $LEFT,  '<', $leftendfile  or croak "Can't open file: $leftendfile";
 open my $RIGHT, '<', $rightendfile or croak "Can't open file: $rightendfile";
 
-# loops through left sequences (left and right files should have same number of sequences)
-while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightendfile reads...  % iterations done
-
+while (my $leftend = <$LEFT>) {
     # reads single sequence from each file
     my $rightend = <$RIGHT>;
 
@@ -147,9 +144,8 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
 
 
 
+
     ##### START POSSIBLE CASES HERE #####
-
-
 
     ##### No matches on either end #####
     if ( $lmatch == 0 && $rmatch == 0 ) {
@@ -176,19 +172,19 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
 
         # checks that both sequences match
         my $match =
-            checkMatch( $left{'chr0'}, $right{'chr0'}, $left{'coord'},
+            check_match( $left{'chr0'}, $right{'chr0'}, $left{'coord'},
                         $right{'coord'}, $reference{$tmp}, $offset, $distance );
 
         # if both sequences match
-        if ($match) { 
-
+        if ($match) {
             if ( $left{'chr0'} =~ /^RC_/i ) { # if left sequence maps to reverse strand
                 $l_seqname = $tmp;
                 $l_feature = $left{'line'} . q{:} . $lsequence;
-                $l_start   = $reference{$tmp} + 1 - $left{'coord'};
-                $l_end     = $reference{$tmp} + 1 - $left{'coord'} + $readsize;
+                $l_start   = $left{'coord'};
+                $l_end     = $left{'coord'} + $readsize;
                 $l_score   = 1;
                 $l_strand  = q{-};
+                $l_frame   = $left{mm},
                 $l_attribute = 'target='
                     . substr(
                         $reference{"$tmp-rc"},
@@ -202,6 +198,7 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
                 $r_end       = $right{'coord'} + $readsize;
                 $r_score     = 1;
                 $r_strand    = q{+};
+                $r_frame   = $right{mm},
                 $r_attribute = 'target='
                     . substr(
                         $reference{"$tmp-seq"},
@@ -216,6 +213,7 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
                 $l_end       = $left{'coord'} + $readsize;
                 $l_score     = 1;
                 $l_strand    = q{+};
+                $l_frame     = $left{mm},
                 $l_attribute = 'target='
                     . substr(
                         $reference{"$tmp-seq"},
@@ -225,10 +223,11 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
 
                 $r_seqname = $tmp;
                 $r_feature = $right{'line'} . q{:} . $rsequence;
-                $r_start   = $reference{$tmp} + 1 - $right{'coord'};
-                $r_end     = $reference{$tmp} + 1 - $right{'coord'} + $readsize;
+                $r_start   = $right{'coord'};
+                $r_end     = $right{'coord'} + $readsize;
                 $r_score   = 1;
                 $r_strand  = q{-};
+                $r_frame     = $right{mm},
                 $r_attribute = 'target='
                     . substr(
                         $reference{"$tmp-rc"},
@@ -236,9 +235,38 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
                         $readsize + 4
                     );
             }
-        }
-        else { # if sequences don't match
-            $l_feature = $left{'line'} . q{:} . $lsequence;
+        } # no match, trust /1 read
+        else {
+            if ( $left{'chr0'} =~ /^RC_/i ) { # if left sequence maps to reverse strand
+                $l_seqname = $tmp;
+                $l_feature = $left{'line'} . q{:} . $lsequence;
+                $l_start   = $left{'coord'};
+                $l_end     = $left{'coord'} + $readsize;
+                $l_score   = 1;
+                $l_strand  = q{-};
+                $l_frame     = $left{mm},
+                $l_attribute = 'target='
+                    . substr(
+                        $reference{"$tmp-rc"},
+                        $left{'coord'} - 1,
+                        $readsize + 4
+                    );
+            }
+            else {         # if left sequence maps to forward strand
+                $l_seqname   = $tmp;
+                $l_feature   = $left{'line'} . q{:} . $lsequence;
+                $l_start     = $left{'coord'};
+                $l_end       = $left{'coord'} + $readsize;
+                $l_score     = 1;
+                $l_strand    = q{+};
+                $l_frame     = $left{mm},
+                $l_attribute = 'target='
+                . substr(
+                    $reference{"$tmp-seq"},
+                    $left{'coord'} - 1,
+                    $readsize + 4
+                );
+            }
             $r_feature = $right{'line'} . q{:} . $rsequence;
         }
     }
@@ -255,42 +283,45 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
         $l_source  = 'NM/U';
         $r_source  = 'NM/U';
 
-        # gets chromosome name into $tmp
-        $right{'chr0'} =~ m/(.*)/i;
-        my $tmp = $1;
-        $tmp =~ tr/A-Z/a-z/;
-        $tmp =~ s/rc_//i;
-
         $l_feature = $left{'line'} . q{:} . $lsequence;
+        $r_feature = $right{'line'} . q{:} . $rsequence;
 
-        if ( $right{'chr0'} =~ m/^RC_/i ) { # if right sequence maps to reverse strand
-            $r_seqname   = $tmp;
-            $r_feature   = $right{'line'} . q{:} . $rsequence;
-            $r_start     = $reference{$tmp} + 1 - $right{'coord'};
-            $r_end       = $reference{$tmp} + 1 - $right{'coord'} + $readsize;
-            $r_score     = 1;
-            $r_strand    = q{-};
-            $r_attribute = 'target='
-                . substr(
-                    $reference{"$tmp-rc"},
-                    $right{'coord'} - 1,
-                    $readsize + 4
-                );
-        }
-        else { # if right sequence maps to forward strand
-            $r_seqname   = $tmp;
-            $r_feature   = $right{'line'} . q{:} . $rsequence;
-            $r_start     = $right{'coord'};
-            $r_end       = $right{'coord'} + $readsize;
-            $r_score     = 1;
-            $r_strand    = q{+};
-            $r_attribute = 'target='
-                . substr(
-                    $reference{"$tmp-seq"},
-                    $right{'coord'} - 1,
-                    $readsize + 4
-                );
-        }
+#         # gets chromosome name into $tmp
+#         $right{'chr0'} =~ m/(.*)/i;
+#         my $tmp = $1;
+#         $tmp =~ tr/A-Z/a-z/;
+#         $tmp =~ s/rc_//i;
+
+#         $l_feature = $left{'line'} . q{:} . $lsequence;
+
+#         if ( $right{'chr0'} =~ m/^RC_/i ) { # if right sequence maps to reverse strand
+#             $r_seqname   = $tmp;
+#             $r_feature   = $right{'line'} . q{:} . $rsequence;
+#             $r_start     = $right{'coord'};
+#             $r_end       = $right{'coord'} + $readsize;
+#             $r_score     = 1;
+#             $r_strand    = q{-};
+#             $r_attribute = 'target='
+#                 . substr(
+#                     $reference{"$tmp-rc"},
+#                     $right{'coord'} - 1,
+#                     $readsize + 4
+#                 );
+#         }
+#         else { # if right sequence maps to forward strand
+#             $r_seqname   = $tmp;
+#             $r_feature   = $right{'line'} . q{:} . $rsequence;
+#             $r_start     = $right{'coord'};
+#             $r_end       = $right{'coord'} + $readsize;
+#             $r_score     = 1;
+#             $r_strand    = q{+};
+#             $r_attribute = 'target='
+#                 . substr(
+#                     $reference{"$tmp-seq"},
+#                     $right{'coord'} - 1,
+#                     $readsize + 4
+#                 );
+#         }
     }
 
     # 0 matches on right sequence
@@ -306,20 +337,19 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
         $tmp =~ s/rc_//i;
 
         if ( $left{'chr0'} =~ m/^RC_/i ) {  # if left sequence maps to reverse strand
-
             $l_seqname = $tmp;
             $l_feature = $left{'line'} . q{:} . $lsequence;
-            $l_start   = $reference{$tmp} + 1 - $left{'coord'};
-            $l_end     = $reference{$tmp} + 1 - $left{'coord'} + $readsize;
+            $l_start   = $left{'coord'};
+            $l_end     = $left{'coord'} + $readsize;
             $l_score   = 1;
             $l_strand  = q{-};
+            $l_frame   = $left{mm},
             $l_attribute =
-                'target='
-                    . substr( $reference{"$tmp-rc"}, $left{'coord'} - 1,
-                              $readsize + 4 );
-
+            'target='
+            . substr( $reference{"$tmp-rc"}, $left{'coord'} - 1,
+                      $readsize + 4 );
         }
-        else { # if left sequence maps to reverse strand
+        else { # if left sequence maps to forward strand
 
             $l_seqname   = $tmp;
             $l_feature   = $left{'line'} . q{:} . $lsequence;
@@ -327,13 +357,13 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
             $l_end       = $left{'coord'} + $readsize;
             $l_score     = 1;
             $l_strand    = q{+};
+            $l_frame   = $left{mm},
             $l_attribute = 'target='
-                . substr(
-                    $reference{"$tmp-seq"},
-                    $left{'coord'} - 1,
-                    $readsize + 4
-                );
-
+            . substr(
+                $reference{"$tmp-seq"},
+                $left{'coord'} - 1,
+                $readsize + 4
+            );
         }
         $r_feature = $right{'line'} . q{:} . $rsequence;
     }
@@ -372,7 +402,7 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
                 $r_attribute .= join(
                     q{:},
                     $right{"chr$i"},
-                    $reference{$tmp} + 1 - $right{"coord$i"},
+                    $right{"coord$i"},
                     substr(
                         $reference{"$tmp-rc"},
                         $right{"coord$i"} - 1,
@@ -423,7 +453,7 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
                 $l_attribute .= join(
                     q{:},
                     $left{"chr$i"},
-                    $reference{$tmp} + 1 - $left{"coord$i"},
+                    $left{"coord$i"},
                     substr(
                         $reference{"$tmp-rc"},
                         $left{"coord$i"} - 1,
@@ -470,13 +500,14 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
         $tmp =~ tr/A-Z/a-z/;
         $tmp =~ s/rc_//i;
 
-        if ( $tmp =~ m/^RC_/i ) { # if left sequence maps to reverse strand
+        if ( $left{'chr0'} =~ m/^RC_/i ) { # if left sequence maps to reverse strand
             $l_seqname   = $tmp;
             $l_feature   = $left{'line'} . q{:} . $lsequence;
-            $l_start     = $reference{$tmp} + 1 - $left{'coord'};
-            $l_end       = $reference{$tmp} + 1 - $left{'coord'} + $readsize;
+            $l_start     = $left{'coord'};
+            $l_end       = $left{'coord'} + $readsize;
             $l_score     = 1;
             $l_strand    = q{-};
+            $l_frame     = $left{mm},
             $l_attribute = 'target='
                 . substr(
                     $reference{"$tmp-rc"},
@@ -491,6 +522,7 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
             $l_end       = $left{'coord'} + $readsize;
             $l_score     = 1;
             $l_strand    = q{+};
+            $l_frame     = $left{mm},
             $l_attribute = 'target='
                 . substr(
                     $reference{"$tmp-seq"},
@@ -500,7 +532,7 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
         }
 
         # loops through every possible match
-        my ( $bestcoord, $beststrand );
+        my ( $bestcoord, $beststrand, $bestmm ) = (-1, -1, -1);
         my $score = 100000000; # arbitrary large number; lower is better
 
         U0_MM_LOOP_RIGHT:
@@ -508,7 +540,7 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
 
             # checks best match
             my $tmpscore =
-                checkMultMatch( $left{'chr0'}, $right{"chr$i"}, $left{'coord'},
+                check_mult_match( $left{'chr0'}, $right{"chr$i"}, $left{'coord'},
                                 $right{"coord$i"}, $reference{$tmp}, $offset, $distance );
 
             # if $tmpscore is higher than current score of -1 discard potential match
@@ -519,6 +551,7 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
                 $score      = $tmpscore;
                 $bestcoord  = $right{"coord$i"};
                 $beststrand = $right{"chr$i"};
+                $bestmm     = $right{"mm$i"};
             }
         }
 
@@ -536,10 +569,11 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
 
                 $r_seqname   = $tmp;
                 $r_feature   = $right{'line'} . q{:} . $rsequence;
-                $r_start     = $reference{$tmp} + 1 - $bestcoord;
-                $r_end       = $reference{$tmp} + 1 - $bestcoord + $readsize;
+                $r_start     = $bestcoord;
+                $r_end       = $bestcoord + $readsize;
                 $r_score     = 1;
                 $r_strand    = q{-};
+                $r_frame     = $bestmm,
                 $r_attribute = 'target='
                     . substr(
                         $reference{"$tmp-rc"},
@@ -555,6 +589,7 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
                 $r_end       = $bestcoord + $readsize;
                 $r_score     = 1;
                 $r_strand    = q{+};
+                $r_frame     = $bestmm,
                 $r_attribute = 'target='
                     . substr(
                         $reference{"$tmp-seq"},
@@ -566,6 +601,60 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
         }
         else { # if right sequence is distanced from left sequence outside given range
             $r_feature = $right{'line'} . q{:} . $rsequence;
+#             if ( $l_strand eq q{-} ) {
+
+#                 my $right_target_sequence = substr $reference{"$l_seqname-rc"}, $left{'coord'} - 1 + $offset, $distance;
+#                 $right_target_sequence =~ tr/Gg/Aa/;
+#                 my @edit_distances = @{get_edit_distances ($rsequence, $right_target_sequence)};
+
+#                 my $min_distance = min @edit_distances;
+#                 my (@min_distance_indices) = grep { $edit_distances[$_] == $min_distance } 0..$#edit_distances;
+
+#                 if (@min_distance_indices > 1) {
+#                     $r_feature = $right{'line'} . q{:} . $rsequence;
+#                 }
+#                 else {
+#                     $r_seqname   = $l_seqname;
+#                     $r_feature   = $right{'line'} . q{:} . $rsequence;
+#                     $r_start     = $left{'coord'} + $min_distance_indices[0];
+#                     $r_end       = $left{'coord'} + $min_distance_indices[0] + $readsize;
+#                     $r_score     = 1;
+#                     $r_strand    = q{+};
+#                     $r_attribute = 'target='
+#                     . substr(
+#                         $right_target_sequence,
+#                         $min_distance_indices[0] - 2,
+#                         $readsize + 4
+#                     );
+#                 }
+#             }
+#             else {
+
+#                 my $right_target_sequence = substr $reference{"$l_seqname-seq"}, $left{'coord'} - 1 + $offset, $distance;
+#                 $right_target_sequence =~ tr/Gg/Aa/;
+#                 my @edit_distances = @{get_edit_distances ($rsequence, $right_target_sequence)};
+
+#                 my $min_distance = min @edit_distances;
+#                 my (@min_distance_indices) = grep { $edit_distances[$_] == $min_distance } 0..$#edit_distances;
+
+#                 if (@min_distance_indices > 1) {
+#                     $r_feature = $right{'line'} . q{:} . $rsequence;
+#                 }
+#                 else {
+#                     $r_seqname   = $l_seqname;
+#                     $r_feature   = $right{'line'} . q{:} . $rsequence;
+#                     $r_start     = $reference{$l_seqname} + 1 - $left{'coord'} + $min_distance_indices[0];
+#                     $r_end       = $reference{$l_seqname} + 1 - $left{'coord'} + $min_distance_indices[0] + $readsize;
+#                     $r_score     = 1;
+#                     $r_strand    = q{-};
+#                     $r_attribute = 'target='
+#                     . substr(
+#                         $right_target_sequence,
+#                         $min_distance_indices[0] - 2,
+#                         $readsize + 4
+#                     );
+#                 }
+#             }
         }
     }
 
@@ -581,13 +670,14 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
         $tmp =~ tr/A-Z/a-z/;
         $tmp =~ s/rc_//i;
 
-        if ( $tmp =~ m/^RC_/ ) {
+        if ( $right{'chr0'} =~ m/^RC_/ ) {
             $r_seqname = $tmp;
             $r_feature = $right{'line'} . q{:} . $rsequence;
-            $r_start   = $reference{$tmp} + 1 - $right{'coord'};
-            $r_end     = $reference{$tmp} + 1 - $right{'coord'} + $readsize;
+            $r_start   = $right{'coord'};
+            $r_end     = $right{'coord'} + $readsize;
             $r_score   = 1;
             $r_strand  = q{-};
+            $r_frame   = $right{mm},
             $r_attribute = 'target='
                 . substr(
                     $reference{"$tmp-rc"},
@@ -602,6 +692,7 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
             $r_end       = $right{'coord'} + $readsize;
             $r_score     = 1;
             $r_strand    = q{+};
+            $r_frame     = $right{mm},
             $r_attribute = 'target='
                 . substr(
                     $reference{"$tmp-seq"},
@@ -611,7 +702,7 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
         }
 
         # loops through every possible left match
-        my ( $bestcoord, $beststrand );
+        my ( $bestcoord, $beststrand, $bestmm ) = (-1, -1, -1);
         my $score = 100000000; # arbitrary large number; lower is better
 
         U0_MM_LOOP_LEFT:
@@ -619,7 +710,7 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
 
             # checks best match
             my $tmpscore =
-                checkMultMatch ($left{"chr$i"}, $right{'chr0'}, $left{"coord$i"},
+                check_mult_match ($left{"chr$i"}, $right{'chr0'}, $left{"coord$i"},
                                 $right{'coord'}, $reference{$tmp}, $offset, $distance);
 
             # if $tmpscore is higher than current score of -1 discard potential match
@@ -630,6 +721,7 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
                 $score      = $tmpscore;
                 $bestcoord  = $left{"coord$i"};
                 $beststrand = $left{"chr$i"};
+                $bestmm     = $left{"mm$i"};
             }
         }
 
@@ -646,10 +738,11 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
 
                 $l_seqname = $tmp;
                 $l_feature = $left{'line'} . q{:} . $lsequence;
-                $l_start   = $reference{$tmp} + 1 - $bestcoord;
-                $l_end     = $reference{$tmp} + 1 - $bestcoord + $readsize;
+                $l_start   = $bestcoord;
+                $l_end     = $bestcoord + $readsize;
                 $l_score   = 1;
                 $l_strand  = q{-};
+                $l_frame   = $bestmm,
                 $l_attribute = 'target='
                     . substr( $reference{"$tmp-rc"},
                               $bestcoord - 1,
@@ -664,6 +757,7 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
                 $l_end       = $bestcoord + $readsize;
                 $l_score     = 1;
                 $l_strand    = q{+};
+                $l_frame     = $bestmm,
                 $l_attribute = 'target='
                     . substr(
                         $reference{"$tmp-seq"},
@@ -674,6 +768,60 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
         }
         else { # if right sequence is distanced from left sequence outside given range
             $l_feature = $left{'line'} . q{:} . $lsequence;
+#             if ( $r_strand eq q{-} ) {
+
+#                 my $left_target_sequence = substr $reference{"$r_seqname-rc"}, $right{'coord'} - 1 + $offset, $distance;
+#                 $left_target_sequence =~ tr/Cc/Tt/;
+#                 my @edit_distances = @{get_edit_distances ($lsequence, $left_target_sequence)};
+
+#                 my $min_distance = min @edit_distances;
+#                 my (@min_distance_indices) = grep { $edit_distances[$_] == $min_distance } 0..$#edit_distances;
+
+#                 if (@min_distance_indices > 1) {
+#                     $l_feature = $left{'line'} . q{:} . $lsequence;
+#                 }
+#                 else {
+#                     $l_seqname   = $r_seqname;
+#                     $l_feature   = $right{'line'} . q{:} . $lsequence;
+#                     $l_start     = $right{'coord'} + $min_distance_indices[0];
+#                     $l_end       = $right{'coord'} + $min_distance_indices[0] + $readsize;
+#                     $l_score     = 1;
+#                     $l_strand    = q{+};
+#                     $l_attribute = 'target='
+#                     . substr(
+#                         $left_target_sequence,
+#                         $min_distance_indices[0] - 2,
+#                         $readsize + 4
+#                     );
+#                 }
+#             }
+#             else {
+
+#                 my $left_target_sequence = substr $reference{"$r_seqname-seq"}, $right{'coord'} - 1 + $offset, $distance;
+#                 $left_target_sequence =~ tr/Gg/Aa/;
+#                 my @edit_distances = @{get_edit_distances ($lsequence, $left_target_sequence)};
+
+#                 my $min_distance = min @edit_distances;
+#                 my (@min_distance_indices) = grep { $edit_distances[$_] == $min_distance } 0..$#edit_distances;
+
+#                 if (@min_distance_indices > 1) {
+#                     $l_feature = $left{'line'} . q{:} . $lsequence;
+#                 }
+#                 else {
+#                     $l_seqname   = $r_seqname;
+#                     $l_feature   = $left{'line'} . q{:} . $lsequence;
+#                     $l_start     = $reference{$r_seqname} + 1 - $right{'coord'} + $min_distance_indices[0];
+#                     $l_end       = $reference{$r_seqname} + 1 - $right{'coord'} + $min_distance_indices[0] + $readsize;
+#                     $l_score     = 1;
+#                     $l_strand    = q{-};
+#                     $l_attribute = 'target='
+#                     . substr(
+#                         $left_target_sequence,
+#                         $min_distance_indices[0] - 2,
+#                         $readsize + 4
+#                     );
+#                 }
+#             }
         }
     }
     ##### One match on one end, multiple matches on other end #####
@@ -688,8 +836,10 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
         $r_source  = 'R/R';
 
         # loops through each possible target on the left
-        my ( $lbestcoord, $rbestcoord, $lbeststrand, $rbeststrand );
+        my ( $lbestcoord, $rbestcoord, $lbestmm, $lbeststrand, $rbeststrand, $rbestmm )
+        = (-1, -1, -1, -1, -1, -1);
         my $bestscore = 100000000; # arbitrary large number; lower is better
+
         MM_LOOP_LEFT:
         for my $i ( 0 .. $lmatch - 1 ) {
 
@@ -700,14 +850,14 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
             $tmp =~ s/rc_//i;
 
             # loops through each possible target on the right
-            my ( $bestcoord, $beststrand );
+            my ( $bestcoord, $beststrand, $bestmm ) = (-1, -1, -1);
             my $score = 100000000; # arbitrary large number; lower is better
-            
+
             MM_LOOP_RIGHT:
             for my $j ( 0 .. $rmatch - 1 ) {
 
                 my $tmpscore =
-                    checkMultMatch( $left{"chr$i"}, $right{"chr$j"},
+                    check_mult_match( $left{"chr$i"}, $right{"chr$j"},
                                     $left{"coord$i"}, $right{"coord$j"}, $reference{$tmp},
                                     $offset, $distance );
 
@@ -719,6 +869,7 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
                     $score      = $tmpscore;
                     $bestcoord  = $right{"coord$j"};
                     $beststrand = $right{"chr$j"};
+                    $bestmm     = $right{"mm$j"};
                 }
             }
 
@@ -730,8 +881,10 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
                 $bestscore   = $score;
                 $lbestcoord  = $left{"coord$i"};
                 $lbeststrand = $left{"chr$i"};
+                $lbestmm     = $left{"mm$i"};
                 $rbestcoord  = $bestcoord;
                 $rbeststrand = $beststrand;
+                $rbestmm     = $bestmm;
             }
         }
 
@@ -749,10 +902,11 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
 
                 $l_seqname   = $tmp;
                 $l_feature   = $left{'line'} . q{:} . $lsequence;
-                $l_start     = $reference{$tmp} + 1 - $lbestcoord;
-                $l_end       = $reference{$tmp} + 1 - $lbestcoord + $readsize;
+                $l_start     = $lbestcoord;
+                $l_end       = $lbestcoord + $readsize;
                 $l_score     = 1;
                 $l_strand    = q{-};
+                $l_frame     = $lbestmm;
                 $l_attribute = 'target='
                     . substr(
                         $reference{"$tmp-rc"},
@@ -766,6 +920,7 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
                 $r_end       = $rbestcoord + $readsize;
                 $r_score     = 1;
                 $r_strand    = q{+};
+                $r_frame     = $rbestmm;
                 $r_attribute = 'target='
                     . substr(
                         $reference{"$tmp-seq"},
@@ -782,6 +937,7 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
                 $l_end       = $lbestcoord + $readsize;
                 $l_score     = 1;
                 $l_strand    = q{+};
+                $l_frame     = $lbestmm;
                 $l_attribute = 'target='
                     . substr(
                         $reference{"$tmp-seq"},
@@ -791,10 +947,11 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
 
                 $r_seqname   = $tmp;
                 $r_feature   = $right{'line'} . q{:} . $rsequence;
-                $r_start     = $reference{$tmp} + 1 - $rbestcoord;
-                $r_end       = $reference{$tmp} + 1 - $rbestcoord + $readsize;
+                $r_start     = $rbestcoord;
+                $r_end       = $rbestcoord + $readsize;
                 $r_score     = 1;
                 $r_strand    = q{-};
+                $r_frame     = $rbestmm;
                 $r_attribute = 'target='
                     . substr(
                         $reference{"$tmp-rc"},
@@ -819,21 +976,14 @@ while (my $leftend = <$LEFT>) { ### Matching $leftendfile reads versus $rightend
 
 
     # print both ends
-    # only print no matches if explicitly indicated or if there are matches
-    # only print multiple matches if explicitly indicated
-#    if ( $nomatches or $l_score == 1 or ($l_score > 1 and $repeats) ) {
-        print join( "\t",
-                    $l_seqname, $l_source, $l_feature, $l_start, $l_end,
-                    $l_score,   $l_strand, $l_frame,  $l_attribute ),
-                        "\n";
-#    }
-
-#    if ( $nomatches or $r_score == 1 or ($r_score > 1 and $repeats)  ) {
-        print join( "\t",
-                    $r_seqname, $r_source, $r_feature, $r_start, $r_end,
-                    $r_score,   $r_strand, $r_frame,  $r_attribute ),
-                        "\n";
-#    }
+    print join( "\t",
+                $l_seqname, $l_source, $l_feature, $l_start, $l_end,
+                $l_score,   $l_strand, $l_frame,  $l_attribute ),
+                "\n";
+    print join( "\t",
+                $r_seqname, $r_source, $r_feature, $r_start, $r_end,
+                $r_score,   $r_strand, $r_frame,  $r_attribute ),
+                "\n";
 }
 
 # end for loop through all sequences
@@ -853,62 +1003,55 @@ close $RIGHT;
 # Checks that each element of a pair belongs to the reverse complement of the other,
 # and that both their coordinates summed don't exceed the length of the chromosome plus or minus the library size.
 # Returns: $match = 1 or 0
-sub checkMatch {
+sub check_match {
     my ( $lchr, $rchr, $lcoord, $rcoord, $chrlength, $offset, $distance ) = @_;
-    my $match = 1;
 
     # check chromosome
     if ( $lchr =~ m/^([^R][^C][^_])/i ) {
         if ( !$rchr =~ m/^RC_$1/i ) {
-            $match = 0;
+            return 0;
         }
-    }
-    else {
+    } else {
         if ( $rchr =~ m/^RC_(.*)/i ) {
-            if ( $lchr =~ m/^$1/i ) {
-                $match = 0;
+            if ( !$lchr =~ m/^$1/i ) {
+                return 0;
             }
         }
     }
 
     # check coordinates
-    if (   ( $lcoord + $rcoord > $chrlength + ( $offset + $distance ) * 2 )
-               || ( $lcoord + $rcoord < $chrlength - ( $offset + $distance ) * 2 ) ) {
-        $match = 0;
-    }
-    return $match;
+    my $coord_distance = abs (($chrlength - $lcoord + 1) - $rcoord);
+    if ( $coord_distance > ($offset + $distance) ) {return 0;}
+
+    return 1;
 }
 
 # Given 2 chromosomes and 2 coordinates, plus a library offset and distance (see header for details):
 # Checks that each element of a pair belongs to the reverse complement of the other,
 # and that both their coordinates summed don't exceed the length of the chromosome plus or minus the library size.
 # Returns $score = library size/distance between both sequences or -1 for out of range distances
-sub checkMultMatch {
+sub check_mult_match {
     my ( $lchr, $rchr, $lcoord, $rcoord, $chrlength, $offset, $distance ) = @_;
     my $score;
 
     # check chromosome
     if ( $lchr =~ m/^([^R][^C][^_])/i ) {
         if ( !$rchr =~ m/^RC_$1/i ) {
-            $score = -1;
+            return -1;
         }
-    } else {
+    }
+    else {
         if ( $rchr =~ m/^RC_(.*)/i ) {
             if ( !$lchr =~ m/^$1/i ) {
-                $score = -1;
+                return -1;
             }
         }
     }
 
-    # check absolute coordinates
-    if (   ( $lcoord + $rcoord > $chrlength + ( $offset + $distance ) * 2 )
-               || ( $lcoord + $rcoord < $chrlength - ( $offset + $distance ) * 2 ) ) {
-        $score = -1;
-    }
+    my $coord_distance = abs (($chrlength - $lcoord + 1) - $rcoord);
+    if ( $coord_distance > ($offset + $distance) ) {return -1;}
 
-    # check relative coordinates
-    $score = abs( $lcoord - ( $chrlength - $rcoord ) );
-    return $score;
+    return $coord_distance;
 }
 
 # Parses single eland3 record (output from seqmap)
@@ -962,6 +1105,35 @@ sub reverseComp {
     return reverse $shortseq;
 }
 
+
+sub generate_windows {
+    my ($target_sequence, $readsize) = @_;
+
+    my @targets = ();
+
+    for (my $i = 0; $i < (length $target_sequence) - $readsize; $i++) {
+        push @targets, substr $target_sequence, $i, $readsize;
+    }
+
+    return \@targets;
+}
+
+
+sub get_edit_distances {
+    my ($base_sequence, $target_sequence) = @_;
+
+    my $targets_ref = generate_windows ($target_sequence, length $base_sequence);
+
+    my @edit_distances;
+
+    for my $target (@{$targets_ref}) {
+        push @edit_distances, distance ($base_sequence, $target);
+    }
+
+    return \@edit_distances;
+}
+
+
 sub usage {
     if ( $usage || @ARGV < 5 ) {
         print STDERR "correlatePairedEnds.pl <PARAMETERS> [OPTIONS]
@@ -972,8 +1144,6 @@ sub usage {
 \t<--distance>\tMaximum variation from offset
 \t[--output]\tFilename to write results to (default is STDOUT)
 \t[--readsize]\tRaw sequence length
-\t[--repeats]\tPrint reads with multiple matches
-\t[--nomatches]\tPrint reads with no matches
 \t[--quiet]\tDon't output perl warnings
 \t[--verbose]\tOutput detailed perl diagnostic messages
 \t[--usage]\tPrints this

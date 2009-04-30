@@ -41,20 +41,18 @@ use Data::Dumper;
 use Carp;
 
 # Globals, passed as command line options
-my $gff_file_1  = '';
-my $gff_file_2  = '';
-my $operation   = 'sub';
-my $statistic   = 'Fisher::twotailed';
+my $gff_file_1 = '';
+my $gff_file_2 = '';
+my $operation = 'sub';
+my $statistic = 'Fisher::twotailed';
 my $inverse_log = -1;
-my $reverse     = 0;
-my $threshold   = 0;
-my $concatenate = 0;
-my $valid_gff   = 0;
-my $debug       = 0;
-my $output      = '-';
-my $verbose     = 0;
-my $quiet       = 0;
-my $usage       = 0;
+my $reverse = 0;
+my @threshold = ();
+my $debug = 0;
+my $output = '-';
+my $verbose = 0;
+my $quiet = 0;
+my $usage = 0;
 
 # Initial check of command line parameters
 if (@ARGV < 2) {
@@ -63,22 +61,22 @@ if (@ARGV < 2) {
 my @argv = @ARGV;
 
 # Grabs and parses command line options
-my $result = GetOptions (
-    'gff-a|a=s'            => \$gff_file_1,
-    'gff-b|b=s'            => \$gff_file_2,
-    'operation|op|p:s'     => \$operation,
-    'statistic|stat|s=s'   => \$statistic,
-    'inverse-log|ilog|i:i' => \$inverse_log,
-    'reverse-score|rev|r'  => \$reverse,
-    'output|o:s'           => \$output,
-    'threshold|t'          => \$threshold,
-    'concatenate|c'        => \$concatenate,
-    'valid-gff|g'          => \$valid_gff,
-    'debug|d'              => \$debug,
-    'verbose|v'            => sub {enable diagnostics;use warnings;},
-    'quiet|q'              => sub {disable diagnostics;no warnings;}, 
-   'usage|help|h'         => \&usage
+my $result = GetOptions ( 
+    'gff-a|a=s' => \$gff_file_1,
+    'gff-b|b=s' => \$gff_file_2,
+    'operation|op|p:s' => \$operation,
+    'statistic|stat|s=s' => \$statistic,
+    "inverse-log|ilog|i:i" => \$inverse_log,
+    'reverse-score|rev|r' => \$reverse,
+    'output|o:s' => \$output,
+    'threshold|t=f{2}' => \@threshold,
+    'debug|d' => \$debug,
+    'verbose|v' => sub {enable diagnostics;use warnings;},
+    'quiet|q' => sub {disable diagnostics;no warnings;},
+    'usage|help|h' => \&usage
 );
+
+#difference ($gff_file_1, $gff_file_2);exit;
 
 # use the appropriate statistic measure based on user input
 eval "use Text::NSP::Measures::2D::$statistic";
@@ -130,6 +128,7 @@ while (my $line_a = <$GFFA>) {
     my %rec_a = %{&gff_read ($line_a)};
     my %rec_b = %{&gff_read ($line_b)};
 
+
     while ($rec_a{'feature'} ne $rec_b{'feature'}) {
         if ($rec_a{'start'} > $rec_b{'start'}) {
             $line_a = <$GFFA>;
@@ -145,31 +144,34 @@ while (my $line_a = <$GFFA>) {
         }
     }
 
+    # is threshold is given, this is a preliminary statistic to filter out
+    # records more than it. if no threshold is given, this is the final calculation
     # gff_calculate_statistic will call the Text::NSP module
-    # return value is -1 if a record doesn't have coverage (ie. attribute field eq '.')
+    # return value is -200 if a record doesn't have coverage (ie. attribute field eq '.')
     my $ngram = gff_calculate_statistic (\%rec_a, \%rec_b);
     my $score = 0;
 
-    if ($concatenate) {
-    # filter out windows with no Cs
-        next PROCESSING if
-        ($rec_a{'attribute'} eq q{.} and $rec_b{'attribute'} eq q{.}) or
-        ($rec_a{'attribute'} =~ m/c=0/ and $rec_b{'attribute'} =~ m/c=0/);
+    # if threshold is defined
+    if ($threshold[0]) {
+        # filter out records with statistic measures below it
+        next PROCESSING if ( $ngram > $threshold[0] );
 
         # if our buffers are empty OR
         # if we think the current window is contiguous to the ones already stored
         # push the current windows into the buffers
         # and skip processing for now
-        if (@window_buffer_a == 0) {
+        if(@window_buffer_a == 0) {
             push @window_buffer_a, $line_a;
             push @window_buffer_b, $line_b;
             next PROCESSING;
-        } elsif ($rec_a{'start'} > (split "\t", $window_buffer_a[-1])[3] and
-                 $rec_a{'start'} <= (split "\t", $window_buffer_a[-1])[4] + 1) {
+        }
+        elsif ($rec_a{'start'} > (split "\t", $window_buffer_a[-1])[3] and
+               $rec_a{'start'} <= (split "\t", $window_buffer_a[-1])[4] + 1) {
             push @window_buffer_a, $line_a;
             push @window_buffer_b, $line_b;
             next PROCESSING;
-        } else {
+        }
+        else {
             # if the current window is NOT contiguous with the last buffer entry
             # we flush the buffer, start filling it up again, and overwrite the current
             # window with the concatenated window
@@ -183,28 +185,24 @@ while (my $line_a = <$GFFA>) {
             push @window_buffer_a, $line_a;
             push @window_buffer_b, $line_b;
 
-            # filter out records with statistic measures above threshold
-            next PROCESSING if ($threshold and $tmp_ngram > $threshold);
+            # filter out records with statistic measures below it
+            # this should never happen because of the preliminary filtering above
+            # I'm leaving it for now for debugging purposes
+            next PROCESSING if ($tmp_ngram > $threshold[1]);
 
             %rec_a = %{$tmp_window_a_ref};
             %rec_b = %{$tmp_window_b_ref};
             $ngram = $tmp_ngram;
         }
-
-        # filter out windows with no Cs
-        next PROCESSING if
-        ($rec_a{'attribute'} eq q{.} and $rec_b{'attribute'} eq q{.}) or
-        ($rec_a{'attribute'} =~ m/c=0/ and $rec_b{'attribute'} =~ m/c=0/);
     }
 
     # calculates the appropriate result on the scores of both windows
-    $rec_a{'score'} = 0 if $rec_a{'score'} eq q{.};
-    $rec_b{'score'} = 0 if $rec_b{'score'} eq q{.};
+    if ($rec_a{'score'} eq q{.}) {$rec_a{'score'} = 0}
+    if ($rec_b{'score'} eq q{.}) {$rec_b{'score'} = 0}
     if ($operation eq 'sub') {
         $score = $rec_a{'score'} - $rec_b{'score'};
-    }
-    elsif ($operation eq 'div' and
-           $rec_b{'score'} != 0) {
+    } elsif ($operation eq 'div' && 
+                 $rec_b{'score'} != 0) {
         $score = $rec_a{'score'} / $rec_b{'score'};
     }
 
@@ -212,8 +210,7 @@ while (my $line_a = <$GFFA>) {
     if ($ngram > 0 and $ngram != 1 and $inverse_log != -1) {
         if ($inverse_log == 0) {
             $ngram = 1 / log($ngram)
-        }
-        else {
+        } else {
             $ngram = 1 / (log($ngram) / log($inverse_log));
         }
     }
@@ -240,12 +237,6 @@ while (my $line_a = <$GFFA>) {
         $attribute .=  ';' . $rec_a{'attribute'} . ';' . $rec_b{'attribute'};
     }
 
-    unless ($valid_gff) {
-        my @attr_fields = (split /;/, $attribute);
-        $attr_fields[$_] = (split /=/, $attr_fields[$_])[-1] for 0 .. $#attr_fields;
-        $attribute = join "\t", @attr_fields;
-    }
-
     # prints out the current window (or concatenated windows) as a gff record
     print join("\t",
                $rec_a{'seqname'},
@@ -256,8 +247,7 @@ while (my $line_a = <$GFFA>) {
                sprintf("%e", $score),
                ".",
                ".",
-               $attribute
-           ), "\n";
+               $attribute), "\n";
 
 }
 
@@ -291,22 +281,14 @@ sub gff_calculate_statistic {
         $rec_a{'seqname'} !~ m/$rec_b{'seqname'}/i or
         $rec_a{'feature'} ne $rec_b{'feature'}) {
         print STDERR Dumper (\%rec_a, \%rec_b);
-        croak (
-            "Can't match windows in input files.
-             Make sure these are sorted by starting
-             coordinate and that each input file
-             contains only one chromosome and one context.
-             This will be modified in the future to allow
-             multiple chromosomes and contexts per input file."
-        );
+        croak ("Can't match windows in input files. Make sure these are sorted by starting coordinate and that each input file contains only one chromosome and one context. This will be modified in the future to allow multiple chromosomes and contexts per input file.");
     }
 
     # checks for no coverage in the windows (ie. 'attribute' field eq ".")
     my $ngram = 0;
     if ( ($rec_a{'attribute'} =~ m/\./) or ($rec_b{'attribute'} =~ m/\./) ) {
         $ngram = 0;
-    }
-    else {
+    } else {
         # contigency table:
         #
         #  |line a|line b|
@@ -422,14 +404,14 @@ sub gff_concatenate {
     # because strictures won't let me use scalar interpolation
     # in the 'attribute' field when anonymously returning
     my %concatenated_hash = (
-        'seqname'   => $seqname,
-        'source'    => $source,
-        'feature'   => $feature,
-        'start'     => $start,
-        'end'       => $end,
-        'score'     => $score,
-        'strand'    => $strand,
-        'frame'     => $frame,
+        'seqname' => $seqname,
+        'source' => $source,
+        'feature' => $feature,
+        'start' => $start,
+        'end' => $end,
+        'score' => $score,
+        'strand' => $strand,
+        'frame' => $frame,
         'attribute' => $attribute
     );
     return \%concatenated_hash;
@@ -440,21 +422,21 @@ sub gff_concatenate {
 
     Takes in a single GFF line string
 
-    Returns a reference to an anonymous hash with keys equal to the GFF v3 spec
+    Returns a reference to an anonymous hashw with keys equal to the GFF v3 spec
 
 =cut
 sub gff_read {
     my ($seqname, $source, $feature, $start, $end, $score, $strand, $frame, $attribute) = split(/\t/, shift);
     my %rec = (
-        'seqname'   =>$seqname,
-        'source'    =>$source,
-        'feature'   =>$feature,
-        'start'     =>$start,
-        'end'       =>$end,
-        'score'     =>$score,
-        'strand'    =>$strand,
-        'frame'     =>$frame,
-        'attribute' =>$attribute,
+        'seqname'=>$seqname,
+        'source'=>$source,
+        'feature'=>$feature,
+        'start'=>$start,
+        'end'=>$end,
+        'score'=>$score,
+        'strand'=>$strand,
+        'frame'=>$frame,
+        'attribute'=>$attribute
     );
     return \%rec;
 }
@@ -517,13 +499,34 @@ countMethylation.pl <REQUIRED> [OPTIONS]
 		      MI::tmi                  True Mutual Information
     [--inverse-log    -i]    Step interval of sliding window in BS
     [--reverse-score  -r]    Output scores in attributes field and statistics in scores field
-    [--threshold      -t]    Maximum (optional) threshold for filtering out windows by p-value.
-    [--concatenate    -c]    Concatenate adjacent windows after filtering stage
-    [--valid-gff      -g]    Output format is valid GFF (attribute fields split by ';', not '\t'
+    [--threshold      -t]    Maximum threshold for filtering out windows. Takes 1 (coarse filtering) or 2 (fine filtering) decimal values.
     [--output         -o]    Filename to write results to (default is STDOUT)
     [--verbose        -v]    Output Pall's diagnostic and warning messages
     [--quiet          -q]    Supress Pail's diagnostic and warning messages
     [--usage          -h]    Print this information
 EOF
     exit 0;
+}
+
+
+
+sub difference {
+    my @A = split '', (split '/', shift)[-1];
+    my @B = split '', (split '/', shift)[-1];
+
+    # assume @A and @B are already loaded
+    my %seen = ();                  # lookup table to test membership of B
+    my @aonly = ();                 # answer
+
+    # build lookup table
+    foreach my $item (@B) { $seen{$item} = 1 }
+
+    # find only elements in @A and not in @B
+    foreach my $item (@A) {
+        unless ($seen{$item}) {
+            # it's not in %seen, so add to @aonly
+            push(@aonly, $item);
+        }
+    }
+    print STDERR join(' ', @aonly), "\n";
 }

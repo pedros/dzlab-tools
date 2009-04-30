@@ -18,6 +18,14 @@ open(my $MUTATED, "<", "$mutated") or die("Can't open $mutated");
 
 while(my $mutline = <$MUTATED>) { ### Replacing...   % done
 
+    my ($scaff_line) = $mutline =~ m/([ACGTN]{$readsize + 4})/i;
+    my ($mutat_line) = $mutline =~ m/([ACGTN]{$readsize})/i;
+
+    if (defined $scaff_line) {
+        warn "Sequences don't match\n$scaff_line\t$mutat_line\n"
+        if $scaff_line ne $mutat_line;
+    }
+
     if($mutline =~ m/\/1:[ACGTN]{$readsize}/) {
 	my $lorigline = <$LORIG>;
 	if($lorigline =~ m/^>/) {
@@ -33,7 +41,7 @@ while(my $mutline = <$MUTATED>) { ### Replacing...   % done
 	    $rorigline = <$RORIG>;
 	}
 	$rorigline =~ s/[\n\r]//g;
-	$mutline =~ s/[ACGTN]{$readsize}/$rorigline/ ;    
+	$mutline =~ s/[ACGTN]{$readsize}/$rorigline/ ;
     }
 
     print $mutline;

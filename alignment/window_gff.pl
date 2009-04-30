@@ -1,5 +1,4 @@
-#!/usr/bin/env perl
-
+#!/usr/bin/perl
 use strict;
 use warnings;
 use diagnostics;disable diagnostics;
@@ -10,26 +9,28 @@ use Pod::Usage;
 
 # Globals, passed as command line options
 my $gff_file = q{-};
-my $width = 0;
-my $step = $width;
-my $no_sort = 0;
-my @batch = ();
-my $output = q{-};
-my $verbose = 0;
-my $quiet = 0;
+my $width    = 0;
+my $step     = 0;
+my $no_sort  = 0;
+my $no_skip  = 0;
+my @batch    = ();
+my $output   = q{-};
+my $verbose  = 0;
+my $quiet    = 0;
 
 my @argv = @ARGV;
 
 # Grabs and parses command line options
 my $result = GetOptions (
     'gff-file|f=s' => \$gff_file,
-    'width|w=i' => \$width,
-    'step|s=i' => \$step,
-    'no-sort|n' => \$no_sort,
-    'output|o:s' => \$output,
+    'width|w=i'    => \$width,
+    'step|s=i'     => \$step,
+    'no-sort|n'    => \$no_sort,
+    'no-skip|k'    => \$no_skip,
+    'output|o:s'   => \$output,
     'batch|b=s{,}' => \@batch,
-    'verbose|v' => sub {enable diagnostics;use warnings;},
-    'quiet|q' => sub {disable diagnostics;no warnings;},
+    'verbose|v'    => sub {enable diagnostics;use warnings;},
+    'quiet|q'      => sub {disable diagnostics;no warnings;},
     'help|usage|h' => sub {pod2usage(-verbose => 1);},
     'manual|man|m' => sub {pod2usage(-verbose => 2);}
     );
@@ -37,17 +38,13 @@ my $result = GetOptions (
 # Check required command line parameters
 if ( ! $width ) { pod2usage(-verbose => 1) }
 
+$step = $width unless $step;
+
 BATCH:
 while (@batch or $gff_file) {
     if (@batch) {
-        print STDERR "Running in batch mode: all input files will have \'.avg\' appended to form the output name.\n";
         $gff_file = shift @batch;
         $output = $gff_file . "_w${width}_s${step}.avg";
-    }
-
-    # redirects STDOUT to file if specified by user
-    if ($output ne '-') {
-        open STDOUT, '>', "$output" or croak "Can't redirect STDOUT to file: $output";
     }
 
     # opens gff file or STDIN
@@ -64,42 +61,50 @@ while (@batch or $gff_file) {
     }
     if ($GFF ne 'STDIN') {close $GFF}
 
+    # redirects STDOUT to file if specified by user
+    if ($output ne '-') {
+        open STDOUT, '>', "$output" or croak "Can't redirect STDOUT to file: $output";
+    }
+
     # prints out header fields that contain gff v3 header, generating program, time, and field names
     gff_print_header ($0, @argv);
 
     # sort data by sequence name, feature, and starting coordinates
     unless ($no_sort) {
-        @data =  gff_sort ( \@data );
+        print STDERR "sorting data...";
+        @data = gff_sort ( \@data );
+        print STDERR "done.\n";
     }
 
-    # gets indices for chromosome changes (tracks changes on 0th field - seqname)
-    my @locsindex = gff_find_array ( 0, \@data );
+#     # gets indices for chromosome changes (tracks changes on 0th field - seqname)
+#     my @locsindex = gff_find_array ( 0, \@data );
 
-    # for each chromosome
-    for (my $i = 0; $i < @locsindex; $i++) {
+#     # for each chromosome
+#     for (my $i = 0; $i < @locsindex; $i++) {
 
-        # get an array slice with only that chromosome
-        my @subdata;
-        if ($i + 1 <@locsindex) {
-            @subdata = @data[$locsindex[$i]..$locsindex[$i+1]];
-        } else {
-            @subdata = @data[$locsindex[$i]..$#data]; # prevents array pointer out of bounds
-        }
+#         # get an array slice with only that chromosome
+#         my @subdata;
+#         if ($i + 1 <@locsindex) {
+#             @subdata = @data[$locsindex[$i]..$locsindex[$i+1]];
+#         } else {
+#             @subdata = @data[$locsindex[$i]..$#data]; # prevents array pointer out of bounds
+#         }
 
-        # gets indices for context changes (tracks changes on 2th field - feature)
-        my @featureindex = gff_find_array ( 2, \@subdata );
+#         # gets indices for context changes (tracks changes on 2th field - feature)
+#         my @featureindex = gff_find_array ( 2, \@subdata );
 
-        # for each feature/context
-        for (my $l = 0; $l < @featureindex; $l++) {
+#         # for each feature/context
+#         for (my $l = 0; $l < @featureindex; $l++) {
 
-            # get an array slice containing just that feature/chromosome and feed it to the sliding window routine
-            if ($l + 1 < @featureindex) {
-                gff_sliding_window ( $width, $step, @subdata[$featureindex[$l]..$featureindex[$l + 1] - 1]);
-            } else {
-                gff_sliding_window ( $width, $step, @subdata[$featureindex[$l]..$#subdata]);
-            }
-        }
-    }
+#             # get an array slice containing just that feature/chromosome and feed it to the sliding window routine
+#             if ($l + 1 < @featureindex) {
+#                 gff_sliding_window ( $width, $step, @subdata[$featureindex[$l]..$featureindex[$l + 1] - 1]);
+#             } else {
+#                 gff_sliding_window ( $width, $step, @subdata[$featureindex[$l]..$#subdata]);
+#             }
+#         }
+#    }
+    gff_sliding_window ( $width, $step, \@data, $no_skip);
     $gff_file = 0;
 }
 
@@ -107,9 +112,9 @@ close STDOUT;
 exit 0;
 
 sub gff_sliding_window {
-    my ($width, $step, @data) = @_;
+    my ($width, $step, $data_ref, $no_skip) = @_;
 
-    my %last_rec = %{gff_read ($data[-1])};
+    my %last_rec = %{gff_read ($data_ref->[-1])};
 
     print STDERR
 	"windowing data on sequence $last_rec{'seqname'} and context $last_rec{'feature'} with $width bp width and $step bp step...\n";
@@ -117,16 +122,19 @@ sub gff_sliding_window {
     my $lastcoord = $last_rec{'end'};
     my $seqname = $last_rec{'seqname'};
     my $context = $last_rec{'feature'};
+    my $strand  = $last_rec{'strand'};
     my $lastrecord = 0;
 
     for (my $i = 1; $i < $lastcoord; $i++) {
 
-	my ($c_count, $t_count, $score) = (0, 0, -0.1);
+	my ($c_count, $t_count, $score) = (0, 0, 0);
         my ($overlap_c, $overlap_t) = (0, 0);
 
-	my @range = @{ gff_filter_by_coord ($i, $i + $width, $lastrecord, \@data) };
+	my @range = @{ gff_filter_by_coord ($i, $i + $width - 1, $lastrecord, $data_ref) };
 
 	$lastrecord = shift @range;
+
+        next unless @range or $no_skip;
 
 	foreach my $k (@range) {
 	    my %current_rec = %{gff_read ($k)};
@@ -137,6 +145,7 @@ sub gff_sliding_window {
             $t_count += $t_tmp;
 	    $seqname = $current_rec{'seqname'};
 	    $context = $current_rec{'feature'};
+            $strand  = $current_rec{'strand'};
 
             if ($current_rec{'start'} > $i + $step) {
                 $overlap_c += $c_tmp;
@@ -152,18 +161,23 @@ sub gff_sliding_window {
         if ($step != $width) {$attribute .= ";over_c=$overlap_c;over_t=$overlap_t"}
 
 	if (scalar(@range) == 0) {
-	    $attribute = '.';
-	    $score = 0;
+	    $attribute = q{.};
+	    $score     = q{.};
 	}
+        else {
+            $score = sprintf("%e", $score);
+        }
+
+        $strand = q{.} if $width > 1;
 
 	print join("\t",
 		   $seqname,
-		   'avg',
+		   'window',
 		   $context,
 		   $i,
 		   $i + $width - 1,
-		   sprintf("%e", $score),
-		   '.',
+		   $score,
+		   $strand,
 		   '.',
 		   $attribute,
 	    ), "\n";
@@ -196,11 +210,9 @@ sub gff_filter_by_coord {
 sub gff_sort {
     my $data_ref = shift;
 
-    print STDERR "sorting data...\n";
-
     return sort {
-	(split /\t/, $a)[0] cmp (split /\t/, $b)[0] or
-        (split /\t/, $a)[2] cmp (split /\t/, $b)[2] or
+#	(split /\t/, $a)[0] cmp (split /\t/, $b)[0] or
+#        (split /\t/, $a)[2] cmp (split /\t/, $b)[2] or
         (split /\t/, $a)[3] <=> (split /\t/, $b)[3]
     } @{$data_ref};
 }
@@ -242,6 +254,9 @@ sub gff_find_array {
 	if ($i != 0) {$previous = (split /\t/, $array_ref->[$i-1])[$field];}
 	else {$previous = $current;}
 
+        $current =~ tr/A-Z/a-z/;
+        $previous =~ tr/A-Z/a-z/;
+
 	# keeps track of number of different types of records
 	# also stores each record type change in @index
 	# ignores pound (#) characters if they're the first printing character in the record
@@ -255,7 +270,7 @@ sub gff_find_array {
 
 sub gff_print_header {
     my @call_args = @_;
-    print '##gff-version 3\n';
+    print "##gff-version 3\n";
     print join(' ',
 	       '#',
 	       @call_args,
@@ -320,6 +335,7 @@ __END__
  -w, --width       width size of sliding window in bp
  -s, --step        step interval of sliding window in bp
  -n, --no-sort     assumes input gff file is pre-sorted by sequence, feature, and coordinate
+ -k  --no-skip     don't skip coordinates/windows with no coverage
  -b, --batch       takes any number of filenames as arguments and windows them in batch mode
  -o, --output      filename to write results to (default is STDOUT, unless in batch mode)
  -v, --verbose     output perl's diagnostic and warning messages
