@@ -15,40 +15,40 @@ BATCH=$5
 # fq_all2std.pl fq2fa $RREAD > ${RREAD}.fa
 # echo "done with code: $?"
 
-# # convert sequences
-# echo -n "Converting sequences..."
-# convert.pl c2t ${LREAD}.fa > ${LREAD}.c2t
-# convert.pl g2a ${RREAD}.fa > ${RREAD}.g2a
+# convert sequences
+echo -n "Converting sequences..."
+convert.pl c2t ${LREAD}.fa > ${LREAD}.c2t
+convert.pl g2a ${RREAD}.fa > ${RREAD}.g2a
+echo "done with code: $?"
+
+# convert genome
+echo -n "Converting genome..."
+rcfas.pl $GENOME > ${GENOME}-RC
+convert.pl c2t ${GENOME}-RC > ${GENOME}-RC.C2T
+convert.pl g2a ${GENOME}-RC > ${GENOME}-RC.G2A
+echo "done with code: $?"
+
+# /available_memory:`free -m | grep 'Mem:' | perl -e 'while(<>) {@a=(split /\s+/, $_); print $a[3];}'`
+# align sequences
+echo -n "Aligning sequences..."
+seqmap 2 ${LREAD}.c2t ${GENOME}-RC.C2T ${LREAD}.eland3 /eland:3 /forward_strand /available_memory:8000 /cut:1,45 &&
+seqmap 2 ${RREAD}.g2a ${GENOME}-RC.G2A ${RREAD}.eland3 /eland:3 /forward_strand /available_memory:8000 /cut:1,45 &&
 # echo "done with code: $?"
 
-# # convert genome
-# echo -n "Converting genome..."
-# rcfas.pl $GENOME > ${GENOME}-RC
-# convert.pl c2t ${GENOME}-RC > ${GENOME}-RC.C2T
-# convert.pl g2a ${GENOME}-RC > ${GENOME}-RC.G2A
-# echo "done with code: $?"
+# correlate paired ends
+echo -n "Running correlatePairedEnds.pl..."
+correlatePairedEnds.pl --left ${LREAD}.eland3 --right ${RREAD}.eland3 --reference $GENOME --output ${LREAD}_pre.gff --offset 0 --distance 300 --readsize 45 &&
+echo "Done with code: $?"
 
-# # /available_memory:`free -m | grep 'Mem:' | perl -e 'while(<>) {@a=(split /\s+/, $_); print $a[3];}'`
-# # align sequences
-# echo -n "Aligning sequences..."
-# seqmap 2 ${LREAD}.c2t ${GENOME}-RC.C2T ${LREAD}.eland3 /eland:3 /forward_strand /available_memory:8000 /cut:1,45 &&
-# seqmap 2 ${RREAD}.g2a ${GENOME}-RC.G2A ${RREAD}.eland3 /eland:3 /forward_strand /available_memory:8000 /cut:1,45 &&
-# # echo "done with code: $?"
+# replace processed reads with original
+echo -n "Running replaceMutation.pl..."
+replaceMutation.pl ${LREAD}.fa ${RREAD}.fa ${LREAD}_pre.gff 45 > ${LREAD}_post.gff &&
+echo "Done with code: $?"
 
-# # correlate paired ends
-# echo -n "Running correlatePairedEnds.pl..."
-# correlatePairedEnds.pl --left ${LREAD}.eland3 --right ${RREAD}.eland3 --reference $GENOME --output ${LREAD}_pre.gff --offset 0 --distance 300 --readsize 45 &&
-# echo "Done with code: $?"
-
-# # replace processed reads with original
-# echo -n "Running replaceMutation.pl..."
-# replaceMutation.pl ${LREAD}.fa ${RREAD}.fa ${LREAD}_pre.gff 45 > ${LREAD}_post.gff &&
-# echo "Done with code: $?"
-
-# # check alignment ${LREAD}.accuracy
-# echo -n "Computing alignment ${LREAD}.accuracy..."
-# collect_align_stats.pl ${LREAD}.eland3 ${RREAD}.eland3 ${LREAD}_pre.gff $TISSUE $BATCH > ${LREAD}_pre.alignment.log
-# echo "Done with code: $?"
+# check alignment ${LREAD}.accuracy
+echo -n "Computing alignment ${LREAD}.accuracy..."
+collect_align_stats.pl ${LREAD}.eland3 ${RREAD}.eland3 ${LREAD}_pre.gff $TISSUE $BATCH > ${LREAD}_pre.alignment.log
+echo "Done with code: $?"
 
 # filter out all non matches
 echo -n "Filtering out records without matches..."
