@@ -10,9 +10,11 @@ use Pod::Usage;
 my @range;
 my $seqid;
 my $output;
+my $list;
 
 # Grabs and parses command line options
 my $result = GetOptions (
+    'list|l'       => \$list,
     'seqid|s=s'    => \$seqid,
     'range|r=i{2}' => \@range,
     'output|o=s'   => \$output,
@@ -34,24 +36,44 @@ if ($output) {
 my $reference = $ARGV[0];
 my %reference = %{ index_fasta ($reference) };
 
-print STDERR "Available sequence IDs:\n";
-print STDERR "$_\t", length $reference{$_}, "\n" for sort keys %reference;
-
-if ($seqid and @range) {
-    print STDERR "$range[0] to $range[1] on $seqid:\n";
-    my $sequence
-    = _sequence (\%reference, $seqid, $range[0], $range[1]);
-    print $sequence, "\n";
+if ($list) {
+    print "Available sequence IDs:\n";
+    print "$_\t", length $reference{$_}, "\n" for sort keys %reference;
 }
+
+if ($seqid) {
+
+    @range = (0, 0)
+    unless @range;
+
+    my $sequence
+    = _sequence (\%reference, $seqid, @range);
+
+    print ">lcl|$seqid $range[0] $range[1]\n";
+    print $sequence, "\n";
+
+}
+
 
 sub _sequence {
     my ($reference, $seqid, $start, $end) = @_;
 
-    carp "Coordinates out of bounds"
-    if $start < 0 or $end > length $reference->{$seqid};
+    $seqid =~ tr/A-Z/a-z/;
 
-    return
-    substr ($reference{$seqid}, $start, $end - $start + 1);
+    croak "Sequence ID does not exist"
+    unless exists $reference{$seqid};
+
+    if ($start and $end) {
+
+        croak "Coordinates out of bounds"
+        if $start < 0 or $end > length $reference->{$seqid};
+
+        return
+        substr ($reference{$seqid}, $start - 1, $end - $start - 1);
+    }
+    else {
+        return $reference{$seqid};
+    }
 }
 
 
@@ -106,8 +128,9 @@ __END__
 
 =head1 OPTIONS
 
- name.pl [OPTION]... [FILE]...
+ parse_fasta.pl [OPTION]... [FILE]...
 
+ -l, --list        print list of sequence ids and lengths
  -s, --seqid       sequence id from which to print sub sequence
  -r, --range       start and end coordinates to print
  -o, --output      filename to write results to (defaults to STDOUT)
