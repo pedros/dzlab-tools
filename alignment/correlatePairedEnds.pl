@@ -62,7 +62,7 @@ my $result = GetOptions(
     "reference|f=s"  => \$referencefile,
     "distance|d=i"   => \$distance,
     "offset|t=i"     => \$offset,
-    'trust-dash-2|t' => \$trust_dash_2,
+    'trust-dash-2|2' => \$trust_dash_2,
     "output|o:s"     => \$output,
     "readsize|s:i"   => \$readsize,
     "verbose|v"      => sub { enable diagnostics },
