@@ -8,12 +8,12 @@ GENOME=$3
 TISSUE=$4
 BATCH=$5
 
-# # convert from fastq to fasta
-# echo -n "Converting sequences to fasta format..."
-# fq_all2std.pl fq2fa $LREAD > ${LREAD}.fa
-# echo "done with code: $?"
-# fq_all2std.pl fq2fa $RREAD > ${RREAD}.fa
-# echo "done with code: $?"
+# convert from fastq to fasta
+echo -n "Converting sequences to fasta format..."
+fq_all2std.pl fq2fa $LREAD > ${LREAD}.fa
+echo "done with code: $?"
+fq_all2std.pl fq2fa $RREAD > ${RREAD}.fa
+echo "done with code: $?"
 
 # convert sequences
 echo -n "Converting sequences..."
