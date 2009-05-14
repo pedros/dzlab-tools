@@ -25,7 +25,7 @@ while(my $line = <$GENOME>) {
 	    $chr = $manifest{$1};
 	}
 	else {
-	    $chr = 0;
+	    $chr = 'unknown';
 	}
 	next;
     }

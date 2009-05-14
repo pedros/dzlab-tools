@@ -8,7 +8,7 @@ GENOME=$3
 TISSUE=$4
 BATCH=$5
 
-# # # convert from fastq to fasta
+# # convert from fastq to fasta
 # echo -n "Converting sequences to fasta format..."
 # fq_all2std.pl fq2fa $LREAD > ${LREAD}.fa
 # echo "done with code: $?"
@@ -37,7 +37,7 @@ seqmap 2 ${RREAD}.g2a ${GENOME}-RC.G2A ${RREAD}.eland3 /eland:3 /forward_strand 
 
 # correlate paired ends
 echo -n "Running correlatePairedEnds.pl..."
-correlatePairedEnds.pl --left ${LREAD}.eland3 --right ${RREAD}.eland3 --reference $GENOME --output ${LREAD}_pre.gff --offset 0 --distance 300 --readsize 45 &&
+correlatePairedEnds.pl --left ${LREAD}.eland3 --right ${RREAD}.eland3 --reference $GENOME --output ${LREAD}_pre.gff --offset 0 --distance 300 --readsize 45 --trust-dash-2&&
 echo "Done with code: $?"
 
 # replace processed reads with original
@@ -52,14 +52,14 @@ echo "Done with code: $?"
 
 # filter out all non matches
 echo -n "Filtering out records without matches..."
-grep target ${LREAD}_post.gff | grep target > ${LREAD}_post_filtered.gff &&
+grep 'target=' ${LREAD}_post.gff > ${LREAD}_post_filtered.gff &&
 echo "Done with code: $?"
 
 # split into multiple chromosomes
 echo -n "Splitting into multiple chromosomes..."
 for i in `grep '>' $GENOME | perl -e 'while(<>) {m/^\s*>(\w+)/; print $1, q{ };}'`
 do
-    grep -i $i ${LREAD}_post_filtered.gff > ${LREAD}_post_filtered_${i}.gff
+    grep -i "^$i	" ${LREAD}_post_filtered.gff > ${LREAD}_post_filtered_${i}.gff
 done
 echo "Done with code: $?"
 

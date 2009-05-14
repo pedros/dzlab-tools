@@ -50,22 +50,24 @@ my $offset         = 0;    # minimum distance between left and right sequences o
 my $output         = q{-}; # output mode. standard output by default
 my $readsize       = 45;   # length of each read
 my $usage          = 0;    # print usage and exit
+my $trust_dash_2   = 0;
 
 # Initial check of command line parameters
 usage();
 
 # Parse command line arguments
 my $result = GetOptions(
-    "left|l=s"      => \$leftendfile,
-    "right|r=s"     => \$rightendfile,
-    "reference|f=s" => \$referencefile,
-    "distance|d=i"  => \$distance,
-    "offset|t=i"    => \$offset,
-    "output|o:s"    => \$output,
-    "readsize|s:i"  => \$readsize,
-    "verbose|v"     => sub { enable diagnostics },
-    "quiet|q"       => sub { no warnings  },
-    "help|h"        => \&usage
+    "left|l=s"       => \$leftendfile,
+    "right|r=s"      => \$rightendfile,
+    "reference|f=s"  => \$referencefile,
+    "distance|d=i"   => \$distance,
+    "offset|t=i"     => \$offset,
+    'trust-dash-2|t' => \$trust_dash_2,
+    "output|o:s"     => \$output,
+    "readsize|s:i"   => \$readsize,
+    "verbose|v"      => sub { enable diagnostics },
+    "quiet|q"        => sub { no warnings  },
+    "help|h"         => \&usage
 );
 
 # holds name of chromosomes as keys and length of chromosomes in bp as values
@@ -286,42 +288,43 @@ while (my $leftend = <$LEFT>) {
         $l_feature = $left{'line'} . q{:} . $lsequence;
         $r_feature = $right{'line'} . q{:} . $rsequence;
 
-#         # gets chromosome name into $tmp
-#         $right{'chr0'} =~ m/(.*)/i;
-#         my $tmp = $1;
-#         $tmp =~ tr/A-Z/a-z/;
-#         $tmp =~ s/rc_//i;
+        if ($trust_dash_2) {
+            # gets chromosome name into $tmp
+            $right{'chr0'} =~ m/(.*)/i;
+            my $tmp = $1;
+            $tmp =~ tr/A-Z/a-z/;
+            $tmp =~ s/rc_//i;
 
-#         $l_feature = $left{'line'} . q{:} . $lsequence;
+            $l_feature = $left{'line'} . q{:} . $lsequence;
 
-#         if ( $right{'chr0'} =~ m/^RC_/i ) { # if right sequence maps to reverse strand
-#             $r_seqname   = $tmp;
-#             $r_feature   = $right{'line'} . q{:} . $rsequence;
-#             $r_start     = $right{'coord'};
-#             $r_end       = $right{'coord'} + $readsize;
-#             $r_score     = 1;
-#             $r_strand    = q{-};
-#             $r_attribute = 'target='
-#                 . substr(
-#                     $reference{"$tmp-rc"},
-#                     $right{'coord'} - 1,
-#                     $readsize + 4
-#                 );
-#         }
-#         else { # if right sequence maps to forward strand
-#             $r_seqname   = $tmp;
-#             $r_feature   = $right{'line'} . q{:} . $rsequence;
-#             $r_start     = $right{'coord'};
-#             $r_end       = $right{'coord'} + $readsize;
-#             $r_score     = 1;
-#             $r_strand    = q{+};
-#             $r_attribute = 'target='
-#                 . substr(
-#                     $reference{"$tmp-seq"},
-#                     $right{'coord'} - 1,
-#                     $readsize + 4
-#                 );
-#         }
+            if ( $right{'chr0'} =~ m/^RC_/i ) { # if right sequence maps to reverse strand
+                $r_seqname   = $tmp;
+                $r_feature   = $right{'line'} . q{:} . $rsequence;
+                $r_start     = $right{'coord'};
+                $r_end       = $right{'coord'} + $readsize;
+                $r_score     = 1;
+                $r_strand    = q{-};
+                $r_attribute = 'target='
+                . substr(
+                    $reference{"$tmp-rc"},
+                    $right{'coord'} - 1,
+                    $readsize + 4
+                );
+            } else {        # if right sequence maps to forward strand
+                $r_seqname   = $tmp;
+                $r_feature   = $right{'line'} . q{:} . $rsequence;
+                $r_start     = $right{'coord'};
+                $r_end       = $right{'coord'} + $readsize;
+                $r_score     = 1;
+                $r_strand    = q{+};
+                $r_attribute = 'target='
+                . substr(
+                    $reference{"$tmp-seq"},
+                    $right{'coord'} - 1,
+                    $readsize + 4
+                );
+            }
+        }
     }
 
     # 0 matches on right sequence
