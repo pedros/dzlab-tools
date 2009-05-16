@@ -57,7 +57,7 @@ echo "Done with code: $?"
 
 # split into multiple chromosomes
 echo -n "Splitting into multiple chromosomes..."
-for i in `grep '>' $GENOME | perl -e 'while(<>) {m/^\s*>(\w+)/; print $1, q{ };}'`
+for i in `grep '>' $GENOME | sed s/\>//`
 do
     grep -i "^$i	" ${LREAD}_post_filtered.gff > ${LREAD}_post_filtered_${i}.gff
 done
@@ -65,7 +65,7 @@ echo "Done with code: $?"
 
 # count methylation
 echo -n "Running countMethylation.pl..."
-for i in `grep '>' $GENOME | perl -e 'while(<>) {m/^\s*>(\w+)/; print $1, q{ };}'`
+for i in `grep '>' $GENOME | sed s/\>//`
 do
     countMethylation.pl --ref $GENOME --gff ${LREAD}_post_filtered_${i}.gff --output ${LREAD}_post_filtered_${i}_singleC.gff --sort
 done
@@ -73,7 +73,7 @@ echo "Done with code: $?"
 
 # split into multiple contexts
 echo -n "Splitting into multiple contexts..."
-for i in `grep '>' $GENOME | perl -e 'while(<>) {m/^\s*>(\w+)/; print $1, q{ };}'`
+for i in `grep '>' $GENOME | sed s/\>//`
 do
     for j in CG CHG CHH
     do
