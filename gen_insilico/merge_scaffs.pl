@@ -8,17 +8,16 @@ use Getopt::Long;
 use Pod::Usage;
 
 # Check required command line parameters
-unless (@ARGV > 0) {
-    pod2usage ( -verbose => 1 );
-}
+pod2usage ( -verbose => 1 )
+unless @ARGV;
 
 my $scaffolds;
-my $max_length = 20000000;
+my $max_length = 30000000;
 
 # Grabs and parses command line options
 my $result = GetOptions (
-    'scaffolds|s=s'  => \$scaffolds,
-    'max-length|l=i' => \$max_length,
+    'fasta-scaffolds|f=s'  => \$scaffolds,
+    'max-length|l=i'       => \$max_length,
     'verbose|v' => sub { use diagnostics; },
     'quiet|q'   => sub { no warnings; },
     'help|h'    => sub { pod2usage ( -verbose => 1 ); },
@@ -101,13 +100,28 @@ __END__
 
 =head1 NAME
 
+ merge_scaffs.pl -- Merge fasta scaffolds into pseudo chromosomes of given maximum length
+
 =head1 SYNOPSIS
+
+ ./merge_scaffs.pl -l 30000000 -f multiple_scaffs.fa -o pseudo-chr.fa
 
 =head1 DESCRIPTION
 
 =head1 OPTIONS
 
+ -l, --max-length        Maximum length for each generated pseudo chromosome
+ -f, --fasta-scaffolds   Fasta file with unknown scaffolds
+ -o, --output            Output pseudo chromosome fasta file name
+
 =head1 REVISION
+
+ $Rev: $:
+ $Author: $:
+ $Date:  $:
+ $HeadURL:  $:
+ $Id:  $:
+
 
 =head1 AUTHOR
 
