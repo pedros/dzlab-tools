@@ -13,40 +13,60 @@ unless @ARGV;
 
 my $scaffolds;
 my $max_length = 30000000;
+my $output;
 
 # Grabs and parses command line options
 my $result = GetOptions (
-    'fasta-scaffolds|f=s'  => \$scaffolds,
-    'max-length|l=i'       => \$max_length,
+    'fasta-scaffolds|f=s' => \$scaffolds,
+    'max-length|l=i'      => \$max_length,
+    'output|o=s'          => \$output,
     'verbose|v' => sub { use diagnostics; },
     'quiet|q'   => sub { no warnings; },
     'help|h'    => sub { pod2usage ( -verbose => 1 ); },
     'manual|m'  => sub { pod2usage ( -verbose => 2 ); }
 );
 
+if ($output) {
+    open my $USER_OUT, '>', $output or croak "Can't open $output for writing: $!";
+    select $USER_OUT;
+}
+
 my $current_length = 0;
 my @objects = ();
 
 my @reference = @{ index_fasta ($scaffolds) };
 
-for my $scaff (@reference) {
+my $last_offset;
 
-    if ($current_length + length $scaff->[1] < $max_length) {
+while (my $scaff = shift @reference) {
+
+    if ($current_length + length $scaff->[1] < $max_length and @reference) {
         push @objects, $scaff;
         $current_length += length $scaff->[1];
     }
     else {
         print ">$objects[0]->[0]-$objects[$#objects]->[0]\n";
 
-        print $_->[1], "\n"
-        for @objects;
+        my $offset = 0;
+        for my $i (0 .. $#objects) {
+            $offset += $objects[$i - 1] if $i > 0;
+            print STDERR "$objects[$i]->[0]\t$offset\n";
+
+            print $objects[$i]->[1], "\n"
+        }
 
         $current_length = 0;
         @objects = ();
 
         push @objects, $scaff;
+        $last_offset = $offset + length $scaff->[1];
         $current_length += length $scaff->[1];
     }
+}
+
+if (@objects) {
+    print STDERR "$objects[0]->[0]\t$last_offset\n";
+    print $objects[0]->[1], "\n"
 }
 
 exit 0;

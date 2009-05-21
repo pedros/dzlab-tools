@@ -7,26 +7,45 @@ RREAD=$2
 GENOME=$3
 TISSUE=$4
 BATCH=$5
+OVERWRITE=$6
 
-# convert from fastq to fasta
-echo -n "Converting sequences to fasta format..."
-fq_all2std.pl fq2fa $LREAD > ${LREAD}.fa
-echo "done with code: $?"
-fq_all2std.pl fq2fa $RREAD > ${RREAD}.fa
-echo "done with code: $?"
+if [ ! -e ${LREAD}.fa -o $OVERWRITE == 1 ]; then
+    # convert from fastq to fasta
+    echo -n "Converting sequences to fasta format..."
+    fq_all2std.pl fq2fa $LREAD > ${LREAD}.fa
+    echo "done with code: $?"
+fi
 
-# convert sequences
-echo -n "Converting sequences..."
-convert.pl c2t ${LREAD}.fa > ${LREAD}.c2t
-convert.pl g2a ${RREAD}.fa > ${RREAD}.g2a
-echo "done with code: $?"
+if [ ! -e ${RREAD}.fa -o $OVERWRITE == 1 ]; then
+    # convert from fastq to fasta
+    echo -n "Converting sequences to fasta format..."
+    fq_all2std.pl fq2fa $RREAD > ${RREAD}.fa
+    echo "done with code: $?"
+fi
 
-# convert genome
-echo -n "Converting genome..."
-rcfas.pl $GENOME > ${GENOME}-RC
-convert.pl c2t ${GENOME}-RC > ${GENOME}-RC.C2T
-convert.pl g2a ${GENOME}-RC > ${GENOME}-RC.G2A
-echo "done with code: $?"
+if [ ! -e ${LREAD}.c2t -o $OVERWRITE == 1 ]; then
+    # convert sequences
+    echo -n "Converting sequences..."
+    convert.pl c2t ${LREAD}.fa > ${LREAD}.c2t
+    echo "done with code: $?"
+fi
+
+if [ ! -e ${RREAD}.c2t -o $OVERWRITE == 1 ]; then
+    # convert sequences
+    echo -n "Converting sequences..."
+    convert.pl g2a ${RREAD}.fa > ${RREAD}.g2a
+    echo "done with code: $?"
+fi
+
+
+if [ ! -e ${GENOME}-RC.G2A -o $OVERWRITE == 1 ]; then
+    # convert genome
+    echo -n "Converting genome..."
+    rcfas.pl $GENOME > ${GENOME}-RC
+    convert.pl c2t ${GENOME}-RC > ${GENOME}-RC.C2T
+    convert.pl g2a ${GENOME}-RC > ${GENOME}-RC.G2A
+    echo "done with code: $?"
+fi
 
 # /available_memory:`free -m | grep 'Mem:' | perl -e 'while(<>) {@a=(split /\s+/, $_); print $a[3];}'`
 # align sequences
