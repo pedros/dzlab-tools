@@ -36,10 +36,28 @@ if ($output) {
 my $reference = $ARGV[0];
 my %reference = %{ index_fasta ($reference) };
 
+my $total_bp = 0;
+my $total_non_bp = 0;
 if ($list) {
-    print "Available sequence IDs:\n";
-    print "$_\t", length $reference{$_}, "\n" for sort keys %reference;
+    print $reference, ":\n";
+
+    for (sort keys %reference) {
+
+        my $t_len = length $reference{$_};
+        my $t_n   = $reference{$_} =~ tr/ACGTacgt//c;
+
+        print join ("\t",
+                    $_,
+                    $t_len,
+                    $t_len - $t_n,
+                ), "\n";
+
+        $total_bp += $t_len;
+        $total_non_bp += $t_n;
+    }
+    print "Total size:\t$total_bp\t", $total_bp - $total_non_bp, "\n";
 }
+
 
 if ($seqid) {
 
