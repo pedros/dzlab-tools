@@ -11,12 +11,14 @@ my @range;
 my $seqid;
 my $output;
 my $list;
+my $split;
 
 # Grabs and parses command line options
 my $result = GetOptions (
     'list|l'       => \$list,
-    'seqid|s=s'    => \$seqid,
+    'seqid|i=s'    => \$seqid,
     'range|r=i{2}' => \@range,
+    'split|s'      => \$split,
     'output|o=s'   => \$output,
     'verbose|v'    => sub { use diagnostics; },
     'quiet|q'      => sub { no warnings; },
@@ -70,6 +72,18 @@ if ($seqid) {
     print ">lcl|$seqid $range[0] $range[1]\n";
     print $sequence, "\n";
 
+}
+
+
+if ($split) {
+    for my $chr (sort keys %reference) {
+        open my $CHROUT, '>', "$reference-$chr" or croak "Can't write to $reference-$chr";
+
+        print $CHROUT ">$chr\n";
+        print $CHROUT $reference{$chr}, "\n";
+
+        close $CHROUT;
+    }
 }
 
 
@@ -149,8 +163,9 @@ __END__
  parse_fasta.pl [OPTION]... [FILE]...
 
  -l, --list        print list of sequence ids and lengths
- -s, --seqid       sequence id from which to print sub sequence
+ -i, --seqid       sequence id from which to print sub sequence
  -r, --range       start and end coordinates to print
+ -s, --split       split input fasta file into <basename> chromosomes
  -o, --output      filename to write results to (defaults to STDOUT)
  -v, --verbose     output perl's diagnostic and warning messages
  -q, --quiet       supress perl's diagnostic and warning messages
