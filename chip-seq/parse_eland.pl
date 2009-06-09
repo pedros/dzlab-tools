@@ -79,7 +79,7 @@ while (<>) {
     print join ("\t",
                 $seq_id,
                 q{.},
-                "$feature",
+                ($feature?$feature:'parse_eland'),
                 int $center,
                 int $center,
                 q{.},
