@@ -70,12 +70,8 @@ while (<>) {
 
         $attribute = "/1=$coordinate;/2=$pair_coord;lib=$lib";
     }
-    else { # if single ends, calculate center coordinate from start coordinate +/- half library size
-        $center = (
-            $strand eq q{+} ?
-            $coordinate + ($library_size / 2) :
-            $coordinate - ($library_size / 2)
-        );
+    else { # if single ends, use read center coordinate
+        $center = $coordinate + ($read_size / 2);
         $attribute = "/1=$coordinate"
     }
 
