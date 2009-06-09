@@ -10,19 +10,26 @@ use List::Util;
 
 my $gff_a;
 my $gff_b;
+my $output;
 
 # Grabs and parses command line options
 my $result = GetOptions (
-    'gff-a|a=s' => \$gff_a,
-    'gff-b|b=s' => \$gff_b,
-    'verbose|v' => sub { use diagnostics; },
-    'quiet|q'   => sub { no warnings; },
-    'help|h'    => sub { pod2usage ( -verbose => 1 ); },
-    'manual|m'  => sub { pod2usage ( -verbose => 2 ); }
+    'gff-a|a=s'  => \$gff_a,
+    'gff-b|b=s'  => \$gff_b,
+    'output|o=s' => \$output,
+    'verbose|v'  => sub { use diagnostics; },
+    'quiet|q'    => sub { no warnings; },
+    'help|h'     => sub { pod2usage ( -verbose => 1 ); },
+    'manual|m'   => sub { pod2usage ( -verbose => 2 ); }
 );
 
 pod2usage ( -verbose => 1 )
 unless $gff_a and $gff_b;
+
+if ($output) {
+    open my $USER_OUT, '>', $output or carp "Can't open $output for writing: $!";
+    select $USER_OUT;
+}
 
 my $max = 0;
 my %probes = ();
