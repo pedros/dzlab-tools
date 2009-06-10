@@ -6,58 +6,62 @@ use Data::Dumper;
 use Carp;
 use Getopt::Long;
 use Pod::Usage;
-use File::Basename;
 
 my $output;
-my $feature;
-my $sequence;
+my $offsets;
 
 # Grabs and parses command line options
 my $result = GetOptions (
-    'feature|f=s'  => \$feature,
-    'sequence|s=s' => \$sequence,
-    'output|o=s'   => \$output,
-    'verbose|v'  => sub { use diagnostics; },
-    'quiet|q'    => sub { no warnings; },
-    'help|h'     => sub { pod2usage ( -verbose => 1 ); },
-    'manual|m'   => sub { pod2usage ( -verbose => 2 ); }
+    'offsets|f=s' => \$offsets,
+    'output|o=s'  => \$output,
+    'verbose|v'   => sub { use diagnostics; },
+    'quiet|q'     => sub { no warnings; },
+    'help|h'      => sub { pod2usage ( -verbose => 1 ); },
+    'manual|m'    => sub { pod2usage ( -verbose => 2 ); }
 );
 
 # Check required command line parameters
 pod2usage ( -verbose => 1 )
-unless @ARGV and $result and -e $ARGV[0]
-or (
-    ($feature and !$sequence) or
-    (!$feature and $sequence)
-);
+unless @ARGV;
+
 
 if ($output) {
     open my $USER_OUT, '>', $output or carp "Can't open $output for writing: $!";
     select $USER_OUT;
 }
 
-my ($name, $path, $suffix) = fileparse ($ARGV[0], qr/\.[^.]*/);
 
-my %file_handle;
-while (my $gff_line = <>) {
-    next if $gff_line =~ m/^\s*$|^\s*#/;
+my %offsets = ();
+open my $OFFSETS, '<', $offsets or croak "Can't open $offsets: $!";
+while (<$OFFSETS>) {
+    chomp;
+    my ($group, $scaffold, $offset)
+    = split /\t/;
 
-    my $current = (split /\t/, $gff_line)[($sequence ? 0 : 2)];
+    $scaffold =~ tr/A-Z/a-z/;
 
-    next unless $feature =~ m/all/i
-    or $current =~ m/$feature/i;
-
-    my $out = $path . $name . "-$current" . $suffix;
-
-    open $file_handle{$current}, '>', $out
-    or croak "Can't open $out for writing: $!"
-    unless exists $file_handle{$current};
-
-    print {$file_handle{$current}} $gff_line;
+    $offsets{$scaffold}{group} =  $group;
+    $offsets{$scaffold}{offset} = $offset;
 }
-close $file_handle{$_} for keys %file_handle;
+close $OFFSETS or croak "Can't close $offsets: $!";
 
-exit 0;
+while (<>) {
+    next if ($_ =~ m/^#.*$|^\s*$/);
+    my @gff = split /\t/, $_;
+
+    $gff[0] =~ tr/A-Z/a-z/;
+
+    unless (exists $offsets{$gff[0]}) {
+        warn "Scaffold $gff[0] doesn't exist in offsets file $offsets"
+    }
+    else {
+        $gff[3] += $offsets{$gff[0]}{offset};
+        $gff[4] += $offsets{$gff[0]}{offset};
+        $gff[0] =  $offsets{$gff[0]}{group};
+    }
+
+    print join "\t", @gff;
+}
 
 
 __END__
@@ -65,22 +69,19 @@ __END__
 
 =head1 NAME
 
- split_gff - Split GFF files by sequence ID or feature
+ offset_coordinates.pl - Change coordinates in a gff annotation file
 
 =head1 SYNOPSIS
 
- split_gff.pl -f exon all_features.gff  # filter by exon
- split_gff.pl -s chr1 all_sequences.gff # filter by chromosome
- split_gff.pl -f all al_features.gff    # create multiple files, one per feature
+ offset_coordinates --offsets file-with-offset-list.dat -o new-annotation-file.gff old-annotation-file
 
 =head1 DESCRIPTION
 
 =head1 OPTIONS
 
- split_gff.pl [OPTION]... [FILE]...
+ offset_coordinates.pl [OPTION]... [FILE]...
 
- -f, --feature     feature used to filter GFF file by ('all' generates one file per feature)
- -s, --sequence    sequence ID used to filter GFF file by ('all' generates one file per sequence ID)
+ -f, --offsets     filename of offset file (group	scaffold	offset)
  -o, --output      filename to write results to (defaults to STDOUT)
  -v, --verbose     output perl's diagnostic and warning messages
  -q, --quiet       supress perl's diagnostic and warning messages

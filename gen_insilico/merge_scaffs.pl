@@ -12,6 +12,7 @@ pod2usage ( -verbose => 1 )
 unless @ARGV;
 
 my $scaffolds;
+my $prefix;
 my $max_length = 30000000;
 my $output;
 
@@ -19,6 +20,7 @@ my $output;
 my $result = GetOptions (
     'fasta-scaffolds|f=s' => \$scaffolds,
     'max-length|l=i'      => \$max_length,
+    'prefix|p=s'          => \$prefix,
     'output|o=s'          => \$output,
     'verbose|v' => sub { use diagnostics; },
     'quiet|q'   => sub { no warnings; },
@@ -37,6 +39,7 @@ my @objects = ();
 my @reference = @{ index_fasta ($scaffolds) };
 
 my $last_offset;
+my $last_header;
 
 while (my $scaff = shift @reference) {
 
@@ -45,14 +48,20 @@ while (my $scaff = shift @reference) {
         $current_length += length $scaff->[1];
     }
     else {
-        print ">$objects[0]->[0]-$objects[$#objects]->[0]\n";
+        my $header = "$objects[0]->[0]-$objects[$#objects]->[0]";
+
+        if ($prefix) {
+            $header =~ s/$prefix//g;
+            $header = 'group_' . $header;
+        }
+
+        print ">$header\n";
 
         my $offset = 0;
         for my $i (0 .. $#objects) {
-            $offset += $objects[$i - 1] if $i > 0;
-            print STDERR "$objects[$i]->[0]\t$offset\n";
-
-            print $objects[$i]->[1], "\n"
+            print STDERR "$header\t$objects[$i]->[0]\t$offset\n";
+            print $objects[$i]->[1], "\n";
+            $offset += length $objects[$i]->[1];
         }
 
         $current_length = 0;
@@ -60,12 +69,13 @@ while (my $scaff = shift @reference) {
 
         push @objects, $scaff;
         $last_offset = $offset + length $scaff->[1];
+        $last_header = $header;
         $current_length += length $scaff->[1];
     }
 }
 
 if (@objects) {
-    print STDERR "$objects[0]->[0]\t$last_offset\n";
+    print STDERR "$last_header\t$objects[0]->[0]\t$last_offset\n";
     print $objects[0]->[1], "\n"
 }
 
@@ -109,6 +119,7 @@ sub index_fasta {
         }
         $line =~ s/[\n\r]//g;
         push @reference, [$dsc[$j], $line];
+
     }
     return \@reference;
 }
@@ -125,6 +136,7 @@ __END__
 =head1 SYNOPSIS
 
  ./merge_scaffs.pl -l 30000000 -f multiple_scaffs.fa -o pseudo-chr.fa
+ ./merge_scaffs.pl -l 30000000 -f multiple_scaffs.fa -o pseudo-chr.fa --prefix scaffold_ 2> offsets
 
 =head1 DESCRIPTION
 
@@ -132,15 +144,16 @@ __END__
 
  -l, --max-length        Maximum length for each generated pseudo chromosome
  -f, --fasta-scaffolds   Fasta file with unknown scaffolds
+ -p, --prefix            remove common prefix from scaffolds headers [scaffold_]
  -o, --output            Output pseudo chromosome fasta file name
 
 =head1 REVISION
 
- $Rev: $:
- $Author: $:
- $Date:  $:
- $HeadURL:  $:
- $Id:  $:
+ $Rev$:
+ $Author$:
+ $Date$:
+ $HeadURL$:
+ $Id$:
 
 
 =head1 AUTHOR
