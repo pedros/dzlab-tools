@@ -116,12 +116,19 @@ __END__
 
 =head1 OPTIONS
 
- --gff-a, -a   Numerator file
- --gff-b, -b   Denominator file
+ -a, --gff-a   experiment GFF file
+ -b, --gff-b   control GFF file
+ -o, --output  output file
 
 =head1 REVISION
 
- 0.0.1
+ Version 0.0.1
+
+ $Rev$:
+ $Author$:
+ $Date$:
+ $HeadURL$:
+ $Id$:
 
 =head1 AUTHOR
 
