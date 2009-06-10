@@ -56,7 +56,7 @@ seqmap 2 ${RREAD}.g2a ${GENOME}-RC.G2A ${RREAD}.eland3 /eland:3 /forward_strand 
 
 # correlate paired ends
 echo -n "Running correlatePairedEnds.pl..."
-correlatePairedEnds.pl --left ${LREAD}.eland3 --right ${RREAD}.eland3 --reference $GENOME --output ${LREAD}_pre.gff --offset 0 --distance 300 --readsize 45 --trust-dash-2&&
+correlatePairedEnds.pl --left ${LREAD}.eland3 --right ${RREAD}.eland3 --reference $GENOME --output ${LREAD}_pre.gff --offset 0 --distance 300 --readsize 45 &&
 echo "Done with code: $?"
 
 # replace processed reads with original
