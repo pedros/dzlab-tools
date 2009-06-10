@@ -63,7 +63,13 @@ __END__
 
 =head1 REVISION
 
- 0.0.1
+ Version 0.0.1
+
+ $Rev$:
+ $Author$:
+ $Date$:
+ $HeadURL$:
+ $Id$:
 
 =head1 AUTHOR
 
