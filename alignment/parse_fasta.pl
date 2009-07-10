@@ -6,7 +6,7 @@ use Data::Dumper;
 use Carp;
 use Getopt::Long;
 use Pod::Usage;
-use File::Spec;
+use File::Basename;
 
 my @range;
 my $seqid;
@@ -73,7 +73,7 @@ if ($seqid) {
     @range = (1, length $sequence)
     unless @range;
 
-    my $file_name = File::Spec->canonpath ($reference);
+    my $file_name = fileparse ($reference);
 
     print ">lcl|$file_name|$seqid|$range[0]-$range[1]\n";
     print $sequence, "\n";
