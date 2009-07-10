@@ -6,6 +6,7 @@ use Data::Dumper;
 use Carp;
 use Getopt::Long;
 use Pod::Usage;
+use File::Spec;
 
 my @range;
 my $seqid;
@@ -38,40 +39,46 @@ if ($output) {
 my $reference = $ARGV[0];
 my %reference = %{ index_fasta ($reference) };
 
-my $total_bp = 0;
+my $total_bp     = 0;
 my $total_non_bp = 0;
+
 if ($list) {
     print $reference, ":\n";
 
     for (sort keys %reference) {
 
-        my $t_len = length $reference{$_};
-        my $t_n   = $reference{$_} =~ tr/ACGTacgt//c;
+        my $tmp_length_bp     = length $reference{$_};
+        my $tmp_length_non_bp = $reference{$_} =~ tr/ACGTacgt//c;
 
         print join ("\t",
                     $_,
-                    $t_len,
-                    $t_len - $t_n,
+                    $tmp_length_bp,
+                    $tmp_length_bp - $tmp_length_non_bp,
                 ), "\n";
 
-        $total_bp += $t_len;
-        $total_non_bp += $t_n;
+        $total_bp += $tmp_length_bp;
+        $total_non_bp += $tmp_length_non_bp;
     }
     print "Total size:\t$total_bp\t", $total_bp - $total_non_bp, "\n";
+
+    exit 0;
 }
 
 
 if ($seqid) {
 
-    @range = (0, 0)
-    unless @range;
-
     my $sequence
     = _sequence (\%reference, $seqid, @range);
 
-    print ">lcl|$seqid $range[0] $range[1]\n";
+    @range = (1, length $sequence)
+    unless @range;
+
+    my $file_name = File::Spec->canonpath ($reference);
+
+    print ">lcl|$file_name|$seqid|$range[0]-$range[1]\n";
     print $sequence, "\n";
 
+    exit 0;
 }
 
 
@@ -84,6 +91,8 @@ if ($split) {
 
         close $CHROUT;
     }
+
+    exit 0;
 }
 
 
@@ -98,10 +107,10 @@ sub _sequence {
     if ($start and $end) {
 
         croak "Coordinates out of bounds"
-        if $start < 0 or $end > length $reference->{$seqid};
+        if $start < 1 or $end > length $reference->{$seqid};
 
         return
-        substr ($reference{$seqid}, $start - 1, $end - $start - 1);
+        substr ($reference{$seqid}, $start - 1, $end - $start);
     }
     else {
         return $reference{$seqid};
