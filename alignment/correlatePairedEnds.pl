@@ -45,6 +45,7 @@ use List::Util qw(min);
 my $leftendfile;           # left end sequences file in eland 3 format
 my $rightendfile;          # right end sequences file in eland 3 format
 my $referencefile;         # unmodified reference genome file in fasta format
+my $skip_nm        = 0;
 my $distance       = 300;  # maximum (random) range distance beyond offset.
 my $offset         = 0;    # minimum distance between left and right sequences of a pair.
 my $output         = q{-}; # output mode. standard output by default
@@ -60,6 +61,7 @@ my $result = GetOptions(
     "left|l=s"       => \$leftendfile,
     "right|r=s"      => \$rightendfile,
     "reference|f=s"  => \$referencefile,
+    'skip-nm|k'      => \$skip_nm,
     "distance|d=i"   => \$distance,
     "offset|t=i"     => \$offset,
     'trust-dash-2|2' => \$trust_dash_2,
@@ -982,11 +984,13 @@ while (my $leftend = <$LEFT>) {
     print join( "\t",
                 $l_seqname, $l_source, $l_feature, $l_start, $l_end,
                 $l_score,   $l_strand, $l_frame,  $l_attribute ),
-                "\n";
+                "\n"
+                unless $skip_nm and $l_score = 1;
     print join( "\t",
                 $r_seqname, $r_source, $r_feature, $r_start, $r_end,
                 $r_score,   $r_strand, $r_frame,  $r_attribute ),
-                "\n";
+                "\n"
+                unless $skip_nm and $r_score = 1;
 }
 
 # end for loop through all sequences

@@ -480,6 +480,11 @@ sub count_freq {
         ($c) = $c =~ m/c=(\d+)/;
         ($t) = $t =~ m/t=(\d+)/;
 
+        $unfiltered{$context}{c} = 0 unless defined $unfiltered{$context}{c};
+        $unfiltered{$context}{t} = 0 unless defined $unfiltered{$context}{t};
+        $filtered{$context}{c}   = 0 unless defined $filtered{$context}{c};
+        $filtered{$context}{t}   = 0 unless defined $filtered{$context}{t};
+
         $unfiltered{$context}{c} += $c;
         $unfiltered{$context}{t} += $t;
 
@@ -488,23 +493,32 @@ sub count_freq {
     }
     close $GFF;
 
+    return unless keys %filtered and keys %unfiltered;
+
     my $total_unfiltered_c = $unfiltered{CG}{c} + $unfiltered{CHG}{c} + $unfiltered{CHH}{c};
     my $total_unfiltered_t = $unfiltered{CG}{t} + $unfiltered{CHG}{t} + $unfiltered{CHH}{t};
 
     my $total_filtered_c = $filtered{CG}{c} + $filtered{CHG}{c} + $filtered{CHH}{c};
     my $total_filtered_t = $filtered{CG}{t} + $filtered{CHG}{t} + $filtered{CHH}{t};
 
-    my $unfiltered_C_ratio = $total_unfiltered_c / ($total_unfiltered_c + $total_unfiltered_t);
-    my $filtered_C_ratio = $total_filtered_c / ($total_filtered_c + $total_filtered_t);
+    my (
+        $unfiltered_C_ratio, $filtered_C_ratio,
+        $unfiltered_CG_ratio, $filtered_CG_ratio,
+        $unfiltered_CHG_ratio, $filtered_CHG_ratio,
+        $unfiltered_CHH_ratio, $filtered_CHH_ratio,
+    ) = 0 x 8;
 
-    my $unfiltered_CG_ratio = $unfiltered{CG}{c} / ($unfiltered{CG}{c} + $unfiltered{CG}{t});
-    my $filtered_CG_ratio = $filtered{CG}{c} / ($filtered{CG}{c} + $filtered{CG}{t});
+    $unfiltered_C_ratio = $total_unfiltered_c / ($total_unfiltered_c + $total_unfiltered_t) if $total_unfiltered_c + $total_unfiltered_t != 0;
+    $filtered_C_ratio = $total_filtered_c / ($total_filtered_c + $total_filtered_t) if $total_filtered_c + $total_filtered_t != 0;
 
-    my $unfiltered_CHG_ratio = $unfiltered{CHG}{c} / ($unfiltered{CHG}{c} + $unfiltered{CHG}{t});
-    my $filtered_CHG_ratio   = $filtered{CHG}{c}   / ($filtered{CHG}{c}   + $filtered{CHG}{t});
+    $unfiltered_CG_ratio = $unfiltered{CG}{c} / ($unfiltered{CG}{c} + $unfiltered{CG}{t}) if $unfiltered{CG}{c} + $unfiltered{CG}{t} != 0;
+    $filtered_CG_ratio = $filtered{CG}{c} / ($filtered{CG}{c} + $filtered{CG}{t}) if $filtered{CG}{c} + $filtered{CG}{t} != 0;
 
-    my $unfiltered_CHH_ratio = $unfiltered{CHH}{c} / ($unfiltered{CHH}{c} + $unfiltered{CHH}{t});
-    my $filtered_CHH_ratio   = $filtered{CHH}{c}   / ($filtered{CHH}{c}   + $filtered{CHH}{t});
+    $unfiltered_CHG_ratio = $unfiltered{CHG}{c} / ($unfiltered{CHG}{c} + $unfiltered{CHG}{t}) if $unfiltered{CHG}{c} + $unfiltered{CHG}{t} != 0;
+    $filtered_CHG_ratio   = $filtered{CHG}{c}   / ($filtered{CHG}{c}   + $filtered{CHG}{t}) if $filtered{CHG}{c} + $filtered{CHG}{t} != 0;
+
+    $unfiltered_CHH_ratio = $unfiltered{CHH}{c} / ($unfiltered{CHH}{c} + $unfiltered{CHH}{t}) if $unfiltered{CHH}{c} + $unfiltered{CHH}{t} != 0;
+    $filtered_CHH_ratio   = $filtered{CHH}{c}   / ($filtered{CHH}{c}   + $filtered{CHH}{t}) if $filtered{CHH}{c} + $filtered{CHH}{t} != 0;
 
     return (
         $total_unfiltered_c,
