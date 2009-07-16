@@ -83,7 +83,7 @@ elsif (! -d $out_dir) {
     mkpath ( File::Spec->catfile ($out_dir, 'windows'),  {verbose => 1} );
     mkpath ( File::Spec->catfile ($out_dir, 'single-c'), {verbose => 1} );
 }
-else {croak "Can't overwrite $out_dir"}
+#else {warn " overwrite $out_dir"}
 
 
 my %files = (
