@@ -105,39 +105,37 @@ my %files = (
               _gen_files (File::Spec->catfile ($out_dir, 'windows', $base_name), "w${window_size}-CHH.gff", @groups)],
 );
 
-# die Dumper \%files;
+run_cmd ("fq_all2std.pl fq2fa $left_read > $files{lfa}")  unless file_exists($files{lfa});
+run_cmd ("convert.pl c2t $files{lfa} > $files{lc2t}")     unless file_exists($files{lc2t});
 
-run_cmd ("fq_all2std.pl fq2fa $left_read > $files{lfa}");
-run_cmd ("convert.pl c2t $files{lfa} > $files{lc2t}");
+run_cmd ("fq_all2std.pl fq2fa $right_read > $files{rfa}") unless file_exists($files{rfa});
+run_cmd ("convert.pl g2a $files{rfa} > $files{rg2a}")     unless file_exists($files{rg2a});
 
-run_cmd ("fq_all2std.pl fq2fa $right_read > $files{rfa}");
-run_cmd ("convert.pl g2a $files{rfa} > $files{rg2a}");
+run_cmd ("rcfas.pl $reference > $reference.rc")           unless file_exists("$reference.rc");
+run_cmd ("convert.pl c2t $reference.rc > $reference.c2t") unless file_exists("$reference.c2t");
+run_cmd ("convert.pl g2a $reference.rc > $reference.g2a") unless file_exists("$reference.g2a");
 
-run_cmd ("rcfas.pl $reference > $reference.rc");
-run_cmd ("convert.pl c2t $reference.rc > $reference.c2t");
-run_cmd ("convert.pl g2a $reference.rc > $reference.g2a");
+run_cmd ("seqmap $mismatches $files{lc2t} $reference.c2t $files{lel3} /eland:3 /forward_strand /available_memory:8000 /cut:$left_splice[0],$left_splice[1]")   unless file_exists($files{lel3});
+run_cmd ("seqmap $mismatches $files{rg2a} $reference.g2a $files{rel3} /eland:3 /forward_strand /available_memory:8000 /cut:$right_splice[0],$right_splice[1]") unless file_exists($files{rel3});
 
-run_cmd ("seqmap $mismatches $files{lc2t} $reference.c2t $files{lel3} /eland:3 /forward_strand /available_memory:8000 /cut:$left_splice[0],$left_splice[1]");
-run_cmd ("seqmap $mismatches $files{rg2a} $reference.g2a $files{rel3} /eland:3 /forward_strand /available_memory:8000 /cut:$right_splice[0],$right_splice[1]");
+run_cmd ("replace_reads.pl -f $files{lfa} -r $read_size -s @left_splice  $files{lel3} > $files{lel3}.post") unless file_exists("$files{lel3}.post");
+run_cmd ("replace_reads.pl -f $files{rfa} -r $read_size -s @right_splice $files{rel3} > $files{rel3}.post") unless file_exists("$files{rel3}.post");
 
-run_cmd ("replace_reads.pl -f $files{lfa} -r $read_size -s @left_splice  $files{lel3} > $files{lel3}.post");
-run_cmd ("replace_reads.pl -f $files{rfa} -r $read_size -s @right_splice $files{rel3} > $files{rel3}.post");
+run_cmd ("correlatePairedEnds.pl --left $files{lel3}.post --right $files{rel3}.post --reference $reference --output $files{base} --offset 0 --distance $library_size --readsize $read_size --trust-dash-2 $trust_dash_2") unless file_exists($files{base});
 
-run_cmd ("correlatePairedEnds.pl --left $files{lel3}.post --right $files{rel3}.post --reference $reference --output $files{base} --offset 0 --distance $library_size --readsize $read_size --trust-dash-2 $trust_dash_2");
-
-run_cmd ("collect_align_stats.pl $files{lel3}.post $files{rel3}.post $files{base} $organism $batch > $files{log}");
+run_cmd ("collect_align_stats.pl $files{lel3}.post $files{rel3}.post $files{base} $organism $batch > $files{log}") unless file_exists($files{log});
 
 run_cmd ("split_gff.pl --sequence all $files{base}");
 
 for (@groups) {
-    run_cmd ("countMethylation.pl --ref $reference --gff $files{split}->{$_} --output $files{freq}->{$_} --sort");
+    run_cmd ("countMethylation.pl --ref $reference --gff $files{split}->{$_} --output $files{freq}->{$_} --sort") unless file_exists($files{freq}->{$_});
     run_cmd ("split_gff.pl --feature all $files{freq}->{$_}");
 }
 
 for my $context (1..3) {
     for my $group (@groups) {
-        run_cmd ("window_gff.pl --gff-file $files{cont}->[$context]{$group} --width 1 --output $files{cont}->[$context]{$group}.merged");
-        run_cmd ("window_gff.pl --gff-file $files{cont}->[$context]{$group}.merged --width $window_size --output $files{wcont}->[$context]{$group} --no-skip");
+        run_cmd ("window_gff.pl --gff-file $files{cont}->[$context]{$group} --width 1 --output $files{cont}->[$context]{$group}.merged") unless file_exists("$files{cont}->[$context]{$group}.merged");
+        run_cmd ("window_gff.pl --gff-file $files{cont}->[$context]{$group}.merged --width $window_size --output $files{wcont}->[$context]{$group} --no-skip") unless file_exists($files{wcont}->[$context]{$group});
     }
 }
 
@@ -149,7 +147,6 @@ sub run_cmd {
     croak "** failed to run command '$cmd': $@" if $@;
 }
 
-
 sub _gen_files {
     my ($base, $ext, @groups) = @_;
 
@@ -158,6 +155,12 @@ sub _gen_files {
         $split_files{$group} = "$base-$group.$ext";
     }
     return \%split_files;
+}
+
+sub file_exists {
+    my $file = shift;
+    return 0 if -f $file and -s $file;
+    return 1;
 }
 
 __END__
