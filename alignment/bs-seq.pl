@@ -74,10 +74,9 @@ unless (@groups) {
             m/>([^\s]+)/ && push @groups, $1;
         }
     }
-
     close $REFERENCE or carp "Can't close $reference: $!";
 }
-die Dumper \@groups;
+
 @left_splice  = (1, $read_size) unless @left_splice;
 @right_splice = (1, $read_size) unless @right_splice;
 
