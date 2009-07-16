@@ -10,6 +10,9 @@ use File::Spec;
 use File::Path;
 use File::Basename;
 
+# SIGINT trap. Ctrl-c triggers unclean exit.
+$SIG{INT} = sub {croak "Received SIG$_[0]. Exiting...\n"};
+
 my $left_read;   # required
 my $right_read;  # required
 my $reference;   # required
