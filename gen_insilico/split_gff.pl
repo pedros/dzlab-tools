@@ -43,6 +43,7 @@ while (my $gff_line = <>) {
     next if $gff_line =~ m/^\s*$|^\s*#/;
 
     my $current = (split /\t/, $gff_line)[($sequence ? 0 : 2)];
+    $feature = $sequence if $sequence;
 
     next unless $feature =~ m/all/i
     or $current =~ m/$feature/i;
@@ -71,7 +72,7 @@ __END__
 
  split_gff.pl -f exon all_features.gff  # filter by exon
  split_gff.pl -s chr1 all_sequences.gff # filter by chromosome
- split_gff.pl -f all al_features.gff    # create multiple files, one per feature
+ split_gff.pl -f all all_features.gff    # create multiple files, one per feature
 
 =head1 DESCRIPTION
 
