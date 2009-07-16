@@ -159,8 +159,8 @@ sub _gen_files {
 
 sub file_exists {
     my $file = shift;
-    return 0 if -f $file and -s $file;
-    return 1;
+    return 1 if -f $file and -s $file;
+    return 0;
 }
 
 __END__
