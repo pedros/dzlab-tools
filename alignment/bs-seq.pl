@@ -68,12 +68,16 @@ unless $result and $left_read and $right_read and $reference;
 unless (@groups) {
     open my $REFERENCE, '<', $reference or croak "Can't open $reference: $!";
 
-    tr/A-Z/a-z/ && s/>([^\s]+)// && push @groups, $1
-    while <$REFERENCE>;
+    while (<$REFERENCE>) {
+        if (m/>/) {
+            tr/A-Z/a-z/;
+            m/>([^\s]+)/ && push @groups, $1;
+        }
+    }
 
     close $REFERENCE or carp "Can't close $reference: $!";
 }
-
+die Dumper \@groups;
 @left_splice  = (1, $read_size) unless @left_splice;
 @right_splice = (1, $read_size) unless @right_splice;
 
