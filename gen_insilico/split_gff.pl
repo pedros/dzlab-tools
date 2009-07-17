@@ -46,7 +46,8 @@ while (my $gff_line = <>) {
     $feature = $sequence if $sequence;
 
     next unless $feature =~ m/all/i
-    or $current =~ m/$feature/i;
+    or $current =~ m/$feature/i
+    and $current ne q{.};
 
     my $out = $path . $name . "-$current" . $suffix;
 
