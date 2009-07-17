@@ -131,15 +131,14 @@ run_cmd ("correlatePairedEnds.pl --left $files{lel3}.post --right $files{rel3}.p
 
 run_cmd ("collect_align_stats.pl $files{lel3}.post $files{rel3}.post $files{base} $organism $batch > $files{log}") unless file_exists($files{log});
 
-run_cmd ("split_gff.pl --sequence all $files{base}");
-
 for (@groups) {
+    run_cmd ("split_gff.pl --sequence all $files{base}") unless (file_exists($files{split}->{$_}));
     run_cmd ("countMethylation.pl --ref $reference --gff $files{split}->{$_} --output $files{freq}->{$_} --sort") unless file_exists($files{freq}->{$_});
-    run_cmd ("split_gff.pl --feature all $files{freq}->{$_}");
 }
 
 for my $context (1..3) {
     for my $group (@groups) {
+        run_cmd ("split_gff.pl --feature all $files{freq}->{$_}") unless file_exists($files{cont}->[$context]{$group});
         run_cmd ("window_gff.pl --gff-file $files{cont}->[$context]{$group} --width 1 --output $files{cont}->[$context]{$group}.merged") unless file_exists("$files{cont}->[$context]{$group}.merged");
         run_cmd ("window_gff.pl --gff-file $files{cont}->[$context]{$group}.merged --width $window_size --output $files{wcont}->[$context]{$group} --no-skip") unless file_exists($files{wcont}->[$context]{$group});
     }
