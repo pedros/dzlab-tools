@@ -67,18 +67,52 @@ if ($list) {
 
 if ($seqid) {
 
-    my $sequence
-    = _sequence (\%reference, $seqid, @range);
+    if (-e $seqid) {
+        
+        open my $SEQID, '<', $seqid or croak "Can't open $seqid for reading";
 
-    @range = (1, length $sequence)
-    unless @range;
+        while ($seqid = <$SEQID>) {
+            $seqid =~ s/[\n\r]//g;
+            
+            my $sequence
+            = _sequence (\%reference, $seqid);
 
-    my $file_name = fileparse ($reference);
+            @range = (1, length $sequence)
+            unless @range;
 
-    print ">lcl|$file_name|$seqid|$range[0]-$range[1]\n";
-    print $sequence, "\n";
+            my $file_name = fileparse ($reference);
 
-    exit 0;
+            # one time masking. keeping it here in case it's needed in the future
+            # if ($seqid =~ m/^scaffold_2$/) {
+            #     print STDERR length $sequence, "\n";
+            #     my $n = 'N' x (2350000 - 1650000);
+            #     substr $sequence, (1650000 - 1), (2350000 - 1650000), $n;
+            # }
+            # elsif ($seqid =~ m/^scaffold_175$/) {
+            #     print STDERR length $sequence, "\n";
+            #     my $n = 'N' x (56000 - 46000);
+            #     substr $sequence, (46000 - 1), (56000 - 46000), $n;
+            # }
+
+            print ">$seqid\n";
+            print $sequence, "\n";
+        }
+    }
+    else {
+
+        my $sequence
+        = _sequence (\%reference, $seqid, @range);
+
+        @range = (1, length $sequence)
+        unless @range;
+
+        my $file_name = fileparse ($reference);
+
+        print ">lcl|$file_name|$seqid|$range[0]-$range[1]\n";
+        print $sequence, "\n";
+
+        exit 0;
+    }
 }
 
 
