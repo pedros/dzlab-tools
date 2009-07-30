@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use Data::Dumper;
 use Carp;
-use Getopt::Long;
+use Getopt::Long qw(:config no_ignore_case);
 use Pod::Usage;
 use File::Spec;
 use File::Path;
@@ -19,12 +19,14 @@ my $reference;   # required
 my $base_name    = 'out';
 my $overwrite;
 my $read_size    = 45;
+my $var_length   = 0;
 my $library_size = 300;
 my $mismatches   = 2;
 my $organism     = q{.};
 my $batch        = 1;
 my $window_size  = 50;
 my $trust_dash_2 = 1;
+my $single_ends  = 0;
 my @left_splice;
 my @right_splice;
 my @groups       = ();
@@ -45,17 +47,19 @@ my $result = GetOptions (
     'base-name|b=s'        => \$base_name,
     'overwrite|o'          => \$overwrite,
     'read-size|s=i'        => \$read_size,
+    'variable-length|v=i'  => \$var_length,
     'library-size|k=i'     => \$library_size,
     'mismatches|n=i'       => \$mismatches,
     'organism|t=s'         => \$organism,
     'batch|i=i'            => \$batch,
     'window-size|w=i'      => \$window_size,
     'trust-dash-2|2'       => \$trust_dash_2,
+    'single-ends|1=i'      => \$single_ends,
     'left-splice|ls=i{2}'  => \@left_splice,
     'right-splice|rs=i{2}' => \@right_splice,
     'groups|g=s{,}'        => \@groups,
     'out-directory|d=s'    => \$out_dir,
-    'verbose|v'            => sub { use diagnostics; },
+    'verbose|V'            => sub { use diagnostics; },
     'quiet|q'              => sub { no warnings; },
     'help|h'               => sub { pod2usage ( -verbose => 1 ); },
     'manual|m'             => sub { pod2usage ( -verbose => 2 ); }
@@ -97,8 +101,8 @@ my %files = (
     lc2t  => File::Spec->catfile ($out_dir, File::Spec->canonpath($left_read))  . '.c2t',
     rfa   => File::Spec->catfile ($out_dir, File::Spec->canonpath($right_read)) . '.fa',
     rg2a  => File::Spec->catfile ($out_dir, File::Spec->canonpath($right_read)) . '.g2a',
-    lel3  => File::Spec->catfile ($out_dir, File::Spec->canonpath($left_read))  . '.eland3',
-    rel3  => File::Spec->catfile ($out_dir, File::Spec->canonpath($right_read)) . '.eland3',
+    lel3  => File::Spec->catfile ($out_dir, File::Spec->canonpath($left_read))  . "_$left_splice[0]-$left_splice[1].eland3",
+    rel3  => File::Spec->catfile ($out_dir, File::Spec->canonpath($right_read)) . "_$right_splice[0]-$right_splice[1].eland3",
     base  => File::Spec->catfile ($out_dir, $base_name)  . '.gff',
     log   => File::Spec->catfile ($out_dir, $base_name)  . '.log',
     split => _gen_files (File::Spec->catfile ($out_dir, $base_name), 'gff',  @groups),
@@ -111,38 +115,59 @@ my %files = (
               _gen_files (File::Spec->catfile ($out_dir, 'windows', $base_name), "w${window_size}-CHH.gff", @groups)],
 );
 
+# convert reads
 run_cmd ("fq_all2std.pl fq2fa $left_read > $files{lfa}")  unless file_exists($files{lfa});
 run_cmd ("convert.pl c2t $files{lfa} > $files{lc2t}")     unless file_exists($files{lc2t});
+unless ($single_ends) {
+    run_cmd ("fq_all2std.pl fq2fa $right_read > $files{rfa}") unless file_exists($files{rfa});
+    run_cmd ("convert.pl g2a $files{rfa} > $files{rg2a}")     unless file_exists($files{rg2a});
+}
 
-run_cmd ("fq_all2std.pl fq2fa $right_read > $files{rfa}") unless file_exists($files{rfa});
-run_cmd ("convert.pl g2a $files{rfa} > $files{rg2a}")     unless file_exists($files{rg2a});
-
+# convert genomes
 run_cmd ("rcfas.pl $reference > $reference.rc")           unless file_exists("$reference.rc");
 run_cmd ("convert.pl c2t $reference.rc > $reference.c2t") unless file_exists("$reference.c2t");
-run_cmd ("convert.pl g2a $reference.rc > $reference.g2a") unless file_exists("$reference.g2a");
+run_cmd ("convert.pl g2a $reference.rc > $reference.g2a") unless file_exists("$reference.g2a") or $single_ends;
 
+# align with seqmap
 run_cmd ("seqmap $mismatches $files{lc2t} $reference.c2t $files{lel3} /eland:3 /forward_strand /available_memory:8000 /cut:$left_splice[0],$left_splice[1]")   unless file_exists($files{lel3});
-run_cmd ("seqmap $mismatches $files{rg2a} $reference.g2a $files{rel3} /eland:3 /forward_strand /available_memory:8000 /cut:$right_splice[0],$right_splice[1]") unless file_exists($files{rel3});
+unless ($single_ends) {
+    run_cmd ("seqmap $mismatches $files{rg2a} $reference.g2a $files{rel3} /eland:3 /forward_strand /available_memory:8000 /cut:$right_splice[0],$right_splice[1]") unless file_exists($files{rel3});
+}
+else {
+    run_cmd ("seqmap $mismatches $files{lc2t} $reference.c2t $files{rel3} /eland:3 /forward_strand /available_memory:8000 /cut:$right_splice[0],$right_splice[1]") unless file_exists($files{rel3});
+}
 
-run_cmd ("replace_reads.pl -f $files{lfa} -r $read_size -s @left_splice  $files{lel3} > $files{lel3}.post") unless file_exists("$files{lel3}.post");
-run_cmd ("replace_reads.pl -f $files{rfa} -r $read_size -s @right_splice $files{rel3} > $files{rel3}.post") unless file_exists("$files{rel3}.post");
+# get back original non-converted reads
+run_cmd ("replace_reads.pl -f $files{lfa} -r $read_size --variable-length $var_length -s @left_splice  $files{lel3} > $files{lel3}.post") unless file_exists("$files{lel3}.post");
+unless ($single_ends) {
+    run_cmd ("replace_reads.pl -f $files{rfa} -r $read_size --variable-length $var_length -s @right_splice $files{rel3} > $files{rel3}.post") unless file_exists("$files{rel3}.post");
+}
+else {
+    run_cmd ("replace_reads.pl -f $files{lfa} -r $read_size --variable-length $var_length -s @right_splice $files{rel3} > $files{rel3}.post") unless file_exists("$files{rel3}.post");
+}
 
-run_cmd ("correlatePairedEnds.pl --left $files{lel3}.post --right $files{rel3}.post --reference $reference --output $files{base} --offset 0 --distance $library_size --readsize $read_size --trust-dash-2 $trust_dash_2") unless file_exists($files{base});
+# make sure reads map together
+run_cmd ("correlatePairedEnds.pl --left $files{lel3}.post --right $files{rel3}.post --reference $reference --output $files{base} --offset 0 --distance $library_size --readsize $read_size --trust-dash-2 $trust_dash_2 --single-ends $single_ends") unless file_exists($files{base});
 
+# basic stats about the aligment
 run_cmd ("collect_align_stats.pl $files{lel3}.post $files{rel3}.post $files{base} $organism $batch > $files{log}") unless file_exists($files{log});
 
+# quantify methylation
 for (@groups) {
     run_cmd ("split_gff.pl --sequence all $files{base}") unless (file_exists($files{split}->{$_}));
     run_cmd ("countMethylation.pl --ref $reference --gff $files{split}->{$_} --output $files{freq}->{$_} --sort") unless file_exists($files{freq}->{$_});
 }
 
-for my $context (1..3) {
+# window methylation counts into non-overlapping windows
+for my $context (0..2) {
     for my $group (@groups) {
         run_cmd ("split_gff.pl --feature all $files{freq}->{$group}") unless file_exists($files{cont}->[$context]{$group});
         run_cmd ("window_gff.pl --gff-file $files{cont}->[$context]{$group} --width 1 --output $files{cont}->[$context]{$group}.merged") unless file_exists("$files{cont}->[$context]{$group}.merged");
         run_cmd ("window_gff.pl --gff-file $files{cont}->[$context]{$group}.merged --width $window_size --output $files{wcont}->[$context]{$group} --no-skip") unless file_exists($files{wcont}->[$context]{$group});
     }
 }
+
+### DONE
 
 
 sub run_cmd {
@@ -191,18 +216,21 @@ __END__
  -b,  --base-name
  -o,  --overwrite
  -s,  --read-size
+ -v,  --variable-length
  -k,  --library-size
  -n,  --mismatches
  -t,  --organism
  -i,  --batch
  -ls, --left-splice
  -rs, --right-splice
+ -1,  --single-ends
+ -2,  --trust-dash-2
  -g,  --groups
  -d,  --out-directory
- -v, --verbose     output perl's diagnostic and warning messages
- -q, --quiet       supress perl's diagnostic and warning messages
- -h, --help        print this information
- -m, --manual      print the plain old documentation page
+ -V,  --verbose     output perl's diagnostic and warning messages
+ -q,  --quiet       supress perl's diagnostic and warning messages
+ -h,  --help        print this information
+ -m,  --manual      print the plain old documentation page
 
 =head1 REVISION
 
