@@ -11,17 +11,19 @@ my $output;
 my $fasta;
 my $readsize;
 my @splice;
+my $var_length;
 
 # Grabs and parses command line options
 my $result = GetOptions (
-    'fasta|f=s'     => \$fasta,
-    'readsize|r=i'  => \$readsize,
-    'splice|s=i{,}' => \@splice,
-    'output|o=s' => \$output,
-    'verbose|v'  => sub { use diagnostics; },
-    'quiet|q'    => sub { no warnings; },
-    'help|h'     => sub { pod2usage ( -verbose => 1 ); },
-    'manual|m'   => sub { pod2usage ( -verbose => 2 ); }
+    'fasta|f=s'           => \$fasta,
+    'readsize|r=i'        => \$readsize,
+    'splice|s=i{,}'       => \@splice,
+    'variable-length|l=i' => \$var_length,
+    'output|o=s'          => \$output,
+    'verbose|v'           => sub { use diagnostics; },
+    'quiet|q'             => sub { no warnings; },
+    'help|h'              => sub { pod2usage ( -verbose => 1 ); },
+    'manual|m'            => sub { pod2usage ( -verbose => 2 ); }
 );
 
 # Check required command line parameters
@@ -43,11 +45,17 @@ while (<>) {
 
     my $header   = <$FASTA>;
     my $sequence = <$FASTA>;
+    $sequence =~ s/[\r\n]//g;
 
     croak "Read IDs don't match:\n$fields[0]\n$header"
     unless $header =~ m/${fields[0]}/;
 
-    chomp ($fields[1] = $sequence);
+    if ($var_length) {
+        $sequence    = substr $sequence, ($splice[0] - 1), (length $fields[1]);
+        $left_offset = 0;
+    }
+
+    $fields[1] = $sequence;
 
     $fields[3] =~ s/(\w+:)(\d+)?(\w+)/$1.($2 - $left_offset).$3/eg
     unless $fields[2] =~ 'NM' or $left_offset == 0;
