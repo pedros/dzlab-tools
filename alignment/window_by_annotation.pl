@@ -13,6 +13,8 @@ my $ratio_file = q{-};
 my $gff_annotation_file;
 my $annotation_file;
 my $reference_file;
+my $count_CG_sites = 0;
+my $new_feature;
 my $no_add  = 0;
 my $output  = q{-};
 my $verbose = 0;
@@ -22,16 +24,18 @@ my @argv = @ARGV;
 
 # Grabs and parses command line options
 my $result = GetOptions (
-    'ratio-file|f=s'      => \$ratio_file,
+    'ratio-file|f=s'          => \$ratio_file,
     'gff-annotation-file|g=s' => \$gff_annotation_file,
-    'annotation-file|a=s' => \$annotation_file,
-    'reference-file|r=s'  => \$reference_file,
-    'no-add|n'            => \$no_add,
-    'output|o:s'          => \$output,
-    'verbose|v'           => sub {enable diagnostics;use warnings;},
-    'quiet|q'             => sub {disable diagnostics;no warnings;},
-    'help|usage|h'        => sub {pod2usage(-verbose => 1);},
-    'manual|man|m'        => sub {pod2usage(-verbose => 2);}
+    'annotation-file|a=s'     => \$annotation_file,
+    'reference-file|r=s'      => \$reference_file,
+    'count-CG-sites|cg|c'     => \$count_CG_sites,
+    'new-feature|nf'          => \$new_feature,
+    'no-add|n'                => \$no_add,
+    'output|o:s'              => \$output,
+    'verbose|v'               => sub {enable diagnostics;use warnings;},
+    'quiet|q'                 => sub {disable diagnostics;no warnings;},
+    'help|usage|h'            => sub {pod2usage(-verbose => 1);},
+    'manual|man|m'            => sub {pod2usage(-verbose => 2);}
 );
 
 # Check required command line parameters
@@ -58,7 +62,7 @@ close $RATIO;
 # prints out header fields that contain gff v3 header, generating program, time, and field names
 # gff_print_header ($0, @argv);
 
-my %reference = %{ index_fasta ($reference_file) };
+my %reference = %{ index_fasta ($reference_file, $count_CG_sites) };
 
 for my $chr (sort {$a cmp $b} keys %annotation) {
 
@@ -137,6 +141,22 @@ for my $chr (sort {$a cmp $b} keys %annotation) {
             }
             else {$score = sprintf ("%g", $score)}
 
+            my $total_CG_sites;
+
+            if($count_CG_sites) {
+                my $direction = "$chr-seq";
+                $direction = "$chr-rc" if $annotation{$chr}{$start}->[3] eq q{-};
+                $total_CG_sites = count_sites (
+                    substr(
+                        $reference{$direction},
+                        $annotation{$chr}{$start}->[0],
+                        $annotation{$chr}{$start}->[1] - $annotation{$chr}{$start}->[0]
+                    ),
+                    'CG'
+                );
+                $attribute = "ID=$annotation{$chr}{$start}->[2];total_CG_sites=$total_CG_sites;total_ct=" . ($a_c_count + $a_t_count);
+            }
+
             print join ("\t",
                         $chr,
                         'window',
@@ -144,10 +164,9 @@ for my $chr (sort {$a cmp $b} keys %annotation) {
                         $annotation{$chr}{$start}->[0],
                         $annotation{$chr}{$start}->[1],
                         $score,
+                        $annotation{$chr}{$start}->[3],
                         q{.},
-                        q{.},
-                        $a_c_count + $a_t_count,#$attribute,
-                        "ID=$annotation{$chr}{$start}->[2]",
+                        $attribute,
                     ), "\n";
 
 #             print join ("\t",
@@ -161,6 +180,15 @@ for my $chr (sort {$a cmp $b} keys %annotation) {
 #                     ), "\n";
          }
     }
+}
+
+
+sub count_sites {
+    my ($sequence, $type) = @_;
+
+    my @count = $sequence =~ m/$type/g;
+
+    return @count;
 }
 
 
@@ -300,7 +328,7 @@ sub index_gff_annotation {
 
         $locus_id =~ s/["\t\r\n]//g;
 
-        $annotation{$locus{seqname}}{$locus{start}} = [$locus{start}, $locus{end}, $locus_id];
+        $annotation{$locus{seqname}}{$locus{start}} = [$locus{start}, $locus{end}, $locus_id, $locus{strand}];
     }
     close $GFFH;
     return \%annotation;
@@ -326,7 +354,7 @@ sub index_generic_annotation {
 
 
 sub index_fasta {
-    my $reference_file = shift;
+    my ($reference_file, $count_CG_Sites) = @_;
 
     # holds name of chromosomes as keys and length of chromosomes in bp as values
     my %reference = ();
@@ -367,6 +395,9 @@ sub index_fasta {
             my $sep_end   = length $separator;
             my $sep_cen   = ($sep_end / 2) + $sep_start;
             $reference{$dsc[$j]} = $sep_cen;
+            $reference{"$dsc[$j]-seq"} = $line if $count_CG_sites;
+            $line =~ tr/ACGTacgt/TGCAtgca/ if $count_CG_sites;
+            $reference{"$dsc[$j]-rc"} = reverse $line if $count_CG_sites;
         }
         else {
             print STDERR "No centrometer region found for $dsc[$j].\n";

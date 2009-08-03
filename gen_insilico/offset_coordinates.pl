@@ -7,22 +7,28 @@ use Carp;
 use Getopt::Long;
 use Pod::Usage;
 
-my $output;
 my $offsets;
+my $new_feature;
+my $upstream;
+my $downstream;
+my $output;
 
 # Grabs and parses command line options
 my $result = GetOptions (
-    'offsets|f=s' => \$offsets,
-    'output|o=s'  => \$output,
-    'verbose|v'   => sub { use diagnostics; },
-    'quiet|q'     => sub { no warnings; },
-    'help|h'      => sub { pod2usage ( -verbose => 1 ); },
-    'manual|m'    => sub { pod2usage ( -verbose => 2 ); }
+    'offsets|f=s'     => \$offsets,
+    'new-feature|n=s' => \$new_feature,
+    'upstream|u=i'    => \$upstream,
+    'downstream|d=i'  => \$downstream,
+    'output|o=s'      => \$output,
+    'verbose|v'       => sub { use diagnostics; },
+    'quiet|q'         => sub { no warnings; },
+    'help|h'          => sub { pod2usage ( -verbose => 1 ); },
+    'manual|m'        => sub { pod2usage ( -verbose => 2 ); }
 );
 
 # Check required command line parameters
 pod2usage ( -verbose => 1 )
-unless @ARGV;
+unless @ARGV and $offsets xor ($upstream and $downstream);
 
 
 if ($output) {
@@ -30,20 +36,22 @@ if ($output) {
     select $USER_OUT;
 }
 
-
 my %offsets = ();
-open my $OFFSETS, '<', $offsets or croak "Can't open $offsets: $!";
-while (<$OFFSETS>) {
-    chomp;
-    my ($group, $scaffold, $offset)
-    = split /\t/;
 
-    $scaffold =~ tr/A-Z/a-z/;
-
-    $offsets{$scaffold}{group} =  $group;
-    $offsets{$scaffold}{offset} = $offset;
+if ($offsets) {
+    open my $OFFSETS, '<', $offsets or croak "Can't open $offsets: $!";
+    while (<$OFFSETS>) {
+	chomp;
+	my ($group, $scaffold, $offset)
+	    = split /\t/;
+	
+	$scaffold =~ tr/A-Z/a-z/;
+	
+	$offsets{$scaffold}{group} =  $group;
+	$offsets{$scaffold}{offset} = $offset;
+    }
+    close $OFFSETS or croak "Can't close $offsets: $!";
 }
-close $OFFSETS or croak "Can't close $offsets: $!";
 
 while (<>) {
     next if ($_ =~ m/^#.*$|^\s*$/);
@@ -51,14 +59,27 @@ while (<>) {
 
     $gff[0] =~ tr/A-Z/a-z/;
 
-    unless (exists $offsets{$gff[0]}) {
-        warn "Scaffold $gff[0] doesn't exist in offsets file $offsets"
+    if ($offsets) {
+	unless (exists $offsets{$gff[0]}) {
+	    warn "Scaffold $gff[0] doesn't exist in offsets file $offsets"
+	}
+	else {
+	    $gff[3] += $offsets{$gff[0]}{offset};
+	    $gff[4] += $offsets{$gff[0]}{offset};
+	    $gff[0] =  $offsets{$gff[0]}{group};
+	}
     }
     else {
-        $gff[3] += $offsets{$gff[0]}{offset};
-        $gff[4] += $offsets{$gff[0]}{offset};
-        $gff[0] =  $offsets{$gff[0]}{group};
+	my $five_prime;
+	($gff[5] eq q{+}) ? $five_prime = $gff[3] : $five_prime = $gff[4];
+
+	$gff[3] = $five_prime - $upstream;
+	$gff[4] = $five_prime + $downstream;
+
+	$gff[3] = 0 if $gff[3] < 0;
     }
+
+    $gff[2] = $new_feature if $new_feature;
 
     print join "\t", @gff;
 }
@@ -73,7 +94,11 @@ __END__
 
 =head1 SYNOPSIS
 
+ # with a list of pre-computed offsets per scaffold/sequence
  offset_coordinates --offsets file-with-offset-list.dat -o new-annotation-file.gff old-annotation-file
+
+ # to convert gene list to (predicted) promoter list
+ offset_coordinates --upstream 500 --downstream 200 --new-feature promoter -o new-annotation-file.gff old-annotation-file
 
 =head1 DESCRIPTION
 
@@ -82,6 +107,9 @@ __END__
  offset_coordinates.pl [OPTION]... [FILE]...
 
  -f, --offsets     filename of offset file (group	scaffold	offset)
+ -n, --new-feature new feature to subsitute in field 3
+ -u, --upstream    offset upstream of 5' (incompatible with --offsets)
+ -d, --downstream  offset downstream of 5' (incompatible with --offsets)
  -o, --output      filename to write results to (defaults to STDOUT)
  -v, --verbose     output perl's diagnostic and warning messages
  -q, --quiet       supress perl's diagnostic and warning messages
