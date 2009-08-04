@@ -34,7 +34,7 @@ unless @ARGV and $result and ($type eq 'concise' or $type eq 'verbose') and $ref
 
 # redirect standard output to file if requested
 if ($output) {
-    open my $USER_OUT, '>', $output or carp "Can't open $output for writing: $!";
+    open my $USER_OUT, '>', $output or croak "Can't open $output for writing: $!";
     select $USER_OUT;
 }
 
@@ -46,7 +46,7 @@ while (<>) {
     my ($read_id, $strand, $target, $coordinate, $sequence, undef, $alternatives, $snp)
     = split /\t/;
 
-    $target = (split /\s/, $target)[0];
+#    $target = (split /\s/, $target)[0];
 
     $counts{$target}{alternatives} += $alternatives;
     $counts{$target}{frequencies}++;
@@ -61,8 +61,12 @@ for my $target (sort keys %counts) {
 
     my ($id) = $target =~ m/$id_regex/;
 
-    print STDERR "$target doesn't exist in $reference\n" && next TARGET
-    unless exists $reference{$target};
+    print STDERR $id, "\n";
+
+    unless (exists $reference{$target}) {
+        carp "$target doesn't exist in $reference\n";
+        next TARGET;
+    }
 
     print join ("\t",
                 #$target,
@@ -93,8 +97,9 @@ sub index_fasta {
     for my $i ( 0 .. @fastaseq - 1 ) {
         if ( $fastaseq[$i] =~ m/^>/ ) {
             $fastaseq[$i] =~ s/>//g;
-            $fastaseq[$i] = ( split /\s/, "$fastaseq[$i]" )[0];
+#            $fastaseq[$i] = ( split /\s/, "$fastaseq[$i]" )[0];
 #            $fastaseq[$i] =~ tr/A-Z/a-z/;
+            $fastaseq[$i] =~ s/[\r\n]//g;
             push @idx, $i;
             push @dsc, $fastaseq[$i];
         }

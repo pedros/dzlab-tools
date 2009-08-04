@@ -7,12 +7,14 @@ use Carp;
 use Getopt::Long;
 use Pod::Usage;
 
-my $id_field_name;
+my $gene_id_field_name;
+my $transcript_id_field_name;
 my $output;
 
 # Grabs and parses command line options
 my $result = GetOptions (
-    'id-field-name|i=s' => \$id_field_name,
+    'gene-id-field-name|g=s' => \$gene_id_field_name,
+    'transcript-id-field-name|t=s' => \$transcript_id_field_name,
     'output|o=s' => \$output,
     'verbose|v'  => sub { use diagnostics; },
     'quiet|q'    => sub { no warnings; },
@@ -22,7 +24,7 @@ my $result = GetOptions (
 
 # Check required command line parameters
 pod2usage ( -verbose => 1 )
-unless @ARGV and $result and $id_field_name;
+unless @ARGV and $result and $gene_id_field_name and $transcript_id_field_name;
 
 
 if ($output) {
@@ -38,21 +40,39 @@ while (<>) {
     my %locus = %{ gff_read ($_) };
     next unless $locus{feature} =~ m/exon/i;
 
-    my ($gene_id) = $locus{attribute} =~ m/.*$id_field_name[\s=]*"?(\w*\d+)"?/;
-    croak "Couldn't find the gene id based on the id field name you provided. Either you provided an invalid field name or my expression matching sucks..."
-    unless $gene_id;
+    my ($gene_id)       = $locus{attribute} =~ m/.*$gene_id_field_name[\s=]*"?(\w*\d+)"?/;
+    my ($transcript_id) = $locus{attribute} =~ m/.*$transcript_id_field_name[\s=]*"?(\w*\d+)"?/;
+
+    !$gene_id_field_name
+	|| croak "Couldn't find the gene id based on the id field name you provided. Either you provided an invalid field name or my expression matching skills suck..."
+	unless $gene_id;
+
+    !$transcript_id_field_name
+	|| croak "Couldn't find the transcript id based on the id field name you provided. Either you provided an invalid field name or my expression matching skills suck..."
+	unless $transcript_id;
 
     my $chr = $locus{seqname};
 
-    $genes{$chr}{$gene_id}{strand} = $locus{strand }  unless exists $genes{$chr}{$gene_id}{strand};
-    $genes{$chr}{$gene_id}{start } = $locus{start  }  unless exists $genes{$chr}{$gene_id}{start } and $locus{start} > $genes{$chr}{$gene_id}{start};
-    $genes{$chr}{$gene_id}{end   } = $locus{end    }  unless exists $genes{$chr}{$gene_id}{end   } and $locus{start} < $genes{$chr}{$gene_id}{end};
+    if (!exists $genes{$chr}{$gene_id} or exists $genes{$chr}{$gene_id}{transcript}{$transcript_id}) {
+	$genes{$chr}{$gene_id}{transcript}{$transcript_id} = undef;
+	$genes{$chr}{$gene_id}{strand}     = $locus{strand }  unless exists $genes{$chr}{$gene_id}{strand};
+	$genes{$chr}{$gene_id}{start }     = $locus{start  }  unless exists $genes{$chr}{$gene_id}{start } and $locus{start} > $genes{$chr}{$gene_id}{start};
+	$genes{$chr}{$gene_id}{end   }     = $locus{end    }  unless exists $genes{$chr}{$gene_id}{end   } and $locus{start} < $genes{$chr}{$gene_id}{end};
+    }
 }
-
-
+    
+CHR:
 for my $chr (sort keys %genes) {
 
+  GENE:
     for my $gene_id (sort { $genes{$chr}{$a}{start} <=>  $genes{$chr}{$b}{start} } keys %{$genes{$chr}}) {
+
+	my ($transcript_id, @more_than_one_transcript) = keys %{$genes{$chr}{$gene_id}{transcript}};
+
+	if (@more_than_one_transcript > 1) {
+	    carp "Found more than one transcript ID for gene $gene_id, skipping:\n", join "\n", @more_than_one_transcript;
+	    next GENE;
+	}
 
         print join ("\t",
                     $chr,
@@ -63,7 +83,7 @@ for my $chr (sort keys %genes) {
                     q{.},
                     $genes{$chr}{$gene_id}{strand},
                     q{.},
-                    "ID=$gene_id",
+                    "ID=$gene_id;transcript_id=$transcript_id",
                     "\n"
                 );
     }
@@ -100,7 +120,7 @@ __END__
 
 =head1 SYNOPSIS
 
- assemble_genes_from_annotation.pl -i gene_id_field_name -o gene_annotation.gff no_gene_annotation.gff
+ assemble_genes_from_annotation.pl -g gene_id_field_name -t transcript_id_field_name -o gene_annotation.gff no_gene_annotation.gff
 
 =head1 DESCRIPTION
 
@@ -108,12 +128,13 @@ __END__
 
  assemble_genes_from_annotation.pl [OPTION]... [FILE]...
 
- -i, --id-field-name  name immediately preceeding the gene id in the input gff file
- -o, --output         filename to write results to (defaults to STDOUT)
- -v, --verbose        output perl's diagnostic and warning messages
- -q, --quiet          supress perl's diagnostic and warning messages
- -h, --help           print this information
- -m, --manual         print the plain old documentation page
+ -g, --gene-id-field-name        name immediately preceeding the gene id in the input gff file
+ -t, --transcript-id-field-name  name immediately preceeding the transcript id in the input gff file
+ -o, --output                    filename to write results to (defaults to STDOUT)
+ -v, --verbose                   output perl's diagnostic and warning messages
+ -q, --quiet                     supress perl's diagnostic and warning messages
+ -h, --help                      print this information
+ -m, --manual                    print the plain old documentation page
 
 =head1 REVISION
 

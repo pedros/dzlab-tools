@@ -71,11 +71,14 @@ if ($seqid) {
         
         open my $SEQID, '<', $seqid or croak "Can't open $seqid for reading";
 
+      SEQID:
         while ($seqid = <$SEQID>) {
             $seqid =~ s/[\n\r]//g;
             
             my $sequence
             = _sequence (\%reference, $seqid);
+
+	    next SEQID unless $sequence;
 
             @range = (1, length $sequence)
             unless @range;
@@ -135,8 +138,10 @@ sub _sequence {
 
     $seqid =~ tr/A-Z/a-z/;
 
-    croak "Sequence ID does not exist"
-    unless exists $reference{$seqid};
+    unless (exists $reference{$seqid}) {
+	carp "Sequence ID does not exist";
+	return;
+    }
 
     if ($start and $end) {
 

@@ -36,6 +36,9 @@ $list = index_list ($list);
 while (<>) {
     my ($id, undef) = split /\t/;
 
+    $id =~ s/ID=//;
+#    $id =~ s/ENSTNIG/ENSTNIT/;
+
     next unless
     exists $list->{$id}
     and $list->{$id}->[0] > $score;
@@ -51,6 +54,8 @@ sub index_list {
     open my $LIST, '<', $list or croak "Can't open $list for reading";
     while (<$LIST>) {
         my ($id, $freq, $alt) = split /\t/;
+#        $id =~ s/-TA//;
+        $id =~ s/\.1//;
         $list{$id} = [$freq, $alt];
     }
     close $LIST or carp "Can't close $list after reading";
