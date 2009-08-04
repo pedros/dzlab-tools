@@ -16,6 +16,7 @@ my $reference_file;
 my $count_CG_sites = 0;
 my $new_feature;
 my $no_add  = 0;
+my $gene_id_field_name = 'ID';
 my $output  = q{-};
 my $verbose = 0;
 my $quiet   = 0;
@@ -31,6 +32,7 @@ my $result = GetOptions (
     'count-CG-sites|cg|c'     => \$count_CG_sites,
     'new-feature|nf'          => \$new_feature,
     'no-add|n'                => \$no_add,
+    'gene-id-field-name|i=s'  => \$gene_id_field_name,
     'output|o:s'              => \$output,
     'verbose|v'               => sub {enable diagnostics;use warnings;},
     'quiet|q'                 => sub {disable diagnostics;no warnings;},
@@ -45,8 +47,8 @@ pod2usage(-verbose => 1) unless @argv;
 open STDOUT, '>', "$output" or croak "Can't redirect STDOUT to file: $output" if $output ne q{-};
 
 my %annotation = ();
-%annotation = %{index_gff_annotation ($gff_annotation_file)} if $gff_annotation_file;
-%annotation = %{index_generic_annotation ($annotation_file)} if $annotation_file;
+%annotation = %{index_gff_annotation ($gff_annotation_file, $gene_id_field_name)} if $gff_annotation_file;
+%annotation = %{index_generic_annotation ($annotation_file, $gene_id_field_name)} if $annotation_file;
 
 my %data;
 open my $RATIO, '<', $ratio_file or croak "Can't read file: $ratio_file" if $ratio_file ne q{-};
@@ -63,6 +65,8 @@ close $RATIO;
 # gff_print_header ($0, @argv);
 
 my %reference = %{ index_fasta ($reference_file, $count_CG_sites) };
+
+die Dumper keys %reference;
 
 for my $chr (sort {$a cmp $b} keys %annotation) {
 
@@ -98,7 +102,7 @@ for my $chr (sort {$a cmp $b} keys %annotation) {
                 if ($reference_file) {
                     my $locus_len = $annotation{$chr}{$start}[1] - $annotation{$chr}{$start}[0] + 1;
                     my $cent_dist = abs ($reference{$fields[0]} - ( int (($fields[4] - $fields[3]) / 2) + $fields[3]));
-                    $attr = "ID=$annotation{$chr}{$start}[2]\t$locus_len\t$cent_dist\t$as\t$bs\t$a_ct\t$b_ct";
+                    $attr = "$gene_id_field_name=$annotation{$chr}{$start}[2]\t$locus_len\t$cent_dist\t$as\t$bs\t$a_ct\t$b_ct";
                 }
                 else {
                     $attr = "$as\t$bs\t$a_ct\t$b_ct";
@@ -121,14 +125,14 @@ for my $chr (sort {$a cmp $b} keys %annotation) {
             my ($context, $a_c_count, $a_t_count, $score, $b_c_count, $b_t_count, $a_score, $b_score)
             = add_gff_attribute_range (\@range);
 
-            my $attribute = "c=$a_c_count;t=$a_t_count";
+            my $attribute = "$gene_id_field_name=$annotation{$chr}{$start}[2];c=$a_c_count;t=$a_t_count";
 
             my $locus_len = $annotation{$chr}{$start}[1] - $annotation{$chr}{$start}[0] + 1;
             my $cent_dist = int (($annotation{$chr}{$start}->[1] - $annotation{$chr}{$start}->[0]) / 2) + $annotation{$chr}{$start}->[0];
             $cent_dist = abs ($reference{$chr} - $cent_dist) if $reference_file;
 
             if (@range == 0) {
-                $attribute = q{.};
+                $attribute = "$gene_id_field_name=$annotation{$chr}{$start}[2]";
                 $score     = q{.};
             }
             elsif (defined $b_c_count) {
@@ -137,7 +141,7 @@ for my $chr (sort {$a cmp $b} keys %annotation) {
                 $b_score = sprintf ("%g", $b_score);
                 my $act = sprintf ("%g", $a_c_count + $a_t_count);
                 my $bct = sprintf ("%g", $b_c_count + $b_t_count);
-                $attribute = "ID=$annotation{$chr}{$start}[2]\t$locus_len\t$cent_dist\t$a_score\t$b_score\t$act\t$bct";
+                $attribute = "$gene_id_field_name=$annotation{$chr}{$start}[2];locus_len=$locus_len;cent_dist=$cent_dist;a_score=$a_score;b_score=$b_score;act_score=$act;bct_score=$bct";
             }
             else {$score = sprintf ("%g", $score)}
 
@@ -154,7 +158,7 @@ for my $chr (sort {$a cmp $b} keys %annotation) {
                     ),
                     'CG'
                 );
-                $attribute = "ID=$annotation{$chr}{$start}->[2];total_CG_sites=$total_CG_sites;total_ct=" . ($a_c_count + $a_t_count);
+                $attribute = "$gene_id_field_name=$annotation{$chr}{$start}->[2];total_CG_sites=$total_CG_sites;total_ct=" . ($a_c_count + $a_t_count);
             }
 
             print join ("\t",
@@ -312,7 +316,8 @@ sub annon_read {
 
 
 sub index_gff_annotation {
-    my $annotation_file = shift;
+    my ($annotation_file, $gene_id_field_name) = @_;
+
     open my $GFFH, '<', $annotation_file or croak "Can't read file: $annotation_file";
     my %annotation = ();
     while (<$GFFH>) {
@@ -320,7 +325,7 @@ sub index_gff_annotation {
         chomp;
         my %locus = %{gff_read ($_)};
 
-        my ($locus_id) = $locus{attribute} =~ m/ID=([^;]+)/;
+        my ($locus_id) = $locus{attribute} =~ m/$gene_id_field_name=([^;]+)/;
 
         if (!defined $locus_id) {
             ($locus_id, undef) = split /;/, $locus{attribute};
