@@ -121,7 +121,7 @@ __END__
 
 =head1 NAME
 
- name.pl - Short description
+ parse_bowtie.pl - Process bowtie alignment file into simple fields
 
 =head1 SYNOPSIS
 
@@ -129,8 +129,11 @@ __END__
 
 =head1 OPTIONS
 
- name.pl [OPTION]... [FILE]...
+ parse_bowtie.pl [OPTION]... [FILE]...
 
+ -t, --type        type of bowtie output file (verbose or concise -- only verbose supported for now)
+ -i, --id-regex    perl-type regular expression to identify feature id (ie. gene) in fasta alignment header (must include capturing parenthesis)
+ -r, --reference   genome/cDNA models file in fasta format (for calculating relative frequency scores, etc.)
  -o, --output      filename to write results to (defaults to STDOUT)
  -v, --verbose     output perl's diagnostic and warning messages
  -q, --quiet       supress perl's diagnostic and warning messages
