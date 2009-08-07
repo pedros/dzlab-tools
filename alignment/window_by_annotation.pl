@@ -66,8 +66,6 @@ close $RATIO;
 
 my %reference = %{ index_fasta ($reference_file, $count_CG_sites) };
 
-die Dumper keys %reference;
-
 for my $chr (sort {$a cmp $b} keys %annotation) {
 
     my $last_record = 0;
@@ -148,11 +146,9 @@ for my $chr (sort {$a cmp $b} keys %annotation) {
             my $total_CG_sites;
 
             if($count_CG_sites) {
-                my $direction = "$chr-seq";
-                $direction = "$chr-rc" if $annotation{$chr}{$start}->[3] eq q{-};
                 $total_CG_sites = count_sites (
                     substr(
-                        $reference{$direction},
+                        $reference{"$chr-seq"},
                         $annotation{$chr}{$start}->[0],
                         $annotation{$chr}{$start}->[1] - $annotation{$chr}{$start}->[0]
                     ),
@@ -325,7 +321,7 @@ sub index_gff_annotation {
         chomp;
         my %locus = %{gff_read ($_)};
 
-        my ($locus_id) = $locus{attribute} =~ m/$gene_id_field_name=([^;]+)/;
+        my ($locus_id) = $locus{attribute} =~ m/$gene_id_field_name[=\s]?([^;]+)/;
 
         if (!defined $locus_id) {
             ($locus_id, undef) = split /;/, $locus{attribute};
@@ -401,8 +397,8 @@ sub index_fasta {
             my $sep_cen   = ($sep_end / 2) + $sep_start;
             $reference{$dsc[$j]} = $sep_cen;
             $reference{"$dsc[$j]-seq"} = $line if $count_CG_sites;
-            $line =~ tr/ACGTacgt/TGCAtgca/ if $count_CG_sites;
-            $reference{"$dsc[$j]-rc"} = reverse $line if $count_CG_sites;
+#            $line =~ tr/ACGTacgt/TGCAtgca/ if $count_CG_sites;
+#            $reference{"$dsc[$j]-rc"} = reverse $line if $count_CG_sites;
         }
         else {
             print STDERR "No centrometer region found for $dsc[$j].\n";

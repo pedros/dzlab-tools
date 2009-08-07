@@ -13,17 +13,19 @@ unless @ARGV;
 
 my $list;
 my $score = 0;
+my $ends_tag = 'ID=';
 my $output;
 
 # Grabs and parses command line options
 my $result = GetOptions (
-    'list|l=s'   => \$list,
-    'score|s=i'  => \$score,
-    'output|o=s' => \$output,
-    'verbose|v'  => sub { use diagnostics; },
-    'quiet|q'    => sub { no warnings; },
-    'help|h'     => sub { pod2usage ( -verbose => 1 ); },
-    'manual|m'   => sub { pod2usage ( -verbose => 2 ); }
+    'list|l=s'     => \$list,
+    'score|s=i'    => \$score,
+    'ends-tag|t=s' => \$ends_tag,
+    'output|o=s'   => \$output,
+    'verbose|v'    => sub { use diagnostics; },
+    'quiet|q'      => sub { no warnings; },
+    'help|h'       => sub { pod2usage ( -verbose => 1 ); },
+    'manual|m'     => sub { pod2usage ( -verbose => 2 ); }
 );
 
 if ($output) {
@@ -33,15 +35,16 @@ if ($output) {
 
 $list = index_list ($list);
 
+ID:
 while (<>) {
     my ($id, undef) = split /\t/;
 
-    $id =~ s/ID=//;
-#    $id =~ s/ENSTNIG/ENSTNIT/;
+    $id =~ s/$ends_tag//;
 
-    next unless
+    next ID unless
     exists $list->{$id}
-    and $list->{$id}->[0] > $score;
+    and ($score == 0
+         or $list->{$id}->[0] > $score);
 
     print $_;
 }
@@ -53,16 +56,18 @@ sub index_list {
     my %list = ();
     open my $LIST, '<', $list or croak "Can't open $list for reading";
     while (<$LIST>) {
-        my ($id, $freq, $alt) = split /\t/;
-#        $id =~ s/-TA//;
-        $id =~ s/\.1//;
+
+        my ($id, $freq, $alt) = (0, 0, 0);
+        ($id, $freq, $alt) = split /\t/;
+
+        $id =~ s/[\r\n]//g;
+        
         $list{$id} = [$freq, $alt];
     }
     close $LIST or carp "Can't close $list after reading";
 
     return \%list;
 }
-
 
 
 __END__
@@ -80,7 +85,7 @@ __END__
 
  filter_ends.pl [OPTION]... [FILE]...
 
- -l, --list        filename with at least two fields: ID and score
+ -l, --list        filename with one or two fields: ID (required) and score (optional)
  -s, --min-score   minimum score to filter by (0 by default)
  -o, --output      filename to write results to (defaults to STDOUT)
  -v, --verbose     output perl's diagnostic and warning messages
