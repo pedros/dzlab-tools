@@ -40,8 +40,8 @@ while (<>) {
     my %locus = %{ gff_read ($_) };
     next unless $locus{feature} =~ m/exon/i;
 
-    my ($gene_id)       = $locus{attribute} =~ m/.*$gene_id_field_name[\s=]*"?(\w*\d+)"?/;
-    my ($transcript_id) = $locus{attribute} =~ m/.*$transcript_id_field_name[\s=]*"?(\w*\d+)"?/;
+    my ($gene_id)       = $locus{attribute} =~ m/.*$gene_id_field_name[\s=]*"?(\w*\d)"?/;
+    my ($transcript_id) = $locus{attribute} =~ m/.*$transcript_id_field_name[\s=]*"?(\w*\d*)"?/;
 
     !$gene_id_field_name
 	|| croak "Couldn't find the gene id based on the id field name you provided. Either you provided an invalid field name or my expression matching skills suck..."
