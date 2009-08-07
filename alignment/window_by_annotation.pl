@@ -66,7 +66,8 @@ close $RATIO;
 
 my %reference = %{ index_fasta ($reference_file, $count_CG_sites) };
 
-for my $chr (sort {$a cmp $b} keys %annotation) {
+for my $chr (sort {$a <=> $b} keys %annotation) {
+print STDERR $chr, "\n";
 
     my $last_record = 0;
 
@@ -396,13 +397,13 @@ sub index_fasta {
             my $sep_end   = length $separator;
             my $sep_cen   = ($sep_end / 2) + $sep_start;
             $reference{$dsc[$j]} = $sep_cen;
-            $reference{"$dsc[$j]-seq"} = $line if $count_CG_sites;
 #            $line =~ tr/ACGTacgt/TGCAtgca/ if $count_CG_sites;
 #            $reference{"$dsc[$j]-rc"} = reverse $line if $count_CG_sites;
         }
         else {
             print STDERR "No centrometer region found for $dsc[$j].\n";
         }
+        $reference{"$dsc[$j]-seq"} = $line if $count_CG_sites;
     }
     return \%reference;
 }
