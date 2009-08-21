@@ -13,13 +13,15 @@ pod2usage ( -verbose => 1 )
 unless @ARGV;
 
 my $width = 50;
+my $reference;
 my $feature;
 my $output;
 
 # Grabs and parses command line options
 my $result = GetOptions (
-    'width|w=i'   => \$width,
-    'feature|f=s' => \$feature,
+    'width|w=i'     => \$width,
+    'feature|f=s'   => \$feature,
+    'reference|r=s' => \$reference,
     'output|o=s'  => \$output,
     'verbose|v'   => sub { use diagnostics; },
     'quiet|q'     => sub { no warnings; },
@@ -44,10 +46,21 @@ while (<>) {
     }
 }
 
+$reference = index_fasta ($reference);
+
 for my $chr (keys %col_windows) {
+
     my $last_coord = max keys %{$col_windows{$chr}};
 
-    for (my $i = 1; $i < $last_coord; $i += $width) {
+    if (ref $reference eq 'HASH') {
+
+        unless (exists $reference->{$chr}) {
+            warn "Can't find $chr in fasta file. This chromosome will only have windows up to $last_coord";
+        }
+        else {$last_coord = $reference->{$chr}}
+    }
+ 
+    for (my $i = 1; $i <= $last_coord - $width + 1; $i += $width) {
         $col_windows{$chr}{$i} = 0 unless exists $col_windows{$chr}{$i};
     }
 }
@@ -72,6 +85,44 @@ for my $chr (sort {$a cmp $b} keys %col_windows) {
 }
 
 
+sub index_fasta {
+    my $reference_file = shift;
+
+    my %reference = ();
+
+    return unless $reference_file;
+
+    # reads in the reference genome file into @fastaseq
+    open my $REF, '<', "$reference_file" or croak "Can't open $reference for reading: $!";
+    my @fastaseq = <$REF>;
+    close $REF;
+
+    # find and store indices for each chromosome change and corresponding descriptions
+    my ( @idx, @dsc ) = ();
+    for my $i ( 0 .. @fastaseq - 1 ) {
+        if ( $fastaseq[$i] =~ m/^>/ ) {
+            $fastaseq[$i] =~ s/>//g;
+            $fastaseq[$i] = ( split /\s/, $fastaseq[$i] )[0];
+            push @idx, $i;
+            push @dsc, $fastaseq[$i];
+        }
+    }
+
+    for my $j ( 0 .. @idx - 1 ) {
+        my $line;
+        if ( $j == scalar @idx - 1 ) {
+            $line = join( q{}, @fastaseq[ $idx[$j] + 1 .. @fastaseq - 1]);
+        }
+        else {
+            $line = join( q{}, @fastaseq[ $idx[$j] + 1 .. $idx[$j + 1] - 1]);
+        }
+        $line =~ s/[\n\r]//g;
+        $reference{$dsc[$j]} = length $line;
+    }
+    return \%reference;
+}
+
+
 __END__
 
 
@@ -81,7 +132,11 @@ __END__
 
 =head1 SYNOPSIS
 
- gff_window_frequency.pl -w 50 -f 'some_feature' input_file.gff
+ # build windows until last coordinate in gff file
+ gff_window_by_frequency.pl -w 50 -f 'some_feature' input_file.gff
+
+ # build windows for whole genome
+ gff_window_by_frequency.pl --width 50 --feature 'foo bar' --reference fasta.fa input_file.gff
 
 =head1 DESCRIPTION
 
@@ -94,7 +149,8 @@ __END__
  gff_window_frequence.pl [OPTION]... [FILE]...
 
  -w, --width       sliding window width
- -f, --feature     third GFF file
+ -f, --feature     third GFF feature
+ -r, --reference   fasta file for computing chromosome lengths
  -o, --output      filename to write results to (defaults to STDOUT)
  -v, --verbose     output perl's diagnostic and warning messages
  -q, --quiet       supress perl's diagnostic and warning messages
