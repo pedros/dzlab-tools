@@ -63,7 +63,7 @@ while (<>) {
 
     if ($offsets) {
 	unless (exists $offsets{$gff[0]}) {
-	    warn "Scaffold $gff[0] doesn't exist in offsets file $offsets"
+	    warn "Scaffold $gff[0] doesn't exist in offsets file $offsets";
             next if $skip_absent;
 	}
 	else {
