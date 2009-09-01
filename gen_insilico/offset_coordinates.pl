@@ -11,6 +11,7 @@ my $offsets;
 my $new_feature;
 my $upstream;
 my $downstream;
+my $skip_absent;
 my $output;
 
 # Grabs and parses command line options
@@ -19,6 +20,7 @@ my $result = GetOptions (
     'new-feature|n=s' => \$new_feature,
     'upstream|u=i'    => \$upstream,
     'downstream|d=i'  => \$downstream,
+    'skip-absent|s'   => \$skip_absent,
     'output|o=s'      => \$output,
     'verbose|v'       => sub { use diagnostics; },
     'quiet|q'         => sub { no warnings; },
@@ -62,6 +64,7 @@ while (<>) {
     if ($offsets) {
 	unless (exists $offsets{$gff[0]}) {
 	    warn "Scaffold $gff[0] doesn't exist in offsets file $offsets"
+            next if $skip_absent;
 	}
 	else {
 	    $gff[3] += $offsets{$gff[0]}{offset};
