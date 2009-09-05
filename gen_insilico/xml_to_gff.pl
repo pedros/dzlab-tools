@@ -97,16 +97,19 @@ __END__
 
 =head1 NAME
 
- name.pl - Short description
+ xml_to_gff.pl - Convert RepeatRunner's XML format to GFF3
 
 =head1 SYNOPSIS
+
+ xml_to_gff.pl -x repeat-runner_out.xml -o repeat-runner_out.gff
 
 =head1 DESCRIPTION
 
 =head1 OPTIONS
 
- name.pl [OPTION]... [FILE]...
+ xml_to_gff.pl [OPTION]... [FILE]...
 
+ -x. --xml         input filename in RepeatRunner's XML format
  -o, --output      filename to write results to (defaults to STDOUT)
  -v, --verbose     output perl's diagnostic and warning messages
  -q, --quiet       supress perl's diagnostic and warning messages
