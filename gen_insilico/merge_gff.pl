@@ -38,6 +38,7 @@ if ($sort) {
     open $GFF_DATA, '<', $sorted_filename;
 }
 
+# one-step buffer
 my $previous = undef;
 
 while (<$GFF_DATA>) {
@@ -47,37 +48,64 @@ while (<$GFF_DATA>) {
 
     my $current = gff_read ($_);
 
-    if (!defined $previous) {
-        # first repeat
-        $previous = $current;
-    }
-    elsif ($previous->{seqname} =~ m/$current->{seqname}/i
-           and $current->{start} - $previous->{end} <= $distance) {
+    # check empty windows
+    $current->{empty} = ($current->{score} =~ m/\d/ ? 0 : 1);
 
-        # merge repeats
-        $previous->{end} = $current->{end} if $current->{end} > $previous->{end};
-        $previous->{attribute} .= q{; } . $current->{attribute};
-        $previous->{feature}    = 'merged_repeat';
-        $previous->{source}     = 'dz';
+    # if buffer has been flushed, or not initialized
+    unless (defined $previous) {
+        $previous = $current unless $current->{empty};
     }
+
+    # adjacency rules: two windows in same chromosome, separated by at most $distance
+    # and with no two adjacent empty windows, are concatenated into one large window
+    elsif ($previous->{seqname} =~ m/$current->{seqname}/i
+           and $current->{start} - $previous->{end} <= $distance
+           and ($previous->{empty} == 0 or $current->{empty} == 0)) {
+
+        $previous->{end} = $current->{end}
+        unless $current->{end} <= $previous->{end};
+
+        $previous->{attribute} .= q{; } . $current->{attribute}
+        if defined $current->{attribute} and $current->{attribute} eq q{.};
+
+        $previous->{score} = $current->{score};
+
+        $previous->{empty} = $current->{empty};
+    }
+
+    # print and flush buffer
     else {
-        print join ("\t",
-                    $previous->{seqname},
-                    $previous->{source},
-                    $previous->{feature},
-                    $previous->{start},
-                    $previous->{end},
-                    $previous->{score},
-                    $previous->{strand},
-                    $previous->{frame},
-                    $previous->{attribute},
-                ), "\n";
-        
+
+        $previous->{score}   = $previous->{end} - $previous->{start} + 1;
+        $previous->{feature} = "merged_$current->{feature}";
+
+        gff_print ($previous);
+
         $previous = undef;
     }
 }
 
+gff_print ($previous) if defined $previous;
 
+## done
+
+
+
+sub gff_print {
+    my ($gff_line) = @_;
+
+    print join ("\t",
+                $gff_line->{seqname},
+                $gff_line->{source},
+                $gff_line->{feature},
+                $gff_line->{start},
+                $gff_line->{end},
+                $gff_line->{score},
+                $gff_line->{strand},
+                $gff_line->{frame},
+                $gff_line->{attribute},
+            ), "\n";
+}        
 
 
 sub gff_read {

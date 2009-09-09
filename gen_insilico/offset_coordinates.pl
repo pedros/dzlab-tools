@@ -9,8 +9,8 @@ use Pod::Usage;
 
 my $offsets;
 my $new_feature;
-my $upstream;
-my $downstream;
+my $upstream   = 0;
+my $downstream = 0;
 my $skip_absent;
 my $output;
 
@@ -30,7 +30,7 @@ my $result = GetOptions (
 
 # Check required command line parameters
 pod2usage ( -verbose => 1 )
-unless @ARGV and $offsets xor ($upstream and $downstream);
+unless @ARGV and $offsets xor ($upstream or $downstream);
 
 
 if ($output) {
@@ -73,11 +73,16 @@ while (<>) {
 	}
     }
     else {
-	my $five_prime;
-	($gff[5] eq q{+}) ? $five_prime = $gff[3] : $five_prime = $gff[4];
+        my ($start, $end) = @gff[3,4];
 
-	$gff[3] = $five_prime - $upstream;
-	$gff[4] = $five_prime + $downstream;
+        if ($gff[6] =~ m/-/) {
+            $gff[3] = $end - $downstream;
+            $gff[4] = $end + $upstream;
+        }
+        else {
+            $gff[3] = $start - $upstream;
+            $gff[4] = $start + $downstream;
+        }
 
 	$gff[3] = 0 if $gff[3] < 0;
     }
@@ -87,6 +92,30 @@ while (<>) {
     print join "\t", @gff;
 }
 
+
+sub extract_offsets_from_annotation {
+    my ($offsets_ref, $gff_ref) = @_;
+
+
+}
+
+
+sub gff_read {
+    my ($seqname, $source, $feature, $start, $end, $score, $strand, $frame, $attribute)
+    = split /\t/, shift;
+
+    return {
+	'seqname'  => $seqname,
+	'source'   => $source,
+	'feature'  => $feature,
+	'start'    => $start,
+	'end'      => $end,
+	'score'    => $score,
+	'strand'   => $strand,
+	'frame'    => $strand,
+	'attribute'=> $attribute
+    };
+}
 
 __END__
 

@@ -9,18 +9,20 @@ use Pod::Usage;
 use LWP::Simple qw(get);
 
 # Check required command line parameters
-# pod2usage ( -verbose => 1 )
-# unless @ARGV;
+pod2usage ( -verbose => 1 )
+unless @ARGV;
 
 my $fid;
+my $from = 1;
 my $db;
 my $table;
 my $output;
 
 # Grabs and parses command line options
 my $result = GetOptions (
-    'fid|i=i'    => \$fid,
+    'fid|i=s'    => \$fid,
     'db|d=s'     => \$db,
+    'from|f=i'   => \$from,
     'table|t=s'  => \$table,
     'output|o=s' => \$output,
     'verbose|v'  => sub { use diagnostics; },
@@ -35,10 +37,21 @@ if ($output) {
 }
 
 if ($fid) {
-    my $target
-    = 'http://genome.jgi-psf.org/cgi-bin/colorSeqViewer?db=' . $db . '&table=' . $table . '&fid=' . $fid;
-    get_parse ($target, $fid);
-    
+
+    if (-e $fid) {
+        open my $FID, '<', $fid or croak "Can't open $fid: $!";
+        while (<$FID>) {
+            chomp;
+            my $target
+            = 'http://genome.jgi-psf.org/cgi-bin/colorSeqViewer?db=' . $db . '&table=' . $table . '&fid=' . $_;
+            get_parse ($target, $_);
+        }
+    }
+    else {
+        my $target
+        = 'http://genome.jgi-psf.org/cgi-bin/colorSeqViewer?db=' . $db . '&table=' . $table . '&fid=' . $fid;
+        get_parse ($target, $fid);
+    }
 }
 elsif (@ARGV) {
     for ($ARGV[0] .. $ARGV[$#ARGV]) {
@@ -48,7 +61,7 @@ elsif (@ARGV) {
     }
 }
 else {
-    $fid = 1;
+    $fid = $from;
     while (1) {
         print STDERR "Fetching $fid\n" unless $fid % 100;
         my $target
@@ -59,9 +72,9 @@ else {
 
 
 sub get_parse {
-    my ($target, $fid) = @_;
+    my ($target, $fid, $html) = @_;
 
-    my $html = get ( $target );
+    $html = get ( $target ) until $html;
 
     return 0 if $html =~ m/Software error/;
     

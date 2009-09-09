@@ -7,14 +7,14 @@ use Carp;
 use Getopt::Long;
 use Pod::Usage;
 
-my $gene_id_field_name;
-my $transcript_id_field_name;
+my $gene_id;
+my $transcript_id;
 my $output;
 
 # Grabs and parses command line options
 my $result = GetOptions (
-    'gene-id-field-name|g=s' => \$gene_id_field_name,
-    'transcript-id-field-name|t=s' => \$transcript_id_field_name,
+    'gene-id-field-name|g=s'       => \$gene_id,
+    'transcript-id-field-name|t=s' => \$transcript_id,
     'output|o=s' => \$output,
     'verbose|v'  => sub { use diagnostics; },
     'quiet|q'    => sub { no warnings; },
@@ -24,7 +24,7 @@ my $result = GetOptions (
 
 # Check required command line parameters
 pod2usage ( -verbose => 1 )
-unless @ARGV and $result and $gene_id_field_name and $transcript_id_field_name;
+unless @ARGV and $result and $gene_id and $transcript_id;
 
 
 if ($output) {
@@ -40,15 +40,32 @@ while (<>) {
     my %locus = %{ gff_read ($_) };
     next unless $locus{feature} =~ m/exon/i;
 
-    my ($gene_id)       = $locus{attribute} =~ m/.*$gene_id_field_name[\s=]*"?(\w*\d)"?/;
-    my ($transcript_id) = $locus{attribute} =~ m/.*$transcript_id_field_name[\s=]*"?(\w*\d*)"?/;
+    my ($gene_id)
+    = $locus{attribute} =~ m/.*
+                             $gene_id
+                             [\s=]+
+                             "+
+                             ([^;"\t]+)
+                             "+
+                            /x;
 
-    !$gene_id_field_name
-	|| croak "Couldn't find the gene id based on the id field name you provided. Either you provided an invalid field name or my expression matching skills suck..."
+    my ($transcript_id) 
+    = $locus{attribute} =~ m/.*
+                             $transcript_id
+                             [\s=]+
+                             "+
+                             ([^;"\t]+)
+                             "+
+                            /x;
+
+    croak "\nCouldn't find the gene id based on the id field name you provided.
+Either you provided an invalid field name or my expression matching skills suck...
+The line in question is $locus{attribute}.\n\n"
 	unless $gene_id;
 
-    !$transcript_id_field_name
-	|| croak "Couldn't find the transcript id based on the id field name you provided. Either you provided an invalid field name or my expression matching skills suck..."
+    croak "\nCouldn't find the transcript id based on the id field name you provided.
+Either you provided an invalid field name or my expression matching skills suck...
+The line in question is $locus{attribute}.\n\n"
 	unless $transcript_id;
 
     my $chr = $locus{seqname};
@@ -120,7 +137,7 @@ __END__
 
 =head1 SYNOPSIS
 
- assemble_genes_from_annotation.pl -g gene_id_field_name -t transcript_id_field_name -o gene_annotation.gff no_gene_annotation.gff
+ assemble_genes_from_annotation.pl -g gene_id -t transcript_id -o gene_annotation.gff no_gene_annotation.gff
 
 =head1 DESCRIPTION
 
@@ -128,13 +145,13 @@ __END__
 
  assemble_genes_from_annotation.pl [OPTION]... [FILE]...
 
- -g, --gene-id-field-name        name immediately preceeding the gene id in the input gff file
- -t, --transcript-id-field-name  name immediately preceeding the transcript id in the input gff file
- -o, --output                    filename to write results to (defaults to STDOUT)
- -v, --verbose                   output perl's diagnostic and warning messages
- -q, --quiet                     supress perl's diagnostic and warning messages
- -h, --help                      print this information
- -m, --manual                    print the plain old documentation page
+ -g, --gene-id        name immediately preceeding the gene id in the input gff file
+ -t, --transcript-id  name immediately preceeding the transcript id in the input gff file
+ -o, --output         filename to write results to (defaults to STDOUT)
+ -v, --verbose        output perl's diagnostic and warning messages
+ -q, --quiet          supress perl's diagnostic and warning messages
+ -h, --help           print this information
+ -m, --manual         print the plain old documentation page
 
 =head1 REVISION
 
