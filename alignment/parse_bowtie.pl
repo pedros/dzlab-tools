@@ -6,31 +6,38 @@ use Data::Dumper;
 use Carp;
 use Getopt::Long;
 use Pod::Usage;
+use List::Util qw /sum/;
 
 # Check required command line parameters
 pod2usage ( -verbose => 1 )
 unless @ARGV;
 
 my $type = 'verbose';
+my $frequencies;
+my $eland;
 my $id_regex;
 my $reference;
 my $output;
 
 # Grabs and parses command line options
 my $result = GetOptions (
-    'output|o=s'    => \$output,
-    'type|t=s'      => \$type,
-    'id-regex|i=s'  => \$id_regex,
-    'reference|r=s' => \$reference,
-    'verbose|v'     => sub { use diagnostics; },
-    'quiet|q'       => sub { no warnings; },
-    'help|h'        => sub { pod2usage ( -verbose => 1 ); },
-    'manual|m'      => sub { pod2usage ( -verbose => 2 ); }
+    'output|o=s'     => \$output,
+    'type|t=s'       => \$type,
+    'frequencies|f'  => \$frequencies,
+    'eland|e'        => \$eland,
+    'id-regex|i=s'   => \$id_regex,
+    'reference|r=s'  => \$reference,
+    'verbose|v'      => sub { use diagnostics; },
+    'quiet|q'        => sub { no warnings; },
+    'help|h'         => sub { pod2usage ( -verbose => 1 ); },
+    'manual|m'       => sub { pod2usage ( -verbose => 2 ); }
 );
 
 # Check required command line parameters
 pod2usage ( -verbose => 1 )
-unless @ARGV and $result and ($type eq 'concise' or $type eq 'verbose') and $reference;
+unless @ARGV and $result
+and ($type eq 'concise' xor $type eq 'verbose');
+
 
 # redirect standard output to file if requested
 if ($output) {
@@ -38,46 +45,138 @@ if ($output) {
     select $USER_OUT;
 }
 
+
 # read in bowtie verbose file
-my %counts = ();
+my $counts = undef;
+my $previous = undef;
+
 while (<>) {
     chomp;
-    
-    my ($read_id, $strand, $target, $coordinate, $sequence, undef, $alternatives, $snp)
-    = split /\t/;
+ 
+    my $current = read_bowtie ($_);
 
-#    $target = (split /\s/, $target)[0];
-
-    $counts{$target}{alternatives} += $alternatives;
-    $counts{$target}{frequencies}++;
-}
-
-# read in chromosome/model lengths
-my %reference = %{ index_fasta ($reference) };
-
-# sort and print target id, read frequency on mapped to target per kb, average alternative mappings
-TARGET:
-for my $target (sort keys %counts) {
-
-    my ($id) = $target =~ m/$id_regex/;
-
-    print STDERR $id, "\n";
-
-    unless (exists $reference{$target}) {
-        carp "$target doesn't exist in $reference\n";
-        next TARGET;
+    if ($frequencies) {
+        $counts->{$current->{target}->[0]}{alternatives} += $$current->{alternatives}->[0];
+        $counts->{$current->{target}->[0]}{frequencies}++;
     }
-
-    print join ("\t",
-                #$target,
-                $id,
-                sprintf ("%g", ($counts{$target}{frequencies} / length $reference{$target}) * 1000),
-                sprintf ("%g", ($counts{$target}{frequencies} ? $counts{$target}{alternatives} / $counts{$target}{frequencies} : 0)),
-            ), "\n";
+    else {
+        unless (defined $previous) {
+            $previous = $current;
+        }
+        elsif ($current->{read_id} eq $previous->{read_id}) {
+            push @{$previous->{strand}}, $current->{strand}->[0];
+            push @{$previous->{target}}, $current->{target}->[0];
+            push @{$previous->{coordinate}}, $current->{coordinate}->[0];
+            push @{$previous->{snp}}, $current->{snp}->[0];
+        }
+        else {
+            print_eland (
+                $previous->{read_id},
+                $previous->{sequence},
+                $previous->{target},
+                $previous->{coordinate},
+                $previous->{strand},
+                $previous->{snp},
+            );
+            $previous = undef;
+        }
+    }
 }
+
+
+count_reads ($reference, $counts, $id_regex)
+if $frequencies;
+
+print_eland (
+    $previous->{read_id},
+    $previous->{sequence},
+    $previous->{target},
+    $previous->{coordinate},
+    $previous->{strand},
+    $previous->{snp},
+) if defined $previous;
+
+
 
 ### done
 
+
+sub read_bowtie {
+    my ($bowtie_line) = @_;
+
+    my ($read_id, $strand, $target, $coordinate, $sequence, $qualities, $alternatives, $snp)
+    = split /\t/, $bowtie_line;
+
+    my @mm = split /,/, $snp;
+
+    return {
+        'read_id'      => $read_id,
+        'strand'       => [$strand],
+        'target'       => [$target],
+        'coordinate'   => [$coordinate],
+        'sequence'     => $sequence,
+        'qualities'    => $qualities,
+        'alternatives' => $alternatives,
+        'snp'          => [scalar @mm],
+    }
+}
+
+
+sub print_eland {
+    my ($read_id, $sequence, $chromosomes_ref, $coordinates_ref, $strands_ref, $mismatches_ref)
+    = @_;
+
+    croak "Total number of chromosomes, coordinates, strands, and mismatches don't match"
+    unless scalar @{$chromosomes_ref} == scalar @{$coordinates_ref} 
+    and scalar @{$chromosomes_ref} == scalar @{$strands_ref}
+    and scalar @{$chromosomes_ref} == scalar @{$mismatches_ref};
+
+    my $target;
+    map {
+        $target
+        .= $chromosomes_ref->[$_] . q{:} . $coordinates_ref->[$_] . ($strands_ref->[$_] eq q{+} ? q{F} : q{R}) . $mismatches_ref->[$_]
+    }
+    ( 0 .. @{$chromosomes_ref} - 1 );
+
+    print join ("\t",
+                $read_id,
+                $sequence,
+                scalar @{$chromosomes_ref},
+                $target,
+            ), "\n";
+}
+
+
+sub count_reads {
+    my ($reference, $counts_ref, $id_regex) = @_;
+
+    return unless $reference;
+
+    # read in chromosome/model lengths
+    my %reference = %{ index_fasta ($reference) };
+
+    # sort and print target id, read frequency on mapped to target per kb, average alternative mappings
+  TARGET:
+    for my $target (sort keys %{$counts_ref}) {
+
+        my ($id) = $target =~ m/$id_regex/;
+
+        print STDERR $id, "\n";
+
+        unless (exists $reference{$target}) {
+            carp "$target doesn't exist in $reference\n";
+            next TARGET;
+        }
+
+        print join ("\t",
+                    #$target,
+                    $id,
+                    sprintf ("%g", ($counts_ref->{$target}{frequencies} / length $reference{$target}) * 1000),
+                    sprintf ("%g", ($counts_ref->{$target}{frequencies} ? $counts_ref->{$target}{alternatives} / $counts_ref->{$target}{frequencies} : 0)),
+                ), "\n";
+    }
+
+}
 
 
 sub index_fasta {
@@ -97,8 +196,6 @@ sub index_fasta {
     for my $i ( 0 .. @fastaseq - 1 ) {
         if ( $fastaseq[$i] =~ m/^>/ ) {
             $fastaseq[$i] =~ s/>//g;
-#            $fastaseq[$i] = ( split /\s/, "$fastaseq[$i]" )[0];
-#            $fastaseq[$i] =~ tr/A-Z/a-z/;
             $fastaseq[$i] =~ s/[\r\n]//g;
             push @idx, $i;
             push @dsc, $fastaseq[$i];
