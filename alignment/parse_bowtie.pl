@@ -134,7 +134,11 @@ sub print_eland {
     my $target;
     map {
         $target
-        .= $chromosomes_ref->[$_] . q{:} . $coordinates_ref->[$_] . ($strands_ref->[$_] eq q{+} ? q{F} : q{R}) . $mismatches_ref->[$_]
+        .= $chromosomes_ref->[$_]
+        .  q{:} . $coordinates_ref->[$_]
+        .  ($strands_ref->[$_] eq q{+} ? q{F} : q{R})
+        .  $mismatches_ref->[$_]
+        .  ($_ < @{$chromosomes_ref} - 1 ? q{,} : q{})
     }
     ( 0 .. @{$chromosomes_ref} - 1 );
 

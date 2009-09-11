@@ -118,8 +118,10 @@ if ( $output ne q{-} ) {
 }
 
 # opens sequence files
-open my $LEFT,  '<', $leftendfile  or croak "Can't open file: $leftendfile";
-open my $RIGHT, '<', $rightendfile or croak "Can't open file: $rightendfile";
+open my $LEFT,  '<', $leftendfile
+or croak "Can't open file: $leftendfile";
+open my $RIGHT, '<', $rightendfile
+or croak "Can't open file: $rightendfile";
 
 while (my $leftend = <$LEFT>) {
     # reads single sequence from each file

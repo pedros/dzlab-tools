@@ -57,7 +57,7 @@ elsif (@ARGV) {
     for ($ARGV[0] .. $ARGV[$#ARGV]) {
         my $target
         = 'http://genome.jgi-psf.org/cgi-bin/colorSeqViewer?db=' . $db . '&table=' . $table . '&fid=' . $_;
-        last unless get_parse ($target, $_);
+        get_parse ($target, $_);
     }
 }
 else {
@@ -66,7 +66,7 @@ else {
         print STDERR "Fetching $fid\n" unless $fid % 100;
         my $target
         = 'http://genome.jgi-psf.org/cgi-bin/colorSeqViewer?db=' . $db . '&table=' . $table . '&fid=' . $fid;
-        last unless get_parse ($target, $fid++);
+        get_parse ($target, $fid++);
     }
 }
 
