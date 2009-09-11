@@ -50,15 +50,16 @@ $reference = index_fasta ($reference);
 
 for my $chr (keys %col_windows) {
 
-    my $last_coord = max keys %{$col_windows{$chr}};
+    my $last_coord;
 
     if (ref $reference eq 'HASH') {
-
         unless (exists $reference->{$chr}) {
-            warn "Can't find $chr in fasta file. This chromosome will only have windows up to $last_coord";
+            carp "Can't find $chr in fasta file. This chromosome will only have windows up to $last_coord";
+            $last_coord = max keys %{$col_windows{$chr}};
         }
         else {$last_coord = $reference->{$chr}}
     }
+    else {$last_coord = max keys %{$col_windows{$chr}};}
  
     for (my $i = 1; $i <= $last_coord - $width + 1; $i += $width) {
         $col_windows{$chr}{$i} = 0 unless exists $col_windows{$chr}{$i};

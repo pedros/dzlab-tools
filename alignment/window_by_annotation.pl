@@ -66,7 +66,7 @@ close $RATIO;
 
 my %reference = %{ index_fasta ($reference_file, $count_CG_sites) };
 
-for my $chr (sort {$a <=> $b} keys %annotation) {
+for my $chr (sort {$a cmp $b} keys %annotation) {
 print STDERR $chr, "\n";
 
     my $last_record = 0;

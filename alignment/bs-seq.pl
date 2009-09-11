@@ -25,7 +25,7 @@ my $mismatches   = 2;
 my $organism     = q{.};
 my $batch        = 1;
 my $window_size  = 50;
-my $trust_dash_2 = 1;
+my $trust_dash_2 = 0;
 my $single_ends  = 0;
 my @left_splice;
 my @right_splice;
@@ -95,14 +95,13 @@ elsif (! -d $out_dir) {
 }
 #else {warn " overwrite $out_dir"}
 
-
 my %files = (
-    lfa   => File::Spec->catfile ($out_dir, File::Spec->canonpath($left_read))  . '.fa',
-    lc2t  => File::Spec->catfile ($out_dir, File::Spec->canonpath($left_read))  . '.c2t',
-    rfa   => File::Spec->catfile ($out_dir, File::Spec->canonpath($right_read)) . '.fa',
-    rg2a  => File::Spec->catfile ($out_dir, File::Spec->canonpath($right_read)) . '.g2a',
-    lel3  => File::Spec->catfile ($out_dir, File::Spec->canonpath($left_read))  . "_$left_splice[0]-$left_splice[1].eland3",
-    rel3  => File::Spec->catfile ($out_dir, File::Spec->canonpath($right_read)) . "_$right_splice[0]-$right_splice[1].eland3",
+    lfa   => File::Spec->catfile ($out_dir, basename($left_read))  . '.fa',
+    lc2t  => File::Spec->catfile ($out_dir, basename($left_read))  . '.c2t',
+    rfa   => File::Spec->catfile ($out_dir, basename($right_read)) . '.fa',
+    rg2a  => File::Spec->catfile ($out_dir, basename($right_read)) . '.g2a',
+    lel3  => File::Spec->catfile ($out_dir, basename($left_read))  . "_$left_splice[0]-$left_splice[1].eland3",
+    rel3  => File::Spec->catfile ($out_dir, basename($right_read)) . "_$right_splice[0]-$right_splice[1].eland3",
     base  => File::Spec->catfile ($out_dir, $base_name)  . '.gff',
     log   => File::Spec->catfile ($out_dir, $base_name)  . '.log',
     split => _gen_files (File::Spec->catfile ($out_dir, $base_name), 'gff',  @groups),

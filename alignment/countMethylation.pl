@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 #
-# Last edited 2008-12-02
-# Copyright 2008 Pedro Silva <psilva@dzlab.pmb.berkeley.edu/>
+# Last edited 2009-08-25
+# Copyright 2008-2009 Pedro Silva <psilva@nature.berkeley.edu/>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -39,6 +39,7 @@ my $gfffile = '';
 my $reference = '';
 my $stats_only = 0;
 my $sort = 0;
+my $di_nucleotide_count = 0;
 my $output = "-";
 my $verbose = 0;
 my $quiet = 0;
@@ -52,6 +53,7 @@ my $result = GetOptions (
     'gff|f=s'      => \$gfffile,
     'ref|r=s'      => \$reference,
     'sort|s'       => \$sort,
+    'di-nuc|d'     => \$di_nucleotide_count,
     "output|o:s"   => \$output,
     'stats-only|t' => \$stats_only,
     "verbose|v"    => sub {enable diagnostics;},
@@ -158,7 +160,7 @@ while (<$GFF>) { ### Indexing...
     next GFF_READ_LOOP if ($record{'score'} != 1);
 
      if (scalar keys %HoH && $record{'start'} > $last_seen_coordinate) {
-         sort_and_count (\%HoH);
+         sort_and_count (\%HoH, $di_nucleotide_count);
      }
 
     $last_seen_coordinate = $record{'end'};
@@ -235,6 +237,19 @@ while (<$GFF>) { ### Indexing...
 		$HoH{$coord}[4]++; # chh_count
 	    }
 
+            if ($di_nucleotide_count) {
+                # count di-nucleotide contexts
+                if ( $unmethylated[$j+3] =~ m/[Aa]/ ) {
+                    $HoH{$coord}[11]++; # ca_count
+                }
+                elsif ( $unmethylated[$j+3] =~ m/[Cc]/ ) {
+                    $HoH{$coord}[12]++; # cc_count
+                }
+                elsif ( $unmethylated[$j+3] =~ m/[Tt]/ ) {
+                    $HoH{$coord}[13]++; # ct_count
+                }
+            }
+
 	    # grab some necessary information into the data structure
 	    # we will print this information later
 	    $HoH{$coord}[5] = $coord; # coord
@@ -272,6 +287,19 @@ while (<$GFF>) { ### Indexing...
 		$HoH{$coord}[4]++; # chh_count
 	    }
 
+            if ($di_nucleotide_count) {
+                # count di-nucleotide contexts
+                if ( $unmethylated[$j + 1] =~ m/[Tt]/ ) {
+                    $HoH{$coord}[11]++; # ca_count
+                }
+                elsif ( $unmethylated[$j + 1] =~ m/[Gg]/ ) {
+                    $HoH{$coord}[12]++; # cc_count
+                }
+                elsif ( $unmethylated[$j + 1] =~ m/[Aa]/ ) {
+                    $HoH{$coord}[13]++; # ct_count
+                }
+            }
+
             # if current coordinate is in pair overlaping region only count /1 reads
             if ($overlap and
                 $overlap->[0] < $coord and
@@ -292,42 +320,85 @@ while (<$GFF>) { ### Indexing...
     }
 }
 
-sort_and_count (\%HoH) if scalar keys %HoH > 0;
+sort_and_count (\%HoH, $di_nucleotide_count) if scalar keys %HoH > 0;
 close($GFF);
 
 # open for counting frequencies
-my @freq = count_freq($output);
+my @freq = count_freq($output, $di_nucleotide_count);
 
 open my $FREQ_OUT, '>', "$output.freq" or die "Can't write to file: $output.freq";
 
-print $FREQ_OUT join ("\t",
-                      'bp',
-                      'overlaps',
-                      'C',
-                      'CG',
-                      'CHG',
-                      'CHH',
-                      'T',
-                      'TG',
-                      'THG',
-                      'THH',
-                      'C_ratio',
-                      'CG_ratio',
-                      'CHG_ratio',
-                      'CHH_ratio',
-                      'filtered_C',
-                      'filtered_CG',
-                      'filtered_CHG',
-                      'filtered_CHH',
-                      'filtered_T',
-                      'filtered_TG',
-                      'filtered_THG',
-                      'filtered_THH',
-                      'filtered_C ratio',
-                      'filtered_CG ratio',
-                      'filtered_CHG ratio',
-                      'filtered_CHH ratio',
-                  ), "\n";
+unless ($di_nucleotide_count) {
+    print $FREQ_OUT join ("\t",
+                          'bp',
+                          'overlaps',
+                          'C',
+                          'CG',
+                          'CHG',
+                          'CHH',
+                          'T',
+                          'TG',
+                          'THG',
+                          'THH',
+                          'C_ratio',
+                          'CG_ratio',
+                          'CHG_ratio',
+                          'CHH_ratio',
+                          'filtered_C',
+                          'filtered_CG',
+                          'filtered_CHG',
+                          'filtered_CHH',
+                          'filtered_T',
+                          'filtered_TG',
+                          'filtered_THG',
+                          'filtered_THH',
+                          'filtered_C ratio',
+                          'filtered_CG ratio',
+                          'filtered_CHG ratio',
+                          'filtered_CHH ratio',
+                      ), "\n";
+}
+else {
+    print $FREQ_OUT join ("\t",
+                          'bp',
+                          'overlaps',
+                          'C',
+                          'NO-CG',
+                          'CG',
+                          'CA',
+                          'CC',
+                          'CT',
+                          'T',
+                          'NO-TG',
+                          'TG',
+                          'TA',
+                          'TC',
+                          'TT',
+                          'C_ratio',
+                          'CG_ratio',
+                          'CA_ratio',
+                          'CC_ratio',
+                          'CT_ratio',
+                          'filtered_C',
+                          'filtered-NO-CG',
+                          'filtered_CG',
+                          'filtered_CA',
+                          'filtered_CC',
+                          'filtered_CT',
+                          'filtered_T',
+                          'filtered-NO-TG',
+                          'filtered_TG',
+                          'filtered_TA',
+                          'filtered_TC',
+                          'filtered_TT',
+                          'filtered_C ratio',
+                          'filtered_CG ratio',
+                          'filtered_CA ratio',
+                          'filtered_CC ratio',
+                          'filtered_CT ratio',
+                      ), "\n";
+}
+
 
 print $FREQ_OUT join ("\t",
                       $total_count{bp},
@@ -349,7 +420,8 @@ sub gff_sort {
 
 
 sub sort_and_count {
-    my $single_count_ref = shift;
+    my ($single_count_ref, $di_nucleotide_count)
+    = @_;
     my %single_count = %{$single_count_ref};
 
     # loops through every initialized key in main hash
@@ -373,27 +445,68 @@ sub sort_and_count {
 
         # finds the appropriate context to put in 'feature' field
         my $context = q{.};
-        if ( $single_count{$i}[2] > 0) {
-            if ($single_count{$i}[2]>$single_count{$i}[3] && $single_count{$i}[2]>$single_count{$i}[4]) {
-                $context = 'CG';
+
+        if ($di_nucleotide_count) {
+            # we need to check that a given key/value pair was initialized
+            # if it wasn't, initialize it to zero (to avoid division-by-zero, etc)
+            for (11 .. 13) {
+                $single_count{$i}[$_] = 0 if !exists $single_count{$i}[$_];
+            }
+
+            if ( $single_count{$i}[2] > 0) {
+                if ($single_count{$i}[2] > $single_count{$i}[11] && $single_count{$i}[2] > $single_count{$i}[12] && $single_count{$i}[2] > $single_count{$i}[13]) {
+                    $context = 'CG';
+                }
+            }
+            elsif ($single_count{$i}[11] > 0) {
+                if ($single_count{$i}[11] > $single_count{$i}[12] && $single_count{$i}[11] > $single_count{$i}[13]) {
+                    $context = 'CA';
+                }
+            }
+            elsif ($single_count{$i}[12] > 0) {
+                if ($single_count{$i}[12] > $single_count{$i}[13]) {
+                    $context = 'CC';
+                }
+            }
+            elsif ($single_count{$i}[13]>0) {
+                $context = 'CT';
+            }
+
+            # checks that the context for any given 'c' is determinable
+            # if not just output a '.' in its place
+            if (($single_count{$i}[2] > 0 && $single_count{$i}[11] > 0) ||
+                ($single_count{$i}[2] > 0 && $single_count{$i}[12] > 0) || 
+                ($single_count{$i}[2] > 0 && $single_count{$i}[13] > 0) ||
+                ($single_count{$i}[11] > 0 && $single_count{$i}[12] > 0) ||
+                ($single_count{$i}[11] > 0 && $single_count{$i}[13] > 0) ||
+                ($single_count{$i}[12] > 0 && $single_count{$i}[13] > 0)) {
+                $context = q{.};
             }
         }
-        elsif ($single_count{$i}[4] > 0) {
-            if ($single_count{$i}[4] > $single_count{$i}[3]) {
-                $context = 'CHH';
+        else {
+            if ( $single_count{$i}[2] > 0) {
+                if ($single_count{$i}[2]>$single_count{$i}[3] && $single_count{$i}[2]>$single_count{$i}[4]) {
+                    $context = 'CG';
+                }
             }
-        }
-        elsif ($single_count{$i}[3]>0) {
-            $context = 'CHG';
+            elsif ($single_count{$i}[4] > 0) {
+                if ($single_count{$i}[4] > $single_count{$i}[3]) {
+                    $context = 'CHH';
+                }
+            }
+            elsif ($single_count{$i}[3]>0) {
+                $context = 'CHG';
+            }
+
+            # checks that the context for any given 'c' is determinable
+            # if not just output a '.' in its place
+            if (($single_count{$i}[2] > 0 && $single_count{$i}[3] > 0) ||
+                ($single_count{$i}[2] > 0 && $single_count{$i}[4] > 0) ||
+                ($single_count{$i}[3] > 0 && $single_count{$i}[4] > 0)) {
+                $context = q{.};
+            }
         }
 
-        # checks that the context for any given 'c' is determinable
-        # if not just output a '.' in its place
-        if (($single_count{$i}[2] > 0 && $single_count{$i}[3] > 0) ||
-            ($single_count{$i}[2] > 0 && $single_count{$i}[4] > 0) ||
-            ($single_count{$i}[3] > 0 && $single_count{$i}[4] > 0)) {
-            $context = q{.};
-        }
 
         if (defined $single_count{$i}[9] and defined $single_count{$i}[10]) {
             $single_count{$i}[7] = q{.};
@@ -450,6 +563,7 @@ sub usage {
 \t<--gff>\tGFF alignment input file
 \t[--sort]\tPre-sort input file in-place before processing
 \t[--output]\tFilename to write results to (default is STDOUT)
+\t[--di-nuc]\tCount C di-nucleotide contexts instead of tri-nuc
 \t[--verbose]\tOutput perl's diagnostic and warning messages
 \t[--quiet]\tSupress perl's diagnostic and warning messages
 \t[--usage]\tPrint this information
@@ -464,7 +578,7 @@ Original reference sequence is assumed to be in the 'attribute' column.
 
 
 sub count_freq {
-    my $gfffile = shift;
+    my ($gfffile, $di_nucleotide_count) = @_;
     open my $GFF, "<", $gfffile or die("Can't read file: $gfffile");
 
     my (%filtered, %unfiltered) = ();
@@ -495,18 +609,31 @@ sub count_freq {
 
     return unless keys %filtered and keys %unfiltered;
 
-    my $total_unfiltered_c = $unfiltered{CG}{c} + $unfiltered{CHG}{c} + $unfiltered{CHH}{c};
-    my $total_unfiltered_t = $unfiltered{CG}{t} + $unfiltered{CHG}{t} + $unfiltered{CHH}{t};
+    my ($total_unfiltered_c, $total_unfiltered_t, $total_filtered_c, $total_filtered_t);
+    if ($di_nucleotide_count) {
+        $total_unfiltered_c = $unfiltered{CG}{c} + $unfiltered{CA}{c} + $unfiltered{CC}{c} + $unfiltered{CT}{c};
+        $total_unfiltered_t = $unfiltered{CG}{t} + $unfiltered{CA}{t} + $unfiltered{CT}{c} + $unfiltered{CT}{t};
 
-    my $total_filtered_c = $filtered{CG}{c} + $filtered{CHG}{c} + $filtered{CHH}{c};
-    my $total_filtered_t = $filtered{CG}{t} + $filtered{CHG}{t} + $filtered{CHH}{t};
+        $total_filtered_c = $filtered{CG}{c} + $filtered{CA}{c} + $filtered{CC}{c} + $filtered{CT}{c};
+        $total_filtered_t = $filtered{CG}{t} + $filtered{CA}{t} + $filtered{CC}{t} + $filtered{CT}{t};
+    }
+    else {
+        $total_unfiltered_c = $unfiltered{CG}{c} + $unfiltered{CHG}{c} + $unfiltered{CHH}{c};
+        $total_unfiltered_t = $unfiltered{CG}{t} + $unfiltered{CHG}{t} + $unfiltered{CHH}{t};
+        
+        $total_filtered_c = $filtered{CG}{c} + $filtered{CHG}{c} + $filtered{CHH}{c};
+        $total_filtered_t = $filtered{CG}{t} + $filtered{CHG}{t} + $filtered{CHH}{t};
+    }
 
     my (
         $unfiltered_C_ratio, $filtered_C_ratio,
         $unfiltered_CG_ratio, $filtered_CG_ratio,
+        $unfiltered_CA_ratio, $filtered_CA_ratio,
+        $unfiltered_CC_ratio, $filtered_CC_ratio,
+        $unfiltered_CT_ratio, $filtered_CT_ratio,
         $unfiltered_CHG_ratio, $filtered_CHG_ratio,
         $unfiltered_CHH_ratio, $filtered_CHH_ratio,
-    ) = 0 x 8;
+    ) = 0 x 14;
 
     $unfiltered_C_ratio = $total_unfiltered_c / ($total_unfiltered_c + $total_unfiltered_t) if $total_unfiltered_c + $total_unfiltered_t != 0;
     $filtered_C_ratio = $total_filtered_c / ($total_filtered_c + $total_filtered_t) if $total_filtered_c + $total_filtered_t != 0;
@@ -514,36 +641,90 @@ sub count_freq {
     $unfiltered_CG_ratio = $unfiltered{CG}{c} / ($unfiltered{CG}{c} + $unfiltered{CG}{t}) if $unfiltered{CG}{c} + $unfiltered{CG}{t} != 0;
     $filtered_CG_ratio = $filtered{CG}{c} / ($filtered{CG}{c} + $filtered{CG}{t}) if $filtered{CG}{c} + $filtered{CG}{t} != 0;
 
-    $unfiltered_CHG_ratio = $unfiltered{CHG}{c} / ($unfiltered{CHG}{c} + $unfiltered{CHG}{t}) if $unfiltered{CHG}{c} + $unfiltered{CHG}{t} != 0;
-    $filtered_CHG_ratio   = $filtered{CHG}{c}   / ($filtered{CHG}{c}   + $filtered{CHG}{t}) if $filtered{CHG}{c} + $filtered{CHG}{t} != 0;
+    if ($di_nucleotide_count) {
+        $unfiltered_CA_ratio = $unfiltered{CA}{c} / ($unfiltered{CA}{c} + $unfiltered{CA}{t}) if $unfiltered{CA}{c} + $unfiltered{CA}{t} != 0;
+        $filtered_CA_ratio   = $filtered{CA}{c}   / ($filtered{CA}{c}   + $filtered{CA}{t}) if $filtered{CA}{c} + $filtered{CA}{t} != 0;
 
-    $unfiltered_CHH_ratio = $unfiltered{CHH}{c} / ($unfiltered{CHH}{c} + $unfiltered{CHH}{t}) if $unfiltered{CHH}{c} + $unfiltered{CHH}{t} != 0;
-    $filtered_CHH_ratio   = $filtered{CHH}{c}   / ($filtered{CHH}{c}   + $filtered{CHH}{t}) if $filtered{CHH}{c} + $filtered{CHH}{t} != 0;
+        $unfiltered_CC_ratio = $unfiltered{CC}{c} / ($unfiltered{CC}{c} + $unfiltered{CC}{t}) if $unfiltered{CC}{c} + $unfiltered{CC}{t} != 0;
+        $filtered_CC_ratio   = $filtered{CC}{c}   / ($filtered{CC}{c}   + $filtered{CC}{t}) if $filtered{CC}{c} + $filtered{CC}{t} != 0;
 
-    return (
-        $total_unfiltered_c,
-        $unfiltered{CG}{c},
-        $unfiltered{CHG}{c},
-        $unfiltered{CHH}{c},
-        $total_unfiltered_t,
-        $unfiltered{CG}{t},
-        $unfiltered{CHG}{t},
-        $unfiltered{CHH}{t},
-        $unfiltered_C_ratio,
-        $unfiltered_CG_ratio,
-        $unfiltered_CHG_ratio,
-        $unfiltered_CHH_ratio,
-        $total_filtered_c,
-        $filtered{CG}{c},
-        $filtered{CHG}{c},
-        $filtered{CHH}{c},
-        $total_filtered_t,
-        $filtered{CG}{t},
-        $filtered{CHG}{t},
-        $filtered{CHH}{t},
-        $filtered_C_ratio,
-        $filtered_CG_ratio,
-        $filtered_CHG_ratio,
-        $filtered_CHH_ratio,
-    );
+        $unfiltered_CT_ratio = $unfiltered{CT}{c} / ($unfiltered{CT}{c} + $unfiltered{CT}{t}) if $unfiltered{CT}{c} + $unfiltered{CT}{t} != 0;
+        $filtered_CT_ratio   = $filtered{CT}{c}   / ($filtered{CT}{c}   + $filtered{CT}{t}) if $filtered{CT}{c} + $filtered{CT}{t} != 0;
+        
+    }
+    else {
+        $unfiltered_CHG_ratio = $unfiltered{CHG}{c} / ($unfiltered{CHG}{c} + $unfiltered{CHG}{t}) if $unfiltered{CHG}{c} + $unfiltered{CHG}{t} != 0;
+        $filtered_CHG_ratio   = $filtered{CHG}{c}   / ($filtered{CHG}{c}   + $filtered{CHG}{t}) if $filtered{CHG}{c} + $filtered{CHG}{t} != 0;
+
+        $unfiltered_CHH_ratio = $unfiltered{CHH}{c} / ($unfiltered{CHH}{c} + $unfiltered{CHH}{t}) if $unfiltered{CHH}{c} + $unfiltered{CHH}{t} != 0;
+        $filtered_CHH_ratio   = $filtered{CHH}{c}   / ($filtered{CHH}{c}   + $filtered{CHH}{t}) if $filtered{CHH}{c} + $filtered{CHH}{t} != 0;
+    }
+
+
+    if ($di_nucleotide_count) {
+        return (
+            $total_unfiltered_c,
+            $total_unfiltered_c - $unfiltered{CG}{c},,
+            $unfiltered{CG}{c},
+            $unfiltered{CA}{c},
+            $unfiltered{CC}{c},
+            $unfiltered{CT}{c},
+            $total_unfiltered_t,
+            $total_unfiltered_t - $unfiltered{CG}{t},
+            $unfiltered{CG}{t},
+            $unfiltered{CA}{t},
+            $unfiltered{CC}{t},
+            $unfiltered{CT}{t},
+            $unfiltered_C_ratio,
+            $unfiltered_CG_ratio,
+            $unfiltered_CA_ratio,
+            $unfiltered_CC_ratio,
+            $unfiltered_CT_ratio,
+            $total_filtered_c,
+            $total_filtered_c - $filtered{CG}{c},
+            $filtered{CG}{c},
+            $filtered{CA}{c},
+            $filtered{CC}{c},
+            $filtered{CT}{c},
+            $total_filtered_t,
+            $total_filtered_t - $filtered{CG}{t},
+            $filtered{CG}{t},
+            $filtered{CA}{t},
+            $filtered{CC}{t},
+            $filtered{CT}{t},
+            $filtered_C_ratio,
+            $filtered_CG_ratio,
+            $filtered_CA_ratio,
+            $filtered_CC_ratio,
+            $filtered_CT_ratio,
+        );
+    }
+    else {
+        return (
+            $total_unfiltered_c,
+            $unfiltered{CG}{c},
+            $unfiltered{CHG}{c},
+            $unfiltered{CHH}{c},
+            $total_unfiltered_t,
+            $unfiltered{CG}{t},
+            $unfiltered{CHG}{t},
+            $unfiltered{CHH}{t},
+            $unfiltered_C_ratio,
+            $unfiltered_CG_ratio,
+            $unfiltered_CHG_ratio,
+            $unfiltered_CHH_ratio,
+            $total_filtered_c,
+            $filtered{CG}{c},
+            $filtered{CHG}{c},
+            $filtered{CHH}{c},
+            $total_filtered_t,
+            $filtered{CG}{t},
+            $filtered{CHG}{t},
+            $filtered{CHH}{t},
+            $filtered_C_ratio,
+            $filtered_CG_ratio,
+            $filtered_CHG_ratio,
+            $filtered_CHH_ratio,
+        );
+    }
 }

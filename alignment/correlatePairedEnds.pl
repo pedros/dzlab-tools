@@ -335,6 +335,7 @@ while (my $leftend = <$LEFT>) {
                 $r_end       = $right{'coord'} + $rreadsize - 1;
                 $r_score     = 1;
                 $r_strand    = q{-};
+                $r_frame     = $right{mm};
                 $r_attribute = 'target='
                 . substr(
                     $reference{"$tmp-rc"},
@@ -349,7 +350,7 @@ while (my $leftend = <$LEFT>) {
                 $r_end       = $right{'coord'} + $rreadsize - 1;
                 $r_score     = 1;
                 $r_strand    = q{+};
-
+                $r_frame     = $right{mm};
                 $r_attribute = 'target='
                 . substr(
                     $reference{"$tmp-seq"},
@@ -1033,7 +1034,7 @@ while (my $leftend = <$LEFT>) {
     ##### END POSSIBLE CASES HERE #####
 
 
-    $r_strand = $l_strand if $single_ends;
+#    $r_strand = $l_strand if $single_ends;
 
     # print both ends
     print join( "\t",
