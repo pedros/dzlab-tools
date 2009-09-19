@@ -85,11 +85,12 @@ for my $chr (sort {$a cmp $b} keys %annotation) {
         if ($extend_annotation) {
 
             if (@range) {
-                my ($lowest_coord, $highest_coord)
+                my ($lowest_coord, $highest_coord, $score)
                 = ((split /\t/, $range[0])[3], (split /\t/, $range[$#range])[4]);
                 
                 if ($lowest_coord < $annotation{$chr}{$start}[0]
-                    or $highest_coord > $annotation{$chr}{$start}[1]) {
+                    or $highest_coord > $annotation{$chr}{$start}[1]
+                    and $score ne q{.}) {
 
                     $annotation{$chr}{$start}[6]
                     .= "; Target=$annotation{$chr}{$start}[2] $annotation{$chr}{$start}[0] $annotation{$chr}{$start}[1]";
