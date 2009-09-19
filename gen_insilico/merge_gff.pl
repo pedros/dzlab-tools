@@ -11,20 +11,26 @@ use Pod::Usage;
 pod2usage ( -verbose => 1 )
 unless @ARGV;
 
-my $GFF_DATA = 'ARGV';
-my $distance = 50;
-my $sort     = 0;
+my $GFF_DATA   = 'ARGV';
+my $distance   = 50;
+my $sort       = 0;
+my $use_scores = 0;
+my $log_scores = 0;
+my $feature;
 my $output;
 
 # Grabs and parses command line options
 my $result = GetOptions (
     'distance|d=i' => \$distance,
     'sort|s'       => \$sort,
-    'output|o=s' => \$output,
-    'verbose|v'  => sub { use diagnostics; },
-    'quiet|q'    => sub { no warnings; },
-    'help|h'     => sub { pod2usage ( -verbose => 1 ); },
-    'manual|m'   => sub { pod2usage ( -verbose => 2 ); }
+    'use-scores|u' => \$use_scores,
+    'log-scores|l' => \$log_scores,
+    'feature|f=s'  => \$feature,
+    'output|o=s'   => \$output,
+    'verbose|v'    => sub { use diagnostics; },
+    'quiet|q'      => sub { no warnings; },
+    'help|h'       => sub { pod2usage ( -verbose => 1 ); },
+    'manual|m'     => sub { pod2usage ( -verbose => 2 ); }
 );
 
 if ($output) {
@@ -33,66 +39,107 @@ if ($output) {
 }
 
 if ($sort) {
+    print STDERR 'Sorting...';
     my $sorted_filename = sort_repeats (@ARGV);
     $GFF_DATA = undef;
     open $GFF_DATA, '<', $sorted_filename;
+    print STDERR "done\n";
 }
 
 # one-step buffer
 my $previous = undef;
 
+print STDERR 'Merging...';
 while (<$GFF_DATA>) {
 
     next if ($_ =~ m/^#.*$|^\s*$/);
     chomp;
+    s/[\n\r]//;
 
     my $current = gff_read ($_);
 
     # check empty windows
-    $current->{empty} = ($current->{score} =~ m/\d/ ? 0 : 1);
+    $current->{empty} = ($current->{score} =~ m/\d/ ? 0 : 1)
+    if $use_scores;
+
+    $current->{empty} = 1
+    if !$log_scores and $current->{score} == 0;
 
     # if buffer has been flushed, or not initialized
-    unless (defined $previous) {
+    if (!defined $previous) {
         $previous = $current unless $current->{empty};
+        $previous->{last} = $current->{end} unless $current->{empty};
     }
 
     # adjacency rules: two windows in same chromosome, separated by at most $distance
     # and with no two adjacent empty windows, are concatenated into one large window
     elsif ($previous->{seqname} =~ m/$current->{seqname}/i
            and $current->{start} - $previous->{end} <= $distance
-           and ($previous->{empty} == 0 or $current->{empty} == 0)) {
+           and ($use_scores == 0 || $previous->{empty} == 0 or $current->{empty} == 0)) {
 
+        $previous->{start} = $current->{start}
+        if $previous->{empty};
+
+        # extend buffered read to current read's length
         $previous->{end} = $current->{end}
         unless $current->{end} <= $previous->{end};
 
+        # concatenate current read's attributes to buffered read
         $previous->{attribute} .= q{; } . $current->{attribute}
-        if defined $current->{attribute} and $current->{attribute} eq q{.};
+        if defined $current->{attribute} and $current->{attribute} ne q{.}
+        and $current->{attribute} ne q{};
 
-        $previous->{score} = $current->{score};
-
-        $previous->{empty} = $current->{empty};
+        if ($use_scores) {
+            if ($log_scores) {
+                $previous->{total} += 2 ** $current->{score} unless $current->{empty};
+            }
+            else {
+                $previous->{total} += $current->{score} unless $current->{empty};
+            }
+            $previous->{score}  = $current->{score};
+            $previous->{empty}  = $current->{empty};
+            $previous->{last}   = $current->{end} unless $current->{empty};
+        }
     }
 
     # print and flush buffer
     else {
-
-        $previous->{score}   = $previous->{end} - $previous->{start} + 1;
-        $previous->{feature} = "merged_$current->{feature}";
-
-        gff_print ($previous);
-
+        $previous->{end} = $previous->{last} if $previous->{last};
+        gff_print ($previous, $feature, $use_scores, $log_scores);
         $previous = undef;
+        $previous = $current unless $previous->{empty};
     }
 }
 
-gff_print ($previous) if defined $previous;
+gff_print ($previous, $feature) if defined $previous;
 
+print STDERR "done\n";
 ## done
 
 
 
 sub gff_print {
-    my ($gff_line) = @_;
+    my ($gff_line, $feature, $use_scores, $log_scores) = @_;
+
+
+    $gff_line->{feature}   = $feature || "merged_$gff_line->{feature}";
+    $gff_line->{attribute} =~ s/([;=])\s+/$1/g;
+    $gff_line->{attribute} =~ s/;/; /g;
+
+    if ($use_scores) {
+        $gff_line->{total} = 0 unless defined $gff_line->{total};
+
+        if ($log_scores) {
+            $gff_line->{score}
+            = sprintf ("%g", ($gff_line->{total} == 0 ? 1 : log ($gff_line->{total}) / log (2)))
+        }
+        else {$gff_line->{score} = $gff_line->{total}}
+
+        $gff_line->{score} = q{.} unless $gff_line->{total};
+
+        $gff_line->{attribute} = s/^\.$//;
+        $gff_line->{attribute} .= 'length=' . ($gff_line->{end} - $gff_line->{start} + 1);
+    }
 
     print join ("\t",
                 $gff_line->{seqname},
@@ -120,7 +167,7 @@ sub gff_read {
 	'end'      => $end,
 	'score'    => $score,
 	'strand'   => $strand,
-	'frame'    => $strand,
+	'frame'    => $frame,
 	'attribute'=> $attribute
     };
 }
@@ -179,6 +226,7 @@ __END__
 
  -d, --distance    maximum distance between adjacent features to be merged
  -s, --sort        sort input files by sequence name and starting coordinate
+ -u, --use-scores  look for empty windows and use two adjacent ones to break merging
  -o, --output      filename to write results to (defaults to STDOUT)
  -v, --verbose     output perl's diagnostic and warning messages
  -q, --quiet       supress perl's diagnostic and warning messages
