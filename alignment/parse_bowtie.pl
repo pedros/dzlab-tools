@@ -14,7 +14,6 @@ unless @ARGV;
 
 my $type = 'verbose';
 my $frequencies;
-my $eland;
 my $id_regex;
 my $reference;
 my $output;
@@ -24,7 +23,6 @@ my $result = GetOptions (
     'output|o=s'     => \$output,
     'type|t=s'       => \$type,
     'frequencies|f'  => \$frequencies,
-    'eland|e'        => \$eland,
     'id-regex|i=s'   => \$id_regex,
     'reference|r=s'  => \$reference,
     'verbose|v'      => sub { use diagnostics; },
@@ -47,7 +45,7 @@ if ($output) {
 
 
 # read in bowtie verbose file
-my $counts = undef;
+my $counts   = undef;
 my $previous = undef;
 
 while (<>) {
@@ -56,7 +54,8 @@ while (<>) {
     my $current = read_bowtie ($_);
 
     if ($frequencies) {
-        $counts->{$current->{target}->[0]}{alternatives} += $$current->{alternatives}->[0];
+
+        $counts->{$current->{target}->[0]}{alternatives} += $current->{alternatives};
         $counts->{$current->{target}->[0]}{frequencies}++;
     }
     else {
@@ -164,9 +163,7 @@ sub count_reads {
     for my $target (sort keys %{$counts_ref}) {
 
         my ($id) = $target =~ m/$id_regex/;
-
-        print STDERR $id, "\n";
-
+print STDERR $id, "\n";
         unless (exists $reference{$target}) {
             carp "$target doesn't exist in $reference\n";
             next TARGET;
@@ -240,6 +237,7 @@ __END__
  -t, --type        type of bowtie output file (verbose or concise -- only verbose supported for now)
  -i, --id-regex    perl-type regular expression to identify feature id (ie. gene) in fasta alignment header (must include capturing parenthesis)
  -r, --reference   genome/cDNA models file in fasta format (for calculating relative frequency scores, etc.)
+ -f, --frequencies count read frequencies in the process
  -o, --output      filename to write results to (defaults to STDOUT)
  -v, --verbose     output perl's diagnostic and warning messages
  -q, --quiet       supress perl's diagnostic and warning messages
