@@ -67,7 +67,7 @@ while (<$GFF_DATA>) {
 
     # if buffer has been flushed, or not initialized
     if (!defined $previous) {
-        $previous = $current unless $current->{empty};
+        $previous = $current;
         $previous->{last} = $current->{end} unless $current->{empty};
     }
 
