@@ -16,6 +16,7 @@ my $reference_file;
 my $count_CG_sites = 0;
 my $new_feature;
 my $no_add  = 0;
+my $extend_annotation = 0;
 my $gene_id_field_name = 'ID';
 my $output  = q{-};
 my $verbose = 0;
@@ -32,6 +33,7 @@ my $result = GetOptions (
     'count-CG-sites|cg|c'     => \$count_CG_sites,
     'new-feature|nf'          => \$new_feature,
     'no-add|n'                => \$no_add,
+    'extend-annotation|e'     => \$extend_annotation,
     'gene-id-field-name|i=s'  => \$gene_id_field_name,
     'output|o:s'              => \$output,
     'verbose|v'               => sub {enable diagnostics;use warnings;},
@@ -53,8 +55,9 @@ my %annotation = ();
 my %data;
 open my $RATIO, '<', $ratio_file or croak "Can't read file: $ratio_file" if $ratio_file ne q{-};
 while (<$RATIO>) {
-    chomp;
     next if ($_ =~ m/^#.*$|^\s*$|\.;\.$/);
+    chomp;
+    s/[\r\n]//g;
     my $chr = (split /\t/, $_)[0];
     $chr =~ tr/A-Z/a-z/;
     push @{$data{$chr}}, $_;
@@ -64,48 +67,99 @@ close $RATIO;
 # prints out header fields that contain gff v3 header, generating program, time, and field names
 # gff_print_header ($0, @argv);
 
-my %reference = %{ index_fasta ($reference_file, $count_CG_sites) };
+my %reference = %{ index_fasta ($reference_file, $count_CG_sites) }
+if $reference_file or $count_CG_sites;
 
+CHROMOSOME:
 for my $chr (sort {$a cmp $b} keys %annotation) {
-print STDERR $chr, "\n";
 
     my $last_record = 0;
 
+  ANNOTATION:
     for my $start (sort {$a <=> $b} keys %{$annotation{$chr}}) {
-
+ 
         my @range = @{ gff_filter_by_coord ($start, $annotation{$chr}{$start}[1], $last_record, \@{$data{$chr}}) };
 
 	$last_record = shift @range;
+        
+        if ($extend_annotation) {
+
+            if (@range) {
+                my ($lowest_coord, $highest_coord)
+                = ((split /\t/, $range[0])[3], (split /\t/, $range[$#range])[4]);
+                
+                if ($lowest_coord < $annotation{$chr}{$start}[0]
+                    or $highest_coord > $annotation{$chr}{$start}[1]) {
+
+                    $annotation{$chr}{$start}[6]
+                    .= "; Target=$annotation{$chr}{$start}[2] $annotation{$chr}{$start}[0] $annotation{$chr}{$start}[1]";
+
+                    my $original_size
+                    = $annotation{$chr}{$start}[1] - $annotation{$chr}{$start}[0];
+
+                    $annotation{$chr}{$start}[0]
+                    = $lowest_coord if $lowest_coord < $annotation{$chr}{$start}[0];
+
+                    $annotation{$chr}{$start}[1]
+                    = $highest_coord if $highest_coord > $annotation{$chr}{$start}[1];
+
+                    $annotation{$chr}{$start}[6]
+                    .= '; extension='
+                    . (($annotation{$chr}{$start}[1] - $annotation{$chr}{$start}[0]) - $original_size);
+
+                }
+
+            }
+
+            $annotation{$chr}{$start}[5] = 'ext_' . $annotation{$chr}{$start}[5];
+
+            print join ("\t",
+                        $chr,
+                        $annotation{$chr}{$start}[4],
+                        $annotation{$chr}{$start}[5],
+                        $annotation{$chr}{$start}[0],
+                        $annotation{$chr}{$start}[1],
+                        q{.},
+                        $annotation{$chr}{$start}[3],
+                        q{.},
+                        $annotation{$chr}{$start}[6],
+                    ), "\n";
+
+            next ANNOTATION;
+        }
+
 
         if ($no_add) {
+
+          WINDOW:
             for my $window (@range) {
                 my @fields = split /\t/, $window;
-                my ($p, $ac, $at, $bc, $bt) = (split /;/, $fields[-1]);
-                ($p)  = $p  =~ m/(\d+)/;
-                ($ac) = $ac =~ m/(\d+)/;
-                ($at) = $at =~ m/(\d+)/;
-                ($bc) = $bc =~ m/(\d+)/;
-                ($bt) = $bt =~ m/(\d+)/;
+                # my ($p, $ac, $at, $bc, $bt) = (split /;/, $fields[-1]);
+                # ($p)  = $p  =~ m/(\d+)/;
+                # ($ac) = $ac =~ m/(\d+)/;
+                # ($at) = $at =~ m/(\d+)/;
+                # ($bc) = $bc =~ m/(\d+)/;
+                # ($bt) = $bt =~ m/(\d+)/;
 
-                my ($as, $bs) = (0, 0);
-                $as = $ac / ($ac + $at) if $ac + $at != 0;
-                $bs = $bc / ($bc + $bt) if $bc + $bt != 0;
+                # my ($as, $bs) = (0, 0);
+                # $as = $ac / ($ac + $at) if $ac + $at != 0;
+                # $bs = $bc / ($bc + $bt) if $bc + $bt != 0;
 
-                my $sc   = sprintf ("%6f", $as - $bs);
-                $as = sprintf ("%g", $as);
-                $bs = sprintf ("%g", $bs);
-                my $a_ct  = sprintf ("%g", $ac + $at);
-                my $b_ct  = sprintf ("%g", $bc + $bt);
+                # my $sc   = sprintf ("%6f", $as - $bs);
+                # $as = sprintf ("%g", $as);
+                # $bs = sprintf ("%g", $bs);
+                # my $a_ct  = sprintf ("%g", $ac + $at);
+                # my $b_ct  = sprintf ("%g", $bc + $bt);
 
-                my $attr;
-                if ($reference_file) {
-                    my $locus_len = $annotation{$chr}{$start}[1] - $annotation{$chr}{$start}[0] + 1;
-                    my $cent_dist = abs ($reference{$fields[0]} - ( int (($fields[4] - $fields[3]) / 2) + $fields[3]));
-                    $attr = "$gene_id_field_name=$annotation{$chr}{$start}[2]\t$locus_len\t$cent_dist\t$as\t$bs\t$a_ct\t$b_ct";
-                }
-                else {
-                    $attr = "$as\t$bs\t$a_ct\t$b_ct";
-                }
+                my $attr = "$gene_id_field_name=$annotation{$chr}{$start}[2]";
+                # if ($reference_file) {
+                #     my $locus_len = $annotation{$chr}{$start}[1] - $annotation{$chr}{$start}[0] + 1;
+                #     my $cent_dist = abs ($reference{$fields[0]} - ( int (($fields[4] - $fields[3]) / 2) + $fields[3]));
+                #     $attr = "$gene_id_field_name=$annotation{$chr}{$start}[2]\t$locus_len\t$cent_dist\t$as\t$bs\t$a_ct\t$b_ct";
+                # }
+                # else {
+                #     $attr = "$as\t$bs\t$a_ct\t$b_ct";
+                # }
 
                 print join ("\t",
                             $fields[0],
@@ -113,7 +167,7 @@ print STDERR $chr, "\n";
                             $fields[2],
                             $fields[3],
                             $fields[4],
-                            $sc,
+                            q{.},
                             q{.},
                             q{.},
                             $attr,
@@ -124,11 +178,17 @@ print STDERR $chr, "\n";
             my ($context, $a_c_count, $a_t_count, $score, $b_c_count, $b_t_count, $a_score, $b_score)
             = add_gff_attribute_range (\@range);
 
-            my $attribute = "$gene_id_field_name=$annotation{$chr}{$start}[2];c=$a_c_count;t=$a_t_count";
+            my $attribute
+            = "$gene_id_field_name=$annotation{$chr}{$start}[2];c=$a_c_count;t=$a_t_count";
 
-            my $locus_len = $annotation{$chr}{$start}[1] - $annotation{$chr}{$start}[0] + 1;
-            my $cent_dist = int (($annotation{$chr}{$start}->[1] - $annotation{$chr}{$start}->[0]) / 2) + $annotation{$chr}{$start}->[0];
-            $cent_dist = abs ($reference{$chr} - $cent_dist) if $reference_file;
+            my $locus_len
+            = $annotation{$chr}{$start}[1] - $annotation{$chr}{$start}[0] + 1;
+            
+            my $cent_dist
+            = int (($annotation{$chr}{$start}->[1] - $annotation{$chr}{$start}->[0]) / 2) + $annotation{$chr}{$start}->[0];
+            
+            $cent_dist
+            = abs ($reference{$chr} - $cent_dist) if $reference_file;
 
             if (@range == 0) {
                 $attribute = "$gene_id_field_name=$annotation{$chr}{$start}[2]";
@@ -145,7 +205,6 @@ print STDERR $chr, "\n";
             else {$score = sprintf ("%g", $score)}
 
             my $total_CG_sites;
-
             if($count_CG_sites) {
                 $total_CG_sites = count_sites (
                     substr(
@@ -155,7 +214,9 @@ print STDERR $chr, "\n";
                     ),
                     'CG'
                 );
-                $attribute = "$gene_id_field_name=$annotation{$chr}{$start}->[2];total_CG_sites=$total_CG_sites;total_ct=" . ($a_c_count + $a_t_count);
+                $attribute
+                = "$gene_id_field_name=$annotation{$chr}{$start}->[2];total_CG_sites=$total_CG_sites;total_ct="
+                . ($a_c_count + $a_t_count);
             }
 
             print join ("\t",
@@ -170,15 +231,6 @@ print STDERR $chr, "\n";
                         $attribute,
                     ), "\n";
 
-#             print join ("\t",
-#                         $annotation{$chr}{$start}->[2],
-#                         $annotation{$chr}{$start}->[3],
-#                         $annotation{$chr}{$start}->[0],
-#                         $annotation{$chr}{$start}->[1],
-#                         $a_c_count,
-#                         $a_t_count,
-#                         $score,
-#                     ), "\n";
          }
     }
 }
@@ -200,6 +252,8 @@ sub add_gff_attribute_range {
     my @attr_fields = ();
     foreach my $k (@{$range}) {
         my %current_rec = %{gff_read ($k)};
+
+        next if $current_rec{attribute} eq q{.};
 
         @attr_fields = split(/;/, $current_rec{'attribute'});
         my ($p_value, $a_c_tmp, $a_t_tmp, $b_c_tmp, $b_t_tmp);
@@ -235,7 +289,7 @@ sub add_gff_attribute_range {
     }
 
     my @scores = ();
-    if (@attr_fields == 2) {
+    if (@attr_fields < 5) {
         $score = $a_c_count / ($a_c_count + $a_t_count) if $a_c_count + $a_t_count != 0;
         @scores = ($a_c_count, $a_t_count, $score);
     }
@@ -256,9 +310,10 @@ sub gff_filter_by_coord {
     my @filtered;
     for (my $i = $last_index_seen; $i < @{$data_ref}; $i++) {
 
-        my $start_coord = (split /\t/, $data_ref->[$i])[3];
+        my ($start_coord, $end_coord)
+        = (split /\t/, $data_ref->[$i])[3, 4];
 
-	if ($start_coord >= $lower_bound && $start_coord <= $upper_bound) {
+	if ($end_coord >= $lower_bound && $start_coord <= $upper_bound) {
 	    push @filtered, $data_ref->[$i];
 	    $last_index_seen = $i;
 	}
@@ -270,10 +325,55 @@ sub gff_filter_by_coord {
     return \@filtered;
 }
 
+
+sub index_gff_annotation {
+    my ($annotation_file, $gene_id_field_name) = @_;
+
+    open my $GFFH, '<', $annotation_file or croak "Can't read file: $annotation_file";
+    my %annotation = ();
+    while (<$GFFH>) {
+        next if ($_ =~ m/^#.*$|^\s*$/);
+        chomp;
+        s/[\r\n]//g;
+        my %locus = %{gff_read ($_)};
+
+        my ($locus_id) = $locus{attribute} =~ m/$gene_id_field_name[=\s]?([^;]+)/;
+
+        if (!defined $locus_id) {
+            ($locus_id, undef) = split /;/, $locus{attribute};
+        }
+
+        $locus_id =~ s/["\t\r\n]//g;
+
+        $annotation{$locus{seqname}}{$locus{start}}
+        = [$locus{start}, $locus{end}, $locus_id, $locus{strand}, $locus{source}, $locus{feature}, $locus{attribute}];
+    }
+    close $GFFH;
+    return \%annotation;
+}
+
+
+sub index_generic_annotation {
+    my $annonfile = shift;
+    open my $ANNON, '<', $annonfile or croak "Can't open $annonfile.";
+
+    my %annotation = ();
+
+    while (<$ANNON>) {
+        next if ($_ =~ m/^#.*$|^\s*$/);
+        chomp;
+        my %locus = %{annon_read ($_)};
+
+        $annotation{$locus{seqname}}{$locus{start}} = [$locus{start}, $locus{end}, $locus{locus_id}, $locus{comment}];
+    }
+    close $ANNON;
+    return \%annotation;
+}
+
 sub gff_read {
     my ($seqname, $source, $feature, $start, $end, $score, $strand, $frame, $attribute) = split(/\t/, shift);
 
-    $seqname =~ tr/A-Z/a-z/;
+#    $seqname =~ tr/A-Z/a-z/;
 
     my %rec = (
 	'seqname'   => $seqname,
@@ -283,7 +383,7 @@ sub gff_read {
 	'end'       => $end,
 	'score'     => $score,
 	'strand'    => $strand,
-	'frame'     => $strand,
+	'frame'     => $frame,
 	'attribute' => $attribute
 	);
     return \%rec;
@@ -309,49 +409,6 @@ sub annon_read {
     );
 
     return \%rec;
-}
-
-
-sub index_gff_annotation {
-    my ($annotation_file, $gene_id_field_name) = @_;
-
-    open my $GFFH, '<', $annotation_file or croak "Can't read file: $annotation_file";
-    my %annotation = ();
-    while (<$GFFH>) {
-        next if ($_ =~ m/^#.*$|^\s*$/);
-        chomp;
-        my %locus = %{gff_read ($_)};
-
-        my ($locus_id) = $locus{attribute} =~ m/$gene_id_field_name[=\s]?([^;]+)/;
-
-        if (!defined $locus_id) {
-            ($locus_id, undef) = split /;/, $locus{attribute};
-        }
-
-        $locus_id =~ s/["\t\r\n]//g;
-
-        $annotation{$locus{seqname}}{$locus{start}} = [$locus{start}, $locus{end}, $locus_id, $locus{strand}];
-    }
-    close $GFFH;
-    return \%annotation;
-}
-
-
-sub index_generic_annotation {
-    my $annonfile = shift;
-    open my $ANNON, '<', $annonfile or croak "Can't open $annonfile.";
-
-    my %annotation = ();
-
-    while (<$ANNON>) {
-        next if ($_ =~ m/^#.*$|^\s*$/);
-        chomp;
-        my %locus = %{annon_read ($_)};
-
-        $annotation{$locus{seqname}}{$locus{start}} = [$locus{start}, $locus{end}, $locus{locus_id}, $locus{comment}];
-    }
-    close $ANNON;
-    return \%annotation;
 }
 
 
