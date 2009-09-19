@@ -78,19 +78,18 @@ for my $chr (sort {$a cmp $b} keys %annotation) {
   ANNOTATION:
     for my $start (sort {$a <=> $b} keys %{$annotation{$chr}}) {
  
-        my @range = @{ gff_filter_by_coord ($start, $annotation{$chr}{$start}[1], $last_record, \@{$data{$chr}}) };
+        my @range = @{ gff_filter_by_coord ($start, $annotation{$chr}{$start}[1], $last_record, \@{$data{$chr}}, 'filter_by_score') };
 
 	$last_record = shift @range;
         
         if ($extend_annotation) {
 
             if (@range) {
-                my ($lowest_coord, $highest_coord, $score)
+                my ($lowest_coord, $highest_coord)
                 = ((split /\t/, $range[0])[3], (split /\t/, $range[$#range])[4]);
                 
                 if ($lowest_coord < $annotation{$chr}{$start}[0]
-                    or $highest_coord > $annotation{$chr}{$start}[1]
-                    and $score ne q{.}) {
+                    or $highest_coord > $annotation{$chr}{$start}[1]) {
 
                     $annotation{$chr}{$start}[6]
                     .= "; Target=$annotation{$chr}{$start}[2] $annotation{$chr}{$start}[0] $annotation{$chr}{$start}[1]";
@@ -306,15 +305,19 @@ sub add_gff_attribute_range {
 
 
 sub gff_filter_by_coord {
-    my ($lower_bound, $upper_bound, $last_index_seen, $data_ref) = @_;
+    my ($lower_bound, $upper_bound, $last_index_seen, $data_ref, $filter_by_score) = @_;
 
     my @filtered;
+  WINDOW:
     for (my $i = $last_index_seen; $i < @{$data_ref}; $i++) {
 
-        my ($start_coord, $end_coord)
-        = (split /\t/, $data_ref->[$i])[3, 4];
+        my ($start_coord, $end_coord, $score)
+        = (split /\t/, $data_ref->[$i])[3, 4, 5];
 
 	if ($end_coord >= $lower_bound && $start_coord <= $upper_bound) {
+          
+            next WINDOW if $filter_by_score and $score !~ m/\d/;
+  
 	    push @filtered, $data_ref->[$i];
 	    $last_index_seen = $i;
 	}
