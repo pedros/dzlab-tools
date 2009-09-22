@@ -77,7 +77,7 @@ while (<>) {
                 $previous->{strand},
                 $previous->{snp},
             );
-            $previous = undef;
+            $previous = $current;
         }
     }
 }
@@ -106,7 +106,9 @@ sub read_bowtie {
     my ($read_id, $strand, $target, $coordinate, $sequence, $qualities, $alternatives, $snp)
     = split /\t/, $bowtie_line;
 
-    my @mm = split /,/, $snp;
+    my @mm = (split /,/, $snp);
+
+    @mm = () if $snp =~ m/^\s*$/;
 
     return {
         'read_id'      => $read_id,
@@ -141,10 +143,24 @@ sub print_eland {
     }
     ( 0 .. @{$chromosomes_ref} - 1 );
 
+
+    my %rank = (
+        0 => 0,
+        1 => 0,
+        2 => 0
+    );
+
+    for (@{$mismatches_ref}) {
+        $rank{$_}++
+    }
+
+    map { die if $rank{$_} eq 'string' ; $rank{string} .= $rank{$_} . q{:} } sort keys %rank;
+    chop $rank{string};
+
     print join ("\t",
                 $read_id,
                 $sequence,
-                scalar @{$chromosomes_ref},
+                $rank{string},
                 $target,
             ), "\n";
 }
