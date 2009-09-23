@@ -14,15 +14,21 @@ unless @ARGV;
 
 my $type = 'verbose';
 my $frequencies;
+my $eland;
 my $id_regex;
 my $reference;
 my $output;
+my $unmatched;
+my @splice;
 
 # Grabs and parses command line options
 my $result = GetOptions (
     'output|o=s'     => \$output,
+    'recover|u=s'    => \$unmatched,
+    'splice|s=i{2}'  => \@splice,
     'type|t=s'       => \$type,
     'frequencies|f'  => \$frequencies,
+    'eland|e'        => \$eland,
     'id-regex|i=s'   => \$id_regex,
     'reference|r=s'  => \$reference,
     'verbose|v'      => sub { use diagnostics; },
@@ -45,7 +51,7 @@ if ($output) {
 
 
 # read in bowtie verbose file
-my $counts   = undef;
+my $counts = undef;
 my $previous = undef;
 
 while (<>) {
@@ -54,8 +60,7 @@ while (<>) {
     my $current = read_bowtie ($_);
 
     if ($frequencies) {
-
-        $counts->{$current->{target}->[0]}{alternatives} += $current->{alternatives};
+        $counts->{$current->{target}->[0]}{alternatives} += $$current->{alternatives}->[0];
         $counts->{$current->{target}->[0]}{frequencies}++;
     }
     else {
@@ -69,6 +74,10 @@ while (<>) {
             push @{$previous->{snp}}, $current->{snp}->[0];
         }
         else {
+
+            catch_up ($previous, $unmatched, @splice)
+            if $unmatched;
+
             print_eland (
                 $previous->{read_id},
                 $previous->{sequence},
@@ -86,6 +95,9 @@ while (<>) {
 count_reads ($reference, $counts, $id_regex)
 if $frequencies;
 
+catch_up ($previous, $unmatched, @splice)
+if defined $previous and $unmatched;
+
 print_eland (
     $previous->{read_id},
     $previous->{sequence},
@@ -95,9 +107,55 @@ print_eland (
     $previous->{snp},
 ) if defined $previous;
 
-
+close $unmatched or carp "Can't close $unmatched: $!"
+if $unmatched;
 
 ### done
+
+
+{
+    my %file_handles;
+    my $file_handle;
+
+    sub catch_up {
+        my ($current, $unmatched, @splice) = @_;
+
+        $file_handle = $file_handles{$unmatched};
+
+        unless (defined $file_handle) {
+            open $file_handle, '<', $unmatched
+            or croak "Can't open $unmatched: $!";
+            $file_handles{$unmatched} = $file_handle;
+        }
+
+      FASTA_HEADER:
+        while (1) {
+            my $header   = <$file_handle>;    
+            my $sequence = <$file_handle>;    
+
+            chomp $header; chomp $sequence;
+            $header =~ s/>//;
+
+            my %unmatched = (header => $header, sequence => $sequence);
+
+            # if potentially unmatched read is not current bowtie read
+            if ($unmatched{header} !~ m/$current->{read_id}/) {
+
+                $unmatched{sequence}
+                = substr $unmatched{sequence}, ($splice[0] - 1), ($splice[1] - $splice[0] + 1)
+                if @splice;
+
+                print join ("\t",
+                            $unmatched{header},
+                            $unmatched{sequence},
+                            'NM',
+                            "\n"
+                        );
+            }
+            else {last FASTA_HEADER}
+        }
+    }
+}
 
 
 sub read_bowtie {
@@ -106,9 +164,7 @@ sub read_bowtie {
     my ($read_id, $strand, $target, $coordinate, $sequence, $qualities, $alternatives, $snp)
     = split /\t/, $bowtie_line;
 
-    my @mm = (split /,/, $snp);
-
-    @mm = () if $snp =~ m/^\s*$/;
+    my @mm = split /,/, $snp;
 
     return {
         'read_id'      => $read_id,
@@ -143,24 +199,10 @@ sub print_eland {
     }
     ( 0 .. @{$chromosomes_ref} - 1 );
 
-
-    my %rank = (
-        0 => 0,
-        1 => 0,
-        2 => 0
-    );
-
-    for (@{$mismatches_ref}) {
-        $rank{$_}++
-    }
-
-    map { die if $rank{$_} eq 'string' ; $rank{string} .= $rank{$_} . q{:} } sort keys %rank;
-    chop $rank{string};
-
     print join ("\t",
                 $read_id,
                 $sequence,
-                $rank{string},
+                scalar @{$chromosomes_ref},
                 $target,
             ), "\n";
 }
@@ -179,7 +221,9 @@ sub count_reads {
     for my $target (sort keys %{$counts_ref}) {
 
         my ($id) = $target =~ m/$id_regex/;
-print STDERR $id, "\n";
+
+        print STDERR $id, "\n";
+
         unless (exists $reference{$target}) {
             carp "$target doesn't exist in $reference\n";
             next TARGET;
@@ -253,7 +297,7 @@ __END__
  -t, --type        type of bowtie output file (verbose or concise -- only verbose supported for now)
  -i, --id-regex    perl-type regular expression to identify feature id (ie. gene) in fasta alignment header (must include capturing parenthesis)
  -r, --reference   genome/cDNA models file in fasta format (for calculating relative frequency scores, etc.)
- -f, --frequencies count read frequencies in the process
+ -u, --recover     given original alignment fasta file, recovers unmatched reads (which bowtie does not output)
  -o, --output      filename to write results to (defaults to STDOUT)
  -v, --verbose     output perl's diagnostic and warning messages
  -q, --quiet       supress perl's diagnostic and warning messages
