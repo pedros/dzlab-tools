@@ -11,14 +11,12 @@ my $output;
 my $fasta;
 my $readsize;
 my @splice;
-my $var_length;
 
 # Grabs and parses command line options
 my $result = GetOptions (
     'fasta|f=s'           => \$fasta,
     'readsize|r=i'        => \$readsize,
     'splice|s=i{,}'       => \@splice,
-    'variable-length|l' => \$var_length,
     'output|o=s'          => \$output,
     'verbose|v'           => sub { use diagnostics; },
     'quiet|q'             => sub { no warnings; },
@@ -50,7 +48,7 @@ while (<>) {
     croak "Read IDs don't match:\n$fields[0]\n$header"
     unless $header =~ m/${fields[0]}/;
 
-    if ($var_length) {
+    if ( (length $sequence) != (length $fields[1]) ) {
         $sequence    = substr $sequence, ($splice[0] - 1), (length $fields[1]);
         $left_offset = 0;
     }
