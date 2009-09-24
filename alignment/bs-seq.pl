@@ -19,7 +19,6 @@ my $reference;   # required
 my $base_name    = 'out';
 my $overwrite;
 my $read_size    = 45;
-my $var_length   = 0;
 my $library_size = 300;
 my $mismatches   = 2;
 my $organism     = q{.};
@@ -47,7 +46,6 @@ my $result = GetOptions (
     'base-name|b=s'        => \$base_name,
     'overwrite|o'          => \$overwrite,
     'read-size|s=i'        => \$read_size,
-    'variable-length|v=i'  => \$var_length,
     'library-size|k=i'     => \$library_size,
     'mismatches|n=i'       => \$mismatches,
     'organism|t=s'         => \$organism,
@@ -137,12 +135,12 @@ else {
 }
 
 # get back original non-converted reads
-run_cmd ("replace_reads.pl -f $files{lfa} -r $read_size --variable-length $var_length -s @left_splice  $files{lel3} > $files{lel3}.post") unless file_exists("$files{lel3}.post");
+run_cmd ("replace_reads.pl -f $files{lfa} -r $read_size -s @left_splice  $files{lel3} > $files{lel3}.post") unless file_exists("$files{lel3}.post");
 unless ($single_ends) {
-    run_cmd ("replace_reads.pl -f $files{rfa} -r $read_size --variable-length $var_length -s @right_splice $files{rel3} > $files{rel3}.post") unless file_exists("$files{rel3}.post");
+    run_cmd ("replace_reads.pl -f $files{rfa} -r $read_size -s @right_splice $files{rel3} > $files{rel3}.post") unless file_exists("$files{rel3}.post");
 }
 else {
-    run_cmd ("replace_reads.pl -f $files{lfa} -r $read_size --variable-length $var_length -s @right_splice $files{rel3} > $files{rel3}.post") unless file_exists("$files{rel3}.post");
+    run_cmd ("replace_reads.pl -f $files{lfa} -r $read_size -s @right_splice $files{rel3} > $files{rel3}.post") unless file_exists("$files{rel3}.post");
 }
 
 # make sure reads map together
@@ -215,7 +213,6 @@ __END__
  -b,  --base-name
  -o,  --overwrite
  -s,  --read-size
- -v,  --variable-length
  -k,  --library-size
  -n,  --mismatches
  -t,  --organism
