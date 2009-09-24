@@ -18,7 +18,7 @@ my $result = GetOptions (
     'fasta|f=s'           => \$fasta,
     'readsize|r=i'        => \$readsize,
     'splice|s=i{,}'       => \@splice,
-    'variable-length|l=i' => \$var_length,
+    'variable-length|l' => \$var_length,
     'output|o=s'          => \$output,
     'verbose|v'           => sub { use diagnostics; },
     'quiet|q'             => sub { no warnings; },
