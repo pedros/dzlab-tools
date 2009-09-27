@@ -16,19 +16,23 @@ $SIG{INT} = sub {croak "Received SIG$_[0]. Exiting...\n"};
 my $left_read;   # required
 my $right_read;  # required
 my $reference;   # required
-my $base_name    = 'out';
+my $base_name     = 'out';
 my $overwrite;
-my $read_size    = 45;
-my $library_size = 300;
-my $mismatches   = 2;
-my $organism     = q{.};
-my $batch        = 1;
-my $window_size  = 50;
-my $trust_dash_2 = 0;
-my $single_ends  = 0;
+my $read_size     = 76;
+my $library_size  = 300;
+my $mismatches    = 2;
+my $organism      = q{.};
+my $batch         = 1;
+my $window_size   = 50;
+my $trust_dash_2  = 0;
+my $single_ends   = 1;
 my @left_splice;
 my @right_splice;
-my @groups       = ();
+my @groups        = ();
+my $aligner       = 'bowtie';
+my $max_hits      = 0;
+my $random_assign = 1;
+my $pthreads      = 2;
 
 my @date = localtime (time);
 
@@ -51,12 +55,16 @@ my $result = GetOptions (
     'organism|t=s'         => \$organism,
     'batch|i=i'            => \$batch,
     'window-size|w=i'      => \$window_size,
-    'trust-dash-2|2'       => \$trust_dash_2,
+    'trust-dash-2|2=i'     => \$trust_dash_2,
     'single-ends|1=i'      => \$single_ends,
     'left-splice|ls=i{2}'  => \@left_splice,
     'right-splice|rs=i{2}' => \@right_splice,
     'groups|g=s{,}'        => \@groups,
     'out-directory|d=s'    => \$out_dir,
+    'aligner|a=s'          => \$aligner,
+    'max-hits|mh=i'        => \$max_hits,
+    'random-assign|rnd=i'  => \$random_assign,
+    'pthreads|pt=i'        => \$pthreads,
     'verbose|V'            => sub { use diagnostics; },
     'quiet|q'              => sub { no warnings; },
     'help|h'               => sub { pod2usage ( -verbose => 1 ); },
@@ -125,26 +133,59 @@ run_cmd ("rcfas.pl $reference > $reference.rc")           unless file_exists("$r
 run_cmd ("convert.pl c2t $reference.rc > $reference.c2t") unless file_exists("$reference.c2t");
 run_cmd ("convert.pl g2a $reference.rc > $reference.g2a") unless file_exists("$reference.g2a") or $single_ends;
 
-# align with seqmap
-run_cmd ("seqmap $mismatches $files{lc2t} $reference.c2t $files{lel3} /eland:3 /forward_strand /available_memory:8000 /cut:$left_splice[0],$left_splice[1]")   unless file_exists($files{lel3});
-unless ($single_ends) {
-    run_cmd ("seqmap $mismatches $files{rg2a} $reference.g2a $files{rel3} /eland:3 /forward_strand /available_memory:8000 /cut:$right_splice[0],$right_splice[1]") unless file_exists($files{rel3});
-}
-else {
-    run_cmd ("seqmap $mismatches $files{lc2t} $reference.c2t $files{rel3} /eland:3 /forward_strand /available_memory:8000 /cut:$right_splice[0],$right_splice[1]") unless file_exists($files{rel3});
+if ($aligner eq 'bowtie') {
+    run_cmd ("bowtie-build $reference.c2t $reference.c2t") unless file_exists("$reference.c2t.1.ebwt");
+    run_cmd ("bowtie-build $reference.g2a $reference.g2a") unless file_exists("$reference.g2a.1.ebwt") or $single_ends;
 }
 
-# get back original non-converted reads
-run_cmd ("replace_reads.pl -f $files{lfa} -r $read_size -s @left_splice  $files{lel3} > $files{lel3}.post") unless file_exists("$files{lel3}.post");
-unless ($single_ends) {
-    run_cmd ("replace_reads.pl -f $files{rfa} -r $read_size -s @right_splice $files{rel3} > $files{rel3}.post") unless file_exists("$files{rel3}.post");
+if ($aligner eq 'seqmap') {
+    # align with seqmap
+    run_cmd ("seqmap $mismatches $files{lc2t} $reference.c2t $files{lel3} /eland:3 /forward_strand /available_memory:8000 /cut:$left_splice[0],$left_splice[1]")   unless file_exists($files{lel3});
+    unless ($single_ends) {
+        run_cmd ("seqmap $mismatches $files{rg2a} $reference.g2a $files{rel3} /eland:3 /forward_strand /available_memory:8000 /cut:$right_splice[0],$right_splice[1]") unless file_exists($files{rel3});
+    }
+    else {
+        run_cmd ("seqmap $mismatches $files{lc2t} $reference.c2t $files{rel3} /eland:3 /forward_strand /available_memory:8000 /cut:$right_splice[0],$right_splice[1]") unless file_exists($files{rel3});
+    }
+
+    # get back original non-converted reads
+    run_cmd ("replace_reads.pl -f $files{lfa} -r $read_size -s @left_splice  $files{lel3} > $files{lel3}.post") unless file_exists("$files{lel3}.post");
+    unless ($single_ends) {
+        run_cmd ("replace_reads.pl -f $files{rfa} -r $read_size -s @right_splice $files{rel3} > $files{rel3}.post") unless file_exists("$files{rel3}.post");
+    }
+    else {
+        run_cmd ("replace_reads.pl -f $files{lfa} -r $read_size -s @right_splice $files{rel3} > $files{rel3}.post") unless file_exists("$files{rel3}.post");
+    }
 }
-else {
-    run_cmd ("replace_reads.pl -f $files{lfa} -r $read_size -s @right_splice $files{rel3} > $files{rel3}.post") unless file_exists("$files{rel3}.post");
+elsif ($aligner eq 'bowtie') {
+
+    my $l3trim = $read_size - $left_splice[1];
+    my $l5trim = $left_splice[0] - 1;
+
+    my $r3trim = $read_size - $right_splice[1];
+    my $r5trim = $right_splice[0] - 1;
+
+    # align with bowtie
+    run_cmd ("bowtie $reference.c2t -f -B 1 -v $mismatches -5 $l5trim -3 $l3trim --best --strata -k $max_hits -m $max_hits -p $pthreads --norc $files{lc2t} $files{lel3}")   unless file_exists($files{lel3});
+    unless ($single_ends) {
+        run_cmd ("bowtie $reference.g2a -f -B 1 -v $mismatches -5 $r5trim -3 $r3trim --best --strata -k $max_hits -m $max_hits -p $pthreads --norc $files{rc2t} $files{rel3}") unless file_exists($files{rel3});
+    }
+    else {
+        run_cmd ("bowtie $reference.c2t -f -B 1 -v $mismatches -5 $r5trim -3 $r3trim --best --strata -k $max_hits -m $max_hits -p $pthreads --norc $files{lc2t} $files{rel3}") unless file_exists($files{rel3});
+    }
+
+    # get back original non-converted reads and convert from bowtie to eland3
+    run_cmd ("parse_bowtie.pl -u $files{lfa} -s @left_splice  $files{lel3} -o $files{lel3}.post") unless file_exists("$files{lel3}.post");
+    unless ($single_ends) {
+        run_cmd ("parse_bowtie.pl -u $files{rfa} -s @right_splice  $files{rel3} -o $files{rel3}.post") unless file_exists("$files{rel3}.post");
+    }
+    else {
+        run_cmd ("parse_bowtie.pl -u $files{lfa} -s @right_splice  $files{rel3} -o $files{rel3}.post") unless file_exists("$files{rel3}.post");
+    }
 }
 
 # make sure reads map together
-run_cmd ("correlatePairedEnds.pl --left $files{lel3}.post --right $files{rel3}.post --reference $reference --output $files{base} --offset 0 --distance $library_size --readsize $read_size --trust-dash-2 $trust_dash_2 --single-ends $single_ends") unless file_exists($files{base});
+run_cmd ("correlatePairedEnds.pl -l $files{lel3}.post -r $files{rel3}.post -ref $reference -o $files{base} -t 0 -d $library_size -s $read_size -2 $trust_dash_2 -1 $single_ends -mh $max_hits -a $random_assign") unless file_exists($files{base});
 
 # basic stats about the aligment
 run_cmd ("collect_align_stats.pl $files{lel3}.post $files{rel3}.post $files{base} $organism $batch > $files{log}") unless file_exists($files{log});
@@ -160,7 +201,7 @@ for my $context (0..2) {
     for my $group (@groups) {
         run_cmd ("split_gff.pl --feature all $files{freq}->{$group}") unless file_exists($files{cont}->[$context]{$group});
         run_cmd ("window_gff.pl --gff-file $files{cont}->[$context]{$group} --width 1 --output $files{cont}->[$context]{$group}.merged") unless file_exists("$files{cont}->[$context]{$group}.merged");
-        run_cmd ("window_gff.pl --gff-file $files{cont}->[$context]{$group}.merged --width $window_size --output $files{wcont}->[$context]{$group} --no-skip") unless file_exists($files{wcont}->[$context]{$group});
+#        run_cmd ("window_gff.pl --gff-file $files{cont}->[$context]{$group}.merged --width $window_size --output $files{wcont}->[$context]{$group} --no-skip") unless file_exists($files{wcont}->[$context]{$group});
     }
 }
 
@@ -213,6 +254,7 @@ __END__
  -b,  --base-name
  -o,  --overwrite
  -s,  --read-size
+ -v,  --variable-length
  -k,  --library-size
  -n,  --mismatches
  -t,  --organism
