@@ -56,8 +56,11 @@ my $previous = undef;
 
 while (<>) {
     chomp;
- 
+    s/[\r\n]//;
+
     my $current = read_bowtie ($_);
+
+    $current->{snps}{$current->{snp}->[0]}++;
 
     if ($frequencies) {
         $counts->{$current->{target}->[0]}{alternatives} += $$current->{alternatives}->[0];
@@ -72,13 +75,14 @@ while (<>) {
             push @{$previous->{target}}, $current->{target}->[0];
             push @{$previous->{coordinate}}, $current->{coordinate}->[0];
             push @{$previous->{snp}}, $current->{snp}->[0];
+            $previous->{snps}{$current->{snp}->[0]}++;
         }
         else {
 
             catch_up ($previous, $unmatched, @splice)
             if $unmatched;
 
-            print_eland (
+            print_eland ($previous,
                 $previous->{read_id},
                 $previous->{sequence},
                 $previous->{target},
@@ -91,14 +95,13 @@ while (<>) {
     }
 }
 
-
 count_reads ($reference, $counts, $id_regex)
 if $frequencies;
 
 catch_up ($previous, $unmatched, @splice)
 if defined $previous and $unmatched;
 
-print_eland (
+print_eland ($previous,
     $previous->{read_id},
     $previous->{sequence},
     $previous->{target},
@@ -107,10 +110,11 @@ print_eland (
     $previous->{snp},
 ) if defined $previous;
 
-close $unmatched or carp "Can't close $unmatched: $!"
-if $unmatched;
+# close $unmatched or carp "Can't close $unmatched: $!"
+# if $unmatched;
 
 ### done
+
 
 
 {
@@ -152,9 +156,51 @@ if $unmatched;
                             "\n"
                         );
             }
-            else {last FASTA_HEADER}
+            else {
+                $current->{sequence} = $sequence;
+
+                $current->{sequence}
+                = substr $current->{sequence}, ($splice[0] - 1), ($splice[1] - $splice[0] + 1)
+                if @splice;
+
+                last FASTA_HEADER;
+            }
         }
     }
+}
+
+
+sub print_eland {
+    my ($previous) = @_;
+
+    my ($read_id, $sequence, $chromosomes_ref, $coordinates_ref, $strands_ref, $mismatches_ref, $mismatches_total)
+    = ($previous->{read_id}, $previous->{sequence}, $previous->{target}, $previous->{coordinate}, $previous->{strand}, $previous->{snp}, $previous->{snps});
+
+    croak "Total number of chromosomes, coordinates, strands, and mismatches don't match"
+    unless scalar @{$chromosomes_ref} == scalar @{$coordinates_ref} 
+    and    scalar @{$chromosomes_ref} == scalar @{$strands_ref}
+    and    scalar @{$chromosomes_ref} == scalar @{$mismatches_ref};
+
+    my $mismatches
+    = join q{:}, map { $mismatches_total->{$_} || 0 } (0 .. 2);
+
+    my $target;
+    map {
+        $target
+        .= $chromosomes_ref->[$_]
+        .  q{:} . $coordinates_ref->[$_]
+        .  ($strands_ref->[$_] eq q{+} ? q{F} : q{R})
+        .  $mismatches_ref->[$_]
+        .  ($_ < @{$chromosomes_ref} - 1 ? q{,} : q{})
+    }
+    ( 0 .. @{$chromosomes_ref} - 1 );
+
+    print join ("\t",
+                $read_id,
+                $sequence,
+                $mismatches,
+                $target,
+            ), "\n";
 }
 
 
@@ -178,34 +224,6 @@ sub read_bowtie {
     }
 }
 
-
-sub print_eland {
-    my ($read_id, $sequence, $chromosomes_ref, $coordinates_ref, $strands_ref, $mismatches_ref)
-    = @_;
-
-    croak "Total number of chromosomes, coordinates, strands, and mismatches don't match"
-    unless scalar @{$chromosomes_ref} == scalar @{$coordinates_ref} 
-    and scalar @{$chromosomes_ref} == scalar @{$strands_ref}
-    and scalar @{$chromosomes_ref} == scalar @{$mismatches_ref};
-
-    my $target;
-    map {
-        $target
-        .= $chromosomes_ref->[$_]
-        .  q{:} . $coordinates_ref->[$_]
-        .  ($strands_ref->[$_] eq q{+} ? q{F} : q{R})
-        .  $mismatches_ref->[$_]
-        .  ($_ < @{$chromosomes_ref} - 1 ? q{,} : q{})
-    }
-    ( 0 .. @{$chromosomes_ref} - 1 );
-
-    print join ("\t",
-                $read_id,
-                $sequence,
-                scalar @{$chromosomes_ref},
-                $target,
-            ), "\n";
-}
 
 
 sub count_reads {
