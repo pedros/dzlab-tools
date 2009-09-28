@@ -185,7 +185,7 @@ elsif ($aligner eq 'bowtie') {
 }
 
 # make sure reads map together
-run_cmd ("correlatePairedEnds.pl -l $files{lel3}.post -r $files{rel3}.post -ref $reference -o $files{base} -t 0 -d $library_size -s $read_size -2 $trust_dash_2 -1 $single_ends -mh $max_hits -a $random_assign") unless file_exists($files{base});
+run_cmd ("correlatePairedEnds.pl -l $files{lel3}.post -r $files{rel3}.post -ref $reference -o $files{base} -t 0 -d $library_size -s $read_size -2 $trust_dash_2 -1 $single_ends -m $max_hits -a $random_assign") unless file_exists($files{base});
 
 # basic stats about the aligment
 run_cmd ("collect_align_stats.pl $files{lel3}.post $files{rel3}.post $files{base} $organism $batch > $files{log}") unless file_exists($files{log});
