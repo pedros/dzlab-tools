@@ -134,8 +134,8 @@ print_eland ($previous,
 
       FASTA_HEADER:
         while (1) {
-            my $header   = <$file_handle>;    
-            my $sequence = <$file_handle>;    
+            defined (my $header   = <$file_handle>) or last FASTA_HEADER;
+            defined (my $sequence = <$file_handle>) or last FASTA_HEADER;    
 
             chomp $header; chomp $sequence;
             $header =~ s/>//;
