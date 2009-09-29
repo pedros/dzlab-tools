@@ -82,33 +82,20 @@ while (<>) {
             catch_up ($previous, $unmatched, @splice)
             if $unmatched;
 
-            print_eland ($previous,
-                $previous->{read_id},
-                $previous->{sequence},
-                $previous->{target},
-                $previous->{coordinate},
-                $previous->{strand},
-                $previous->{snp},
-            );
+            print_eland ($previous);
             $previous = $current;
         }
     }
 }
 
-count_reads ($reference, $counts, $id_regex)
-if $frequencies;
+count_reads ($reference, $counts, $id_regex) if $frequencies;
 
-catch_up ($previous, $unmatched, @splice)
-if defined $previous and $unmatched;
+catch_up ($previous, $unmatched, @splice) if defined $previous and $unmatched;
 
-print_eland ($previous,
-    $previous->{read_id},
-    $previous->{sequence},
-    $previous->{target},
-    $previous->{coordinate},
-    $previous->{strand},
-    $previous->{snp},
-) if defined $previous;
+print_eland ($previous) if defined $previous;
+
+# for when last read in bowtie file is *not* last read in fasta file
+catch_up ($previous, $unmatched, @splice) if defined $previous and $unmatched;
 
 # close $unmatched or carp "Can't close $unmatched: $!"
 # if $unmatched;
@@ -133,9 +120,8 @@ print_eland ($previous,
         }
 
       FASTA_HEADER:
-        while (1) {
-            defined (my $header   = <$file_handle>) or last FASTA_HEADER;
-            defined (my $sequence = <$file_handle>) or last FASTA_HEADER;    
+        while (defined (my $header = <$file_handle>)
+               and defined (my $sequence = <$file_handle>)) {
 
             chomp $header; chomp $sequence;
             $header =~ s/>//;
