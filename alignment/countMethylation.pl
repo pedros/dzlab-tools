@@ -53,7 +53,7 @@ my $result = GetOptions (
     'gff|f=s'      => \$gfffile,
     'ref|r=s'      => \$reference,
     'sort|s'       => \$sort,
-    'di-nuc|d'     => \$di_nucleotide_count,
+    'di-nuc|d:o'   => \$di_nucleotide_count,
     "output|o:s"   => \$output,
     'stats-only|t' => \$stats_only,
     "verbose|v"    => sub {enable diagnostics;},

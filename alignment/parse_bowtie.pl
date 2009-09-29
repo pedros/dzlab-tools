@@ -49,6 +49,7 @@ if ($output) {
     select $USER_OUT;
 }
 
+$| = 1;
 
 # read in bowtie verbose file
 my $counts = undef;
