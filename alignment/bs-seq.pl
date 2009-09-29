@@ -33,6 +33,7 @@ my $aligner       = 'bowtie';
 my $max_hits      = 0;
 my $random_assign = 1;
 my $pthreads      = 2;
+my $di_nuc_freqs  = 0;
 
 my @date = localtime (time);
 
@@ -65,6 +66,7 @@ my $result = GetOptions (
     'max-hits|mh=i'        => \$max_hits,
     'random-assign|rnd=i'  => \$random_assign,
     'pthreads|pt=i'        => \$pthreads,
+    'di-nuc-freqs|dnf=i'   => \$di_nuc_freqs,
     'verbose|V'            => sub { use diagnostics; },
     'quiet|q'              => sub { no warnings; },
     'help|h'               => sub { pod2usage ( -verbose => 1 ); },
@@ -193,7 +195,7 @@ run_cmd ("collect_align_stats.pl $files{lel3}.post $files{rel3}.post $files{base
 # quantify methylation
 for (@groups) {
     run_cmd ("split_gff.pl --sequence all $files{base}") unless (file_exists($files{split}->{$_}));
-    run_cmd ("countMethylation.pl --ref $reference --gff $files{split}->{$_} --output $files{freq}->{$_} --sort") unless file_exists($files{freq}->{$_});
+    run_cmd ("countMethylation.pl --ref $reference --gff $files{split}->{$_} --output $files{freq}->{$_} --sort -d $di_nuc_freqs") unless file_exists($files{freq}->{$_});
 }
 
 # window methylation counts into non-overlapping windows
