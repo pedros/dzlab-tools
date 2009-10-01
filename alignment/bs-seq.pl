@@ -34,6 +34,7 @@ my $max_hits      = 0;
 my $random_assign = 1;
 my $pthreads      = 2;
 my $di_nuc_freqs  = 0;
+my @contexts;
 
 my @date = localtime (time);
 
@@ -67,6 +68,7 @@ my $result = GetOptions (
     'random-assign|rnd=i'  => \$random_assign,
     'pthreads|pt=i'        => \$pthreads,
     'di-nuc-freqs|dnf=i'   => \$di_nuc_freqs,
+    'contexts|ct=s{,}'     => \@contexts,
     'verbose|V'            => sub { use diagnostics; },
     'quiet|q'              => sub { no warnings; },
     'help|h'               => sub { pod2usage ( -verbose => 1 ); },
@@ -103,6 +105,11 @@ elsif (! -d $out_dir) {
 }
 #else {warn " overwrite $out_dir"}
 
+unless (@contexts) {
+    if ($di_nuc_freqs) {@contexts = qw(CA CC CG CT)}
+    else {@contexts = qw(CG CHG CHH)}
+}
+
 my %files = (
     lfa   => File::Spec->catfile ($out_dir, basename($left_read))  . '.fa',
     lc2t  => File::Spec->catfile ($out_dir, basename($left_read))  . '.c2t',
@@ -114,12 +121,8 @@ my %files = (
     log   => File::Spec->catfile ($out_dir, $base_name)  . '.log',
     split => _gen_files (File::Spec->catfile ($out_dir, $base_name), 'gff',  @groups),
     freq  => _gen_files (File::Spec->catfile ($out_dir, 'single-c', $base_name), 'single-c.gff', @groups),
-    cont  => [_gen_files (File::Spec->catfile ($out_dir, 'single-c', $base_name), 'single-c-CG.gff', @groups),
-              _gen_files (File::Spec->catfile ($out_dir, 'single-c', $base_name), 'single-c-CHG.gff', @groups),
-              _gen_files (File::Spec->catfile ($out_dir, 'single-c', $base_name), 'single-c-CHH.gff', @groups)],
-    wcont => [_gen_files (File::Spec->catfile ($out_dir, 'windows', $base_name), "w${window_size}-CG.gff", @groups),
-              _gen_files (File::Spec->catfile ($out_dir, 'windows', $base_name), "w${window_size}-CHG.gff", @groups),
-              _gen_files (File::Spec->catfile ($out_dir, 'windows', $base_name), "w${window_size}-CHH.gff", @groups)],
+    cont  => [map { _gen_files (File::Spec->catfile ($out_dir, 'single-c', $base_name), "single-c-$_.gff", @groups) } @contexts],
+    wcont => [map { _gen_files (File::Spec->catfile ($out_dir, 'windows', $base_name), "w${window_size}-$_.gff", @groups) } @contexts],
 );
 
 # convert reads
@@ -250,27 +253,30 @@ __END__
 
  bs-seq-pl [OPTION]... [FILE]...
 
- -l,  --left-read
- -r,  --right-read
- -f,  --reference
- -b,  --base-name
- -o,  --overwrite
- -s,  --read-size
- -v,  --variable-length
- -k,  --library-size
- -n,  --mismatches
- -t,  --organism
- -i,  --batch
- -ls, --left-splice
- -rs, --right-splice
- -1,  --single-ends
- -2,  --trust-dash-2
- -g,  --groups
- -d,  --out-directory
- -V,  --verbose     output perl's diagnostic and warning messages
- -q,  --quiet       supress perl's diagnostic and warning messages
- -h,  --help        print this information
- -m,  --manual      print the plain old documentation page
+ -l,   --left-read
+ -r,   --right-read
+ -f,   --reference
+ -b,   --base-name
+ -o,   --overwrite
+ -s,   --read-size
+ -v,   --variable-length
+ -k,   --library-size
+ -n,   --mismatches
+ -t,   --organism
+ -i,   --batch
+ -ls,  --left-splice
+ -rs,  --right-splice
+ -1,   --single-ends
+ -2,   --trust-dash-2
+ -g,   --groups
+ -rnd, --random-assign
+ -mh,  --max-hits
+ -pt,  --pthreads
+ -d,   --out-directory
+ -V,   --verbose     output perl's diagnostic and warning messages
+ -q,   --quiet       supress perl's diagnostic and warning messages
+ -h,   --help        print this information
+ -m,   --manual      print the plain old documentation page
 
 =head1 REVISION
 
@@ -284,7 +290,7 @@ __END__
 
 =head1 AUTHOR
 
- Pedro Silva <psilva@nature.berkeley.edu/>
+ Pedro Silva <pedros@berkeley.edu/>
  Zilberman Lab <http://dzlab.pmb.berkeley.edu/>
  Plant and Microbial Biology Department
  College of Natural Resources
