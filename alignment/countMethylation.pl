@@ -612,7 +612,7 @@ sub count_freq {
     my ($total_unfiltered_c, $total_unfiltered_t, $total_filtered_c, $total_filtered_t);
     if ($di_nucleotide_count) {
         $total_unfiltered_c = $unfiltered{CG}{c} + $unfiltered{CA}{c} + $unfiltered{CC}{c} + $unfiltered{CT}{c};
-        $total_unfiltered_t = $unfiltered{CG}{t} + $unfiltered{CA}{t} + $unfiltered{CT}{c} + $unfiltered{CT}{t};
+        $total_unfiltered_t = $unfiltered{CG}{t} + $unfiltered{CA}{t} + $unfiltered{CT}{t} + $unfiltered{CT}{t};
 
         $total_filtered_c = $filtered{CG}{c} + $filtered{CA}{c} + $filtered{CC}{c} + $filtered{CT}{c};
         $total_filtered_t = $filtered{CG}{t} + $filtered{CA}{t} + $filtered{CC}{t} + $filtered{CT}{t};
