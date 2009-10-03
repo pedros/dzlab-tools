@@ -202,7 +202,7 @@ for (@groups) {
 }
 
 # window methylation counts into non-overlapping windows
-for my $context (0..2) {
+for my $context (0 .. @contexts - 1) {
     for my $group (@groups) {
         run_cmd ("split_gff.pl --feature all $files{freq}->{$group}") unless file_exists($files{cont}->[$context]{$group});
         run_cmd ("window_gff.pl --gff-file $files{cont}->[$context]{$group} --width 1 --output $files{cont}->[$context]{$group}.merged") unless file_exists("$files{cont}->[$context]{$group}.merged");
