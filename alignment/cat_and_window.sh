@@ -6,6 +6,8 @@ NAME=$1
 GENOME=$2
 GENES=$3
 TRANSPOSONS=$4
+contexts=$5
+shift
 shift
 shift
 shift
@@ -14,7 +16,6 @@ BATCHES=$@
 groups=`grep '>' $GENOME | perl -ne 's/>([^\s]+)//; print $1, "\n"' | tr "[:upper:]" "[:lower:]" `
 width=50
 step=50
-contexts='CG CHG CHH'
 
 echo "Concatenating single c files..."
 mkdir -p post-processing/single-c
