@@ -4,14 +4,15 @@ echo "Starting cat and window run at" `date`
 
 NAME=$1
 GENOME=$2
-GENES=$3
-TRANSPOSONS=$4
-contexts=$5
+# GENES=$3
+# TRANSPOSONS=$4
+#contexts=$5
+contexts=$3
 shift
 shift
 shift
-shift
-shift
+#shift
+#shift
 BATCHES=$@
 groups=`grep '>' $GENOME | perl -ne 's/>([^\s]+)//; print $1, "\n"' | tr "[:upper:]" "[:lower:]" `
 width=50
@@ -22,10 +23,8 @@ mkdir -p post-processing/single-c
 for i in $groups; do
     for j in $BATCHES; do
         for k in $contexts; do
-            # ls ${j}/single-c/*${i}*single-c*${k}*gff
-            # ls post-processing/single-c/${NAME}_BS-Seq_${i}_${k}_w1_methylation.gff
-            cat ${j}/single-c/*${i}*single-c*${k}*gff >> post-processing/single-c/${NAME}_BS-Seq_${i}_${k}_w1_methylation.gff
-            cat ${j}/single-c/*${i}*single-c.gff.freq >> post-processing/single-c/${NAME}_BS-Seq_${i}_methylation.freq
+            cat ${j}/single-c/*[._-]${i}[._-]*single-c*${k}*gff >> post-processing/single-c/${NAME}_BS-Seq_${i}_${k}_w1_methylation.gff
+            cat ${j}/single-c/*[._-]${i}[._-]*single-c.gff.freq >> post-processing/single-c/${NAME}_BS-Seq_${i}_methylation.freq
         done
     done
 done
@@ -36,7 +35,7 @@ echo "Done with code: $?"
 
 echo "Merging and windowing concatenated single c files"
 mkdir -p post-processing/windows
-mkdir -p post-processing/ends-analysis/dat
+#mkdir -p post-processing/ends-analysis/dat
 for i in $groups; do
     for j in $contexts; do
 
