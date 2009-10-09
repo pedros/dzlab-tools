@@ -103,7 +103,7 @@ elsif (! -d $out_dir) {
     mkpath ( File::Spec->catfile ($out_dir, 'windows'),  {verbose => 1} );
     mkpath ( File::Spec->catfile ($out_dir, 'single-c'), {verbose => 1} );
 }
-#else {warn " overwrite $out_dir"}
+else {warn " overwrite $out_dir"}
 
 unless (@contexts) {
     if ($di_nuc_freqs) {@contexts = qw(CA CC CG CT)}

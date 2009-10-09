@@ -18,6 +18,8 @@ groups=`grep '>' $GENOME | perl -ne 's/>([^\s]+)//; print $1, "\n"' | tr "[:uppe
 width=50
 step=50
 
+cd $NAME
+rm -r post-processing/single-c
 echo "Concatenating single c files..."
 mkdir -p post-processing/single-c
 for i in $groups; do
@@ -63,7 +65,7 @@ for i in $groups; do
     done
 done
 echo "Done with code: $?"
-
+cd ..
 
 
 

@@ -8,7 +8,7 @@ use Getopt::Long;
 use Carp;
 use Pod::Usage;
 
-# Globals, passed as command line options
+   # Globals, passed as command line options
 my $ratio_file = q{-};
 my $gff_annotation_file;
 my $annotation_file;

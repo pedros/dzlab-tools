@@ -207,6 +207,22 @@ sub gff_filter_by_coord {
     return \@filtered;
 }
 
+
+# this is to substitute gff_filter_by_coord
+# when it is suitably modified
+sub binary_range_search {
+    my ($range, $ranges) = @_;
+    my ($low, $high)     = (0, @{$ranges} - 1);
+    while ($low <= $high) {
+        my $try = int (($low + $high) / 2);
+        $low  = $try + 1, next if $ranges->[$try][1] < $range->[0];
+        $high = $try - 1, next if $ranges->[$try][0] > $range->[1];
+        return $ranges->[$try];
+    }
+    return;
+}
+
+
 sub gff_sort {
     my $data_ref = shift;
 
