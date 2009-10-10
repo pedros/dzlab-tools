@@ -31,6 +31,7 @@ echo "Done with code: $?"
 
 
 echo "Merging and windowing concatenated single c files"
+rm -r post-processing/windows
 mkdir -p post-processing/windows
 for i in $groups; do
     for j in $contexts; do
