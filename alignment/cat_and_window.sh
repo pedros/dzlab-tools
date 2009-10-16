@@ -20,6 +20,11 @@ mkdir -p post-processing/single-c
 for i in $groups; do
     for j in $BATCHES; do
         for k in $contexts; do
+	    for l in ${j}/single-c/*[._-]${i}[._-]*single-c*${k}*gff.merged; do
+		if [ -e "$l" ]; then
+		    mv $l `echo $i | sed s/\.merged//`
+		fi
+	    done
             cat ${j}/single-c/*[._-]${i}[._-]*single-c*${k}*gff >> post-processing/single-c/${NAME}_BS-Seq_${i}_${k}_w1_methylation.gff
         done
     done
