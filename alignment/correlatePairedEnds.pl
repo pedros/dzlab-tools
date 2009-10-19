@@ -79,7 +79,7 @@ my $result = GetOptions(
 
 # Check required command line parameters
 pod2usage ( -verbose => 1 )
-unless $result and $leftendfile and $rightendfile;
+unless $result and $leftendfile;
 
 # holds name of chromosomes as keys and length of chromosomes in bp as values
 my %reference = %{ index_fasta ($referencefile) };
@@ -92,27 +92,49 @@ if ( $output ne q{-} ) {
 # opens sequence files
 open my $LEFT,  '<', $leftendfile
 or croak "Can't open file: $leftendfile";
-open my $RIGHT, '<', $rightendfile
-or croak "Can't open file: $rightendfile";
+
+my $RIGHT;
+if ($rightendfile) {
+    open $RIGHT, '<', $rightendfile
+    or croak "Can't open file: $rightendfile";
+}
 
 while (my $leftend = <$LEFT>) {
     # reads single sequence from each file
-    my $rightend = <$RIGHT>;
+
+    my $rightend;
+    my %right;
+
+    if ($rightendfile) {
+        $rightend = <$RIGHT> ;
+        $rightend =~ s/[\r\n]//g;
+        %right = %{ parseEland3Line($rightend, $max_hits) };
+    }
 
     $leftend =~ s/[\r\n]//g;
-    $rightend =~ s/[\r\n]//g;
 
     # parses each line into hash
     my %left  = %{ parseEland3Line($leftend, $max_hits) };
-    my %right = %{ parseEland3Line($rightend, $max_hits) };
 
     # gets number of matches and sequence from hash
     my $lmatch    = $left{'matches'};
-    my $rmatch    = $right{'matches'};
     my $lsequence = $left{'sequence'};
-    my $rsequence = $right{'sequence'};
     my $lreadsize = length $lsequence;
-    my $rreadsize = length $rsequence;
+
+    my $rmatch;
+    my $rsequence;
+    my $rreadsize;
+
+    if ($rightendfile) {
+        $rmatch    = $right{'matches'};
+        $rsequence = $right{'sequence'};
+        $rreadsize = length $rsequence;
+    }
+    else {
+        $rmatch    = 0;
+        $rsequence = 0;
+        $rreadsize = 0;
+    }
 
     # initializes each gff field to default values
     my (
@@ -131,7 +153,7 @@ while (my $leftend = <$LEFT>) {
     ##### No matches on either end #####
     if ( $lmatch == 0 && $rmatch == 0 ) {
         $l_feature = $left{'line'} . q{:} . $lsequence;
-        $r_feature = $right{'line'} . q{:} . $rsequence;
+        $r_feature = $right{'line'} . q{:} . $rsequence if $rightendfile;
         $l_source  = 'NM/NM';
         $r_source  = 'NM/NM';
     }
@@ -1213,7 +1235,7 @@ while (my $leftend = <$LEFT>) {
                 $r_seqname, $r_source, $r_feature, $r_start, $r_end,
                 $r_score,   $r_strand, $r_frame,  $r_attribute ),
                 "\n"
-                unless $skip_nm and $r_score = 1;
+                unless !$rightendfile or $skip_nm and $r_score = 1;
 }
 
 # end for loop through all sequences
