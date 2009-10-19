@@ -6,7 +6,7 @@ use Data::Dumper;
 use Carp;
 use Getopt::Long;
 use Pod::Usage;
-use List::Util qw(min max);
+use List::Util qw(min max sum);
 
 my $DATA_HANDLE    = 'ARGV';
 my $gff_annotation = q{};
@@ -39,11 +39,11 @@ my $result = GetOptions (
 my $stop_flag_dispatch = {
     0 => \&stop_flag_0,
     1 => \&stop_flag_1,
-    2 => \&stop_flag_2,
+    2 => \&stop_flag_2, # implemented
     3 => \&stop_flag_3,
     4 => \&stop_flag_4,
     5 => \&stop_flag_5,
-    6 => \&stop_flag_6,
+    6 => \&stop_flag_6, # implemented
 };
 
 # Check required command line parameters
@@ -71,37 +71,38 @@ my $annotation
                              });
 print STDERR "done\n";
 
-my $gff_it = make_gff_iterator ($ARGV[0], \&gff_read);
+my $num_bins           = 2 * int ($distance / $bin_width);
+my @totals_bins        = (); # will hold the total scores per bin
+my %sorted_annotations = (); # memoized cache for sorting GFF annotation
+my $gff_iterator       = make_gff_iterator ($ARGV[0], \&gff_read);
 
-my $num_bins = 2 * int ($distance / $bin_width);
-my @totals_bins;
+COORD:
+while (my $gff_line = $gff_iterator->()) {
 
-my %sorted_annotations;
+    next COORD unless ref $gff_line eq 'HASH'; # &gff_read returns [] for GFF comments, invalid lines, etc.
 
-print STDERR 'Assigning coordinates to bins...';
-while (my $gff_line = $gff_it->()) {
+    print STDERR "Assigning coordinates to bins...$gff_line->{start}\r";
 
-    next unless ref $gff_line eq 'HASH';
-    
-    print STDERR $gff_line->{start}, "\b" x length $gff_line->{start};
     my $brs = binary_range_search (
-        [ $gff_line->{start}, $gff_line->{end} ],
-        $sorted_annotations{$gff_line->{seqname}}
-            ||= [ map { $annotation->{$gff_line->{seqname}}{$_} }
-                      sort { $a <=> $b }
-                          keys %{$annotation->{$gff_line->{seqname}}}]
-    );
-    
-    next unless $brs;
+        [ $gff_line->{start}, $gff_line->{end} ], # the range reference (look-up key); below is an array of range references to search
+        $sorted_annotations{$gff_line->{seqname}}                       # has this been done before? use it : otherwise save it and use it
+            ||= [ map { $annotation->{$gff_line->{seqname}}{$_} }       # map keys to values [start, end, strand, attribute]
+                      sort { $a <=> $b }                                # sort keys (keys are start coords)
+                          keys %{$annotation->{$gff_line->{seqname}}} ] # START HERE: get keys for seqname
+        ) || next COORD;
 
-    my $reverse
+    my $reverse # orientation of search: 5'->3' or 5'<-3' (reverse)
         = ($five_prime and $gff_line->{strand} eq q{-})
-            or ($three_prime and $gff_line->{strand} eq q{+}) || 0;
+            || ($three_prime and $gff_line->{strand} eq q{+})
+                || 0;
 
-    my $index
-        = abs int (($brs->[$reverse] - ( int ($gff_line->{end} - $gff_line->{start}) / 2 + $gff_line->{start})) / $bin_width);
-
-    $index = $reverse ? $num_bins - 1 - $index : $index;
+    # the bin index is:
+    # the gene 5' (forward) or 3' (reverse) coordinate
+    # minus the current start (forward) or end (reverse) coordinate
+    # divided by the bin width.
+    # Eg: gene 100->3500, coordinate 650 and bin width 100 is bin index |100-650|/100 = int(5.5) = 5
+    my $index = int abs ($brs->[$reverse] - ($reverse ? $gff_line->{end} : $gff_line->{start})) / $bin_width;
+    $index = $reverse ? $num_bins - 1 - $index : $index; # for 5'<=3', reverse bin index
     
     push @{$totals_bins[$index]}, $gff_line->{score};
 }
@@ -109,23 +110,22 @@ print STDERR "done\n";
 
 
 print STDERR 'Computing scores...';
+BIN:
 for my $index (0 .. $num_bins - 1) {
 
-    my $total_score;
-    unless (defined $totals_bins[$index]) {
-        $totals_bins[$index] = 'NaN';
+    if (defined $totals_bins[$index]) {
+        $totals_bins[$index] = sum (@{$totals_bins[$index]}) / @{$totals_bins[$index]};
     }
     else {
-        for my $score (0 .. @{$totals_bins[$index]} - 1) {
-            $total_score += $totals_bins[$index]->[$score];
-        }
-        $totals_bins[$index] = $total_score / @{$totals_bins[$index]};
+        $totals_bins[$index] = 'NaN';
     }
-    print $index * $num_bins - $distance, "\t", $totals_bins[$index], "\n";
+    print $index * $num_bins - $distance, "\t", sprintf("%g", $totals_bins[$index]), "\n";
 }
 print STDERR "done\n";
 
- 
+
+
+
 sub binary_range_search {
     my ($range, $ranges) = @_;
     my ($low, $high)     = (0, @{$ranges} - 1);
@@ -171,13 +171,17 @@ sub index_gff_annotation {
     my ($gff_file_name, $attribute_id) = @_;
 
     my $gff_annotation = {};
-
-    my $gff_it = make_gff_iterator ($gff_file_name, \&gff_read);
+    my $gff_iterator   = make_gff_iterator ($gff_file_name, \&gff_read);
     
-    while (my $gff_line = $gff_it->()) {
+    while (my $gff_line = $gff_iterator->()) {
 
-        $gff_line->{attribute} =~ s/.*$attribute_id[=\s]?([^;\s]+).*/$1/
-            if $attribute_id;
+        $gff_line->{attribute} =~ s/.*
+                                    $attribute_id
+                                    [=\s]?
+                                    ([^;\s]+)
+                                    .*
+                                   /$1/x
+                                       if $attribute_id;
         
         $gff_annotation->{$gff_line->{seqname}}{$gff_line->{start}}
             = [$gff_line->{start}, $gff_line->{end}, $gff_line->{strand}, $gff_line->{attribute}];
@@ -226,6 +230,43 @@ sub stop_flag_2 {
     return ($flag_start, $flag_end);
 }
 
+sub stop_flag_0 {
+    croak "Not yet implemented";
+}
+
+sub stop_flag_1 {
+    croak "Not yet implemented";
+}
+
+
+sub stop_flag_3 {
+    croak "Not yet implemented";
+}
+
+sub stop_flag_4 {
+    croak "Not yet implemented";
+}
+
+sub stop_flag_5 {
+    croak "Not yet implemented";
+}
+
+sub stop_flag_6 {
+    my ($parameters, $previous, $current, $next) = @_;
+
+    croak "Flag 6 requires the stop distance parameter (-k)"
+        unless $parameters->{-stop_distance};
+
+    my ($prev_end, $next_start) = ($previous->[1], $next->[0]);
+    my ($prev_dist, $next_dist) = ($prev_end   + $parameters->{-stop_distance},
+                                   $next_start - $parameters->{-stop_distance});
+    my ($minimum, $maximum)     = min_max_distance ($current, $parameters);
+
+    my $flag_start = max ($prev_end, $minimum, $prev_dist);
+    my $flag_end   = min ($next_start, $maximum, $next_dist);
+    
+    return ($flag_start, $flag_end);
+}
 
 sub min_max_distance {
     my ($current, $parameters) = @_;
@@ -249,40 +290,12 @@ sub min_max_distance {
     return ($minimum, $maximum);
 }
 
-
-sub stop_flag_0 {
-    croak "Not yet implemented";
-}
-
-sub stop_flag_1 {
-    croak "Not yet implemented";
-}
-
-
-sub stop_flag_3 {
-    croak "Not yet implemented";
-}
-
-sub stop_flag_4 {
-    croak "Not yet implemented";
-}
-
-sub stop_flag_5 {
-    croak "Not yet implemented";
-}
-
-sub stop_flag_6 {
-    croak "Not yet implemented";
-}
-
-
-
 __END__
 
 
 =head1 NAME
 
- name.pl - Short description
+ ends_analysis.pl - Produce histogram of GFF data scores, given a GFF annotation
 
 =head1 SYNOPSIS
 
@@ -290,7 +303,7 @@ __END__
 
 =head1 OPTIONS
 
- name.pl [OPTION]... [FILE]...
+ ends_analysis.pl [OPTION]... [FILE]...
 
  -o, --output      filename to write results to (defaults to STDOUT)
  -v, --verbose     output perl's diagnostic and warning messages
