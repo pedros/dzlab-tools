@@ -8,19 +8,18 @@ use Getopt::Long;
 use Carp;
 use Pod::Usage;
 
-   # Globals, passed as command line options
-my $ratio_file = q{-};
+# Globals, passed as command line options
+my $ratio_file           = q{-};
 my $gff_annotation_file;
-my $annotation_file;
 my $reference_file;
-my $count_CG_sites = 0;
+my $count_CG_sites       = 0;
 my $new_feature;
-my $no_add  = 0;
-my $extend_annotation = 0;
-my $gene_id_field_name = 'ID';
-my $output  = q{-};
-my $verbose = 0;
-my $quiet   = 0;
+my $no_add               = 0;
+my $extend_annotation    = 0;
+my $gene_id_field_name   = 'ID';
+my $output               = q{-};
+my $verbose              = 0;
+my $quiet                = 0;
 
 my @argv = @ARGV;
 
@@ -28,7 +27,6 @@ my @argv = @ARGV;
 my $result = GetOptions (
     'ratio-file|f=s'          => \$ratio_file,
     'gff-annotation-file|g=s' => \$gff_annotation_file,
-    'annotation-file|a=s'     => \$annotation_file,
     'reference-file|r=s'      => \$reference_file,
     'count-CG-sites|cg|c'     => \$count_CG_sites,
     'new-feature|nf'          => \$new_feature,
@@ -48,9 +46,7 @@ pod2usage(-verbose => 1) unless @argv;
 # redirects STDOUT to file if specified by user
 open STDOUT, '>', "$output" or croak "Can't redirect STDOUT to file: $output" if $output ne q{-};
 
-my %annotation = ();
-%annotation = %{index_gff_annotation ($gff_annotation_file, $gene_id_field_name)} if $gff_annotation_file;
-%annotation = %{index_generic_annotation ($annotation_file, $gene_id_field_name)} if $annotation_file;
+my %annotation = %{index_gff_annotation ($gff_annotation_file, $gene_id_field_name)} if $gff_annotation_file;
 
 my %data;
 open my $RATIO, '<', $ratio_file or croak "Can't read file: $ratio_file" if $ratio_file ne q{-};
@@ -64,11 +60,8 @@ while (<$RATIO>) {
 }
 close $RATIO;
 
-# prints out header fields that contain gff v3 header, generating program, time, and field names
-# gff_print_header ($0, @argv);
-
 my %reference = %{ index_fasta ($reference_file, $count_CG_sites) }
-if $reference_file or $count_CG_sites;
+if $reference_file and $count_CG_sites;
 
 CHROMOSOME:
 for my $chr (sort {$a cmp $b} keys %annotation) {
@@ -134,32 +127,8 @@ for my $chr (sort {$a cmp $b} keys %annotation) {
           WINDOW:
             for my $window (@range) {
                 my @fields = split /\t/, $window;
-                # my ($p, $ac, $at, $bc, $bt) = (split /;/, $fields[-1]);
-                # ($p)  = $p  =~ m/(\d+)/;
-                # ($ac) = $ac =~ m/(\d+)/;
-                # ($at) = $at =~ m/(\d+)/;
-                # ($bc) = $bc =~ m/(\d+)/;
-                # ($bt) = $bt =~ m/(\d+)/;
-
-                # my ($as, $bs) = (0, 0);
-                # $as = $ac / ($ac + $at) if $ac + $at != 0;
-                # $bs = $bc / ($bc + $bt) if $bc + $bt != 0;
-
-                # my $sc   = sprintf ("%6f", $as - $bs);
-                # $as = sprintf ("%g", $as);
-                # $bs = sprintf ("%g", $bs);
-                # my $a_ct  = sprintf ("%g", $ac + $at);
-                # my $b_ct  = sprintf ("%g", $bc + $bt);
 
                 my $attr = "$gene_id_field_name=$annotation{$chr}{$start}[2]";
-                # if ($reference_file) {
-                #     my $locus_len = $annotation{$chr}{$start}[1] - $annotation{$chr}{$start}[0] + 1;
-                #     my $cent_dist = abs ($reference{$fields[0]} - ( int (($fields[4] - $fields[3]) / 2) + $fields[3]));
-                #     $attr = "$gene_id_field_name=$annotation{$chr}{$start}[2]\t$locus_len\t$cent_dist\t$as\t$bs\t$a_ct\t$b_ct";
-                # }
-                # else {
-                #     $attr = "$as\t$bs\t$a_ct\t$b_ct";
-                # }
 
                 print join ("\t",
                             $fields[0],
@@ -167,8 +136,8 @@ for my $chr (sort {$a cmp $b} keys %annotation) {
                             $fields[2],
                             $fields[3],
                             $fields[4],
-                            q{.},
-                            q{.},
+                            $fields[5],
+                            $fields[6],
                             q{.},
                             $attr,
                         ), "\n";
@@ -247,7 +216,8 @@ sub count_sites {
 
 sub add_gff_attribute_range {
     my $range = shift;
-    my ($a_c_count, $a_t_count, $b_c_count, $b_t_count, $score, $a_score, $b_score, $context) = (0, 0, 0, 0, 0, 0, 0, q{.});
+    my ($a_c_count, $a_t_count, $b_c_count, $b_t_count, $score, $a_score, $b_score, $context)
+    = (0, 0, 0, 0, 0, 0, 0, q{.});
 
     my @attr_fields = ();
     foreach my $k (@{$range}) {
@@ -303,7 +273,6 @@ sub add_gff_attribute_range {
 }
 
 
-
 sub gff_filter_by_coord {
     my ($lower_bound, $upper_bound, $last_index_seen, $data_ref, $filter_by_score) = @_;
 
@@ -357,30 +326,12 @@ sub index_gff_annotation {
 }
 
 
-sub index_generic_annotation {
-    my $annonfile = shift;
-    open my $ANNON, '<', $annonfile or croak "Can't open $annonfile.";
-
-    my %annotation = ();
-
-    while (<$ANNON>) {
-        next if ($_ =~ m/^#.*$|^\s*$/);
-        chomp;
-        my %locus = %{annon_read ($_)};
-
-        $annotation{$locus{seqname}}{$locus{start}} = [$locus{start}, $locus{end}, $locus{locus_id}, $locus{comment}];
-    }
-    close $ANNON;
-    return \%annotation;
-}
-
 sub gff_read {
-    my ($seqname, $source, $feature, $start, $end, $score, $strand, $frame, $attribute) = split(/\t/, shift);
-
-#    $seqname =~ tr/A-Z/a-z/;
+    my ($seqname, $source, $feature, $start, $end, $score, $strand, $frame, $attribute)
+    = split(/\t/, shift);
 
     my %rec = (
-	'seqname'   => $seqname,
+	'seqname'   => lc $seqname,
 	'source'    => $source,
 	'feature'   => $feature,
 	'start'     => $start,
@@ -392,29 +343,6 @@ sub gff_read {
 	);
     return \%rec;
 }
-
-sub annon_read {
-    my ($locus_id, $comment, $start, $end, $length) = split(/\t/, shift);
-
-    $locus_id =~ m/^at(\d?)/i;
-
-    my $seqname;
-    $seqname = 'chr' . $1 if $1;
-    $seqname = $comment unless $1;
-
-
-    my %rec = (
-        'seqname'  => $seqname,
-        'locus_id' => $locus_id,
-        'comment'  => $comment,
-	'start'    => $start,
-	'end'      => $end,
-        'length'   => $length,
-    );
-
-    return \%rec;
-}
-
 
 sub index_fasta {
     my ($reference_file, $count_CG_Sites) = @_;
@@ -469,33 +397,90 @@ sub index_fasta {
     return \%reference;
 }
 
-sub gff_print_header {
-    my @call_args = @_;
-    print "##gff-version 3\n";
-    print join(' ',
-	       '#',
-	       @call_args,
-	       "\n");
-    my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = localtime (time);
-    printf "# %4d-%02d-%02d %02d:%02d:%02d\n", $year+1900, $mon+1, $mday, $hour, $min, $sec;
 
-    print join("\t",
-	       '# SEQNAME',
-	       'SOURCE',
-	       'FEATURE',
-	       'START',
-	       'END',
-	       'SCORE',
-	       'STRAND',
-	       'FRAME',
-               'LOCUSID',
-               'LOCUSLEN',
-               'WINCENTDIST',
-	       'AC/T',
-               'BC/T',
-               'AC+T',
-               'BC+T',
-	), "\n";
-    return 0;
-}
+__END__
 
+=head1 NAME
+
+ window_by_annotation.pl - Window input GFF file to GFF annotated loci
+
+=head1 VERSION
+
+ $Rev$:
+ $Author$:
+ $Date$:
+ $HeadURL$:
+ $Id$:
+
+=head1 USAGE
+
+ # window input.gff to loci in annotation.gff averaging methylation information present in attribute
+ # and reporting number of CG sites per locus present in the reference genome
+ window_by_annotation.pl -f input.gff -g annotation.gff -r reference.fasta -c
+
+ # report which locus each input window falls into. extract loci IDs using 'transcript_id' GFF attribute tag
+ window_by_annotation.pl -f input.gff -g annotation.gff -n -i transcript_id
+
+ # extend annotation.gff using the windows in input.gff that overlap each locus boundaries
+ # extract loci IDs using 'ID' GFF attribute tag
+ window_by_annotation.pl -f input.gff -g annotation.gff -e -i ID
+
+=head1 OPTIONS
+
+ window_by_annotation.pl [OPTION]... [FILE]...
+
+ -f,  --ratio-file          GFF data input file
+ -g.  --gff-annotation-file GFF annotation file
+ -r,  --reference-file      FASTA reference file
+ -c,  --count-CG-sites      compute number of CG sites per locus
+ -nf, --new-feature         substitute feature ID
+ -n,  --no-add              don't try to sum up numeric attributes
+ -e,  --extend-annotation   'reverse' windowing: extend annotations using overlapping GFF data
+ -i,  --gene-id-field-name  GFF attribute locus interest tag [ID]
+ -o, --output      filename to write results to (default is STDOUT, unless in batch mode)
+ -v, --verbose     output perl's diagnostic and warning messages
+ -q, --quiet       supress perl's diagnostic and warning messages
+ -h, --help        print this information
+ -m, --manual      print the plain old documentation page
+
+=head1 DESCRIPTION
+
+ Takes a GFF-formatted input file with methylation information on the attribute field
+ in the form c=? and t=? *or* a generic GFF data file.
+ Given an annotation file also in GFF format, windows all records in input per each locus.
+ It can also extend the annotation file using the overlapping GFF data information
+
+=head1 DIAGNOSTICS
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+=head1 DEPENDENCIES
+
+=head1 INCOMPATIBILITIES
+
+=head1 BUGS AND LIMITATIONS
+
+=head1 AUTHOR
+
+ Pedro Silva <pedros@berkeley.edu/>
+ Zilberman Lab <http://dzlab.pmb.berkeley.edu/>
+ Plant and Microbial Biology Department
+ College of Natural Resources
+ University of California, Berkeley
+
+=head1 LICENSE AND COPYRIGHT
+
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+=cut
