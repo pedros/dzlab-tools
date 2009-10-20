@@ -141,7 +141,7 @@ sub gff_sliding_window {
 	    my %current_rec = %{gff_read ($k)};
 	    my ($c_tmp, $t_tmp) = split(/;/, $current_rec{'attribute'});
 
-            if ($c_tmp and $t_tmp) {
+            if (defined $c_tmp and defined $t_tmp and $c_tmp =~ m/\d+/ and $t_tmp =~ m/\d+/) {
                 ($c_tmp) = $c_tmp =~ m/(\d+)/;
                 ($t_tmp) = $t_tmp =~ m/(\d+)/;
                 $c_count += $c_tmp;
@@ -155,7 +155,7 @@ sub gff_sliding_window {
                     $overlap_t += $t_tmp;
                 }
             }
-            elsif ($current_rec{'score'}) {
+            elsif (defined $current_rec{'score'} and $current_rec{'score'} =~ m/\d/) {
                 $score += $current_rec{'score'};
             }
             else {
