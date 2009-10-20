@@ -129,6 +129,7 @@ sub gff_sliding_window {
 
 	my ($c_count, $t_count, $score) = (0, 0, 0);
         my ($overlap_c, $overlap_t) = (0, 0);
+        my $attribute;
 
 	my @range = @{ gff_filter_by_coord ($i, $i + $width - 1, $lastrecord, $data_ref) };
 
@@ -139,33 +140,47 @@ sub gff_sliding_window {
 	foreach my $k (@range) {
 	    my %current_rec = %{gff_read ($k)};
 	    my ($c_tmp, $t_tmp) = split(/;/, $current_rec{'attribute'});
-	    ($c_tmp) = $c_tmp =~ m/(\d+)/;
-	    ($t_tmp) = $t_tmp =~ m/(\d+)/;
-            $c_count += $c_tmp;
-            $t_count += $t_tmp;
-	    $seqname = $current_rec{'seqname'};
-	    $context = $current_rec{'feature'};
-            $strand  = $current_rec{'strand'};
 
-            if ($current_rec{'start'} > $i + $step) {
-                $overlap_c += $c_tmp;
-                $overlap_t += $t_tmp;
+            if ($c_tmp and $t_tmp) {
+                ($c_tmp) = $c_tmp =~ m/(\d+)/;
+                ($t_tmp) = $t_tmp =~ m/(\d+)/;
+                $c_count += $c_tmp;
+                $t_count += $t_tmp;
+                $seqname = $current_rec{'seqname'};
+                $context = $current_rec{'feature'};
+                $strand  = $current_rec{'strand'};
+
+                if ($current_rec{'start'} > $i + $step) {
+                    $overlap_c += $c_tmp;
+                    $overlap_t += $t_tmp;
+                }
+            }
+            elsif ($current_rec{'score'}) {
+                $score += $current_rec{'score'};
+            }
+            else {
+                croak "Can't find scores or attributes that can be averaged; perhaps you want to use window_gff_by_frequency.pl";
             }
 	}
 
-	if ($c_count + $t_count != 0) {
-	    if ($c_count != 0) {$score = $c_count / ($c_count + $t_count)}
-	}
+        if ($c_count and $t_count) {
+            if ($c_count + $t_count != 0) {
+                if ($c_count != 0) {$score = $c_count / ($c_count + $t_count)}
+            }
 
-	my $attribute = "c=$c_count;t=$t_count";
-        if ($step != $width) {$attribute .= ";over_c=$overlap_c;over_t=$overlap_t"}
+            $attribute = "c=$c_count;t=$t_count";
+            if ($step != $width) {$attribute .= ";over_c=$overlap_c;over_t=$overlap_t"}
+        }
+        else {
+            $score /= @range
+        }
 
 	if (scalar(@range) == 0) {
 	    $attribute = q{.};
 	    $score     = q{.};
 	}
         else {
-            $score = sprintf("%e", $score);
+            $score = sprintf("%g", $score);
         }
 
         $strand = q{.} if $width > 1;
