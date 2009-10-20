@@ -135,9 +135,9 @@ for my $chr (sort {$a cmp $b} keys %annotation) {
                             'filtered',
                             $fields[2],
                             $fields[3],
-                            $fields[4]||q{.},
+                            $fields[4],
                             $fields[5]||q{.},
-                            $fields[6],
+                            $fields[6]||q{.},
                             q{.},
                             $attr,
                         ), "\n";
