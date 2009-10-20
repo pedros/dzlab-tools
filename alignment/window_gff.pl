@@ -129,7 +129,7 @@ sub gff_sliding_window {
 
 	my ($c_count, $t_count, $score) = (0, 0, 0);
         my ($overlap_c, $overlap_t) = (0, 0);
-        my $attribute;
+        my $attribute = q{.};
 
 	my @range = @{ gff_filter_by_coord ($i, $i + $width - 1, $lastrecord, $data_ref) };
 
