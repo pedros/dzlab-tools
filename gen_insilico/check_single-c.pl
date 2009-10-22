@@ -68,8 +68,8 @@ for my $chr (sort keys %chromosomes) {
 
 my $line_length = length $input_file;
 my $dups        = sum (values %chromosomes);
-my $unsorted    = grep { not m/$last{$_}{sorted}/ } keys %last;
-
+my $unsorted    = grep { m/$last{$_}{sorted}/ } keys %last;
+#die Dumper \%last, $unsorted;
 print q{=} x $line_length, "\n";
 print "$input_file\n";
 print q{-} x $line_length, "\n";
@@ -77,7 +77,7 @@ print "Lines:\t\t$total_lines\n";
 print "Comments:\t$total_comms\n";
 print "Bad attrs:\t$total_attrs\n";
 print "Duplicates:\t", $dups, "\t(", join (q{,}, map { "$_:$chromosomes{$_}" } sort keys %chromosomes), ")\n";
-print "Unsorted:\t", $unsorted, "\t(", join (q{,}, map { "$_" . not $last{$_}{sorted} } sort keys %last), ")\n";
+print "Unsorted:\t", $unsorted, "\t(", join (q{,}, map { "$_:" . (not $last{$_}{sorted} or 0) } sort keys %last), ")\n";
 print q{-} x $line_length, "\n";
 print "$input_file looks ", (($unsorted or $total_attrs or $dups) ? 'BAD' : 'OK'), "\n";
 print q{=} x $line_length, "\n";
