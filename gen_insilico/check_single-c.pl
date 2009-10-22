@@ -6,6 +6,7 @@ use Data::Dumper;
 use Carp;
 use Getopt::Long;
 use Pod::Usage;
+use List::Util qw /sum/;
 
 my $output;
 
@@ -64,7 +65,7 @@ print q{-} x $line_length, "\n";
 print "Lines:\t\t$total_lines\n";
 print "Comments:\t$total_comms\n";
 print "Bad attrs:\t$total_attrs\n";
-print "Duplicates:\t", join (q{,}, map { "$_:$chromosomes{$_}" } sort keys %chromosomes), "\n";
+print "Duplicates:\t", sum values %chromosomes, "total\t", join (q{,}, map { "$_:$chromosomes{$_}" } sort keys %chromosomes), "\n";
 print q{=} x $line_length, "\n";
 
 
