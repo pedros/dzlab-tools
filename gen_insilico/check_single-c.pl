@@ -32,6 +32,7 @@ my $total_lines = 0;
 my $total_comms = 0;
 my $total_attrs = 0;
 my %chromosomes = ();
+my %last;
 
 my $input_file  = $ARGV[0];
 
@@ -49,6 +50,11 @@ while (<>) {
     $total_attrs++ unless $attribute =~ m/c=\d+;t=\d+/;
     $total_lines++;
 
+    $last{$fields[0]}{highest} = $fields[3]
+    if !defined $last{$fields[0]}{highest} or $last{$fields[0]}{highest} < $fields[3];
+
+    $last{$fields[0]}{sorted} = 0
+    if defined $last{$fields[0]}{highest} and $fields[3] < $last{$fields[0]}{highest};
 }
 
 for my $chr (sort keys %chromosomes) {
@@ -57,9 +63,12 @@ for my $chr (sort keys %chromosomes) {
         $dups++ if $chromosomes{$chr}{$start} > 1;
     }
     $chromosomes{$chr} = $dups;
+    $last{$chr}{sorted} ||= 0;
 }
 
 my $line_length = length $input_file;
+my $dups        = sum (values %chromosomes);
+my $unsorted    = grep { m/$last{$_}{sorted}/ } keys %last;
 
 print q{=} x $line_length, "\n";
 print "$input_file\n";
@@ -67,10 +76,11 @@ print q{-} x $line_length, "\n";
 print "Lines:\t\t$total_lines\n";
 print "Comments:\t$total_comms\n";
 print "Bad attrs:\t$total_attrs\n";
-print "Duplicates:\t", sum (values %chromosomes), "\t(", join (q{,}, map { "$_:$chromosomes{$_}" } sort keys %chromosomes), ")\n";
+print "Duplicates:\t", $dups, "\t(", join (q{,}, map { "$_:$chromosomes{$_}" } sort keys %chromosomes), ")\n";
+print "Unsorted:\t", $unsorted, "\t(", join (q{,}, map { "$_:$last{$_}{sorted}" } sort keys %last), ")\n";
 print q{=} x $line_length, "\n";
 
-print STDERR "$input_file looks ", $total_attrs ? 'BAD' : 'OK', "\n";
+print "$input_file looks ", ($unsorted or $total_attrs or $dups ? 'BAD' : 'OK'), "\n";
 
 __END__
 
