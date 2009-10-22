@@ -7,7 +7,6 @@ use Carp;
 use Getopt::Long;
 use Pod::Usage;
 
-my $DATA_HANDLE = 'ARGV';
 my $output;
 
 # Grabs and parses command line options
@@ -28,12 +27,14 @@ if ($output) {
     select $USER_OUT;
 }
 
+print "$ARGV[0]\n";
+
 my $total_lines = 0;
 my $total_comms = 0;
 my $total_attrs = 0;
 my %chromosomes = ();
 
-while (<ARGV>) {
+while (<>) {
     if (m/^\s*#/) {
         $total_comms++;
         next;
@@ -50,7 +51,6 @@ while (<ARGV>) {
 }
 
 
-print "$ARGV[0]\n";
 print "Lines:\t$total_lines\n";
 print "Comments:\t$total_comms\n";
 print "Bad attrs:\t$total_attrs\n";
