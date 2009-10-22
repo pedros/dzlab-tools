@@ -20,30 +20,27 @@ mkdir -p post-processing/single-c
 for i in $groups; do
     for j in $BATCHES; do
         for k in $contexts; do
-	    for l in ${j}/single-c/*[._-]${i}[._-]single-c*${k}*gff.merged; do
-		if [ -e "$l" ]; then
-		    mv $l `echo $i | sed s/\.merged//`
-		fi
-	    done
             cat ${j}/single-c/*[._-]${i}[._-]single-c*${k}*gff >> post-processing/single-c/${NAME}_BS-Seq_${i}_${k}_w1_methylation.gff
+            window_gff.pl -f post-processing/single-c/${NAME}_BS-Seq_${i}_${k}_w1_methylation.gff -w 1 -s 1 >> post-processing/single-c/${NAME}_BS-Seq_${i}_${k}_w1_methylation.gff.merged
+            mv post-processing/single-c/${NAME}_BS-Seq_${i}_${k}_w1_methylation.gff.merged post-processing/single-c/${NAME}_BS-Seq_${i}_${k}_w1_methylation.gff
         done
     done
-    for k in $contexts; do
-        cat  post-processing/single-c/${NAME}_BS-Seq_${i}_${k}_w1_methylation.gff >> post-processing/single-c/${NAME}_BS-Seq_all_${k}_w1_methylation.gff
-    done
+    # for k in $contexts; do
+    #     cat  post-processing/single-c/${NAME}_BS-Seq_${i}_${k}_w1_methylation.gff >> post-processing/single-c/${NAME}_BS-Seq_all_${k}_w1_methylation.gff
+    # done
 done
 echo "Done with code: $?"
 
 
-echo "Merging and windowing concatenated single c files"
-#rm -r post-processing/windows
-mkdir -p post-processing/windows
-for i in $groups; do
-    for j in $contexts; do
-        window_gff.pl --gff-file post-processing/single-c/${NAME}_BS-Seq_${i}_${j}_w1_methylation.gff --width ${width} --step ${step} --no-skip --output post-processing/windows/${NAME}_BS-Seq_${i}_${j}_w${width}_methylation.gff
-        cat post-processing/windows/${NAME}_BS-Seq_${i}_${j}_w${width}_methylation.gff >> post-processing/windows/${NAME}_BS-Seq_all_${j}_w${width}_methylation.gff
-    done
-done
+# echo "Merging and windowing concatenated single c files"
+# #rm -r post-processing/windows
+# mkdir -p post-processing/windows
+# for i in $groups; do
+#     for j in $contexts; do
+#         window_gff.pl --gff-file post-processing/single-c/${NAME}_BS-Seq_${i}_${j}_w1_methylation.gff --width ${width} --step ${step} --no-skip --output post-processing/windows/${NAME}_BS-Seq_${i}_${j}_w${width}_methylation.gff
+# #        cat post-processing/windows/${NAME}_BS-Seq_${i}_${j}_w${width}_methylation.gff >> post-processing/windows/${NAME}_BS-Seq_all_${j}_w${width}_methylation.gff
+#     done
+# done
 echo "Done with code: $?"
 cd ..
 
