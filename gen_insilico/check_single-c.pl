@@ -27,12 +27,14 @@ if ($output) {
     select $USER_OUT;
 }
 
-print "$ARGV[0]\n";
-
 my $total_lines = 0;
 my $total_comms = 0;
 my $total_attrs = 0;
 my %chromosomes = ();
+
+my $line_length = length $ARGV[0];
+print q{=} x $line_length, "\n";
+print "$ARGV[0]\n";
 
 while (<>) {
     if (m/^\s*#/) {
@@ -43,18 +45,27 @@ while (<>) {
 
     my @fields = split /\t/, $_;
     my $attribute = $fields[-1];
-    $chromosomes{$fields[0]}++;
+    $chromosomes{$fields[0]}{$fields[3]}++;
 
     $total_attrs++ unless $attribute =~ m/c=\d+;t=\d+/;
     $total_lines++;
 
 }
 
+for my $chr (sort keys %chromosomes) {
+    my $dups = 0;
+    for my $start (keys %{$chromosomes{$chr}}) {
+        $dups++ if $chromosomes{$chr}{$start} > 1;
+    }
+    $chromosomes{$chr} = $dups;
+}
 
-print "Lines:\t$total_lines\n";
+print q{-} x $line_length, "\n";
+print "Lines:\t\t$total_lines\n";
 print "Comments:\t$total_comms\n";
 print "Bad attrs:\t$total_attrs\n";
-print "Chromosomes:\t", join q{,}, sort keys %chromosomes, "\n";
+print "Duplicates:\t", join (q{,}, map { "$_:$chromosomes{$_}" } sort keys %chromosomes), "\n";
+print q{=} x $line_length, "\n";
 
 
 __END__
