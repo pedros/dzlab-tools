@@ -53,7 +53,8 @@ while (<>) {
     $last{$fields[0]}{highest} = $fields[3]
     if !defined $last{$fields[0]}{highest} or $last{$fields[0]}{highest} < $fields[3];
 
-    $last{$fields[0]}{sorted} = 1 if !defined $last{$fields[0]}{sorted};
+    $last{$fields[0]}{sorted} = 1
+    if !defined $last{$fields[0]}{sorted};
 
     $last{$fields[0]}{sorted} = 0
     if defined $last{$fields[0]}{highest} and $fields[3] < $last{$fields[0]}{highest};
@@ -65,13 +66,12 @@ for my $chr (sort keys %chromosomes) {
         $dups++ if $chromosomes{$chr}{$start} > 1;
     }
     $chromosomes{$chr} = $dups;
-    $last{$chr}{sorted} = 1 if !defined $last{$chr}{sorted};
 }
 
 my $line_length = length $input_file;
 my $dups        = sum (values %chromosomes);
-my $unsorted    = grep { m/$last{$_}{sorted}/ == 0 } keys %last;
-#die Dumper \%last, $unsorted;
+my $unsorted    = grep { $last{$_}{sorted} != 1 } keys %last;
+
 print q{=} x $line_length, "\n";
 print "$input_file\n";
 print q{-} x $line_length, "\n";
