@@ -13,8 +13,10 @@ unless @ARGV;
 
 # Grabs and parses command line options
 my $reference;
+my $filter;
 my $result = GetOptions (
     'reference|r=s' => \$reference,
+    'filter|f'      => \$filter,
     'verbose|v'     => sub { use diagnostics; },
     'quiet|q'       => sub { no warnings; },
     'help|h'        => sub { pod2usage ( -verbose => 1 ); },
@@ -31,12 +33,13 @@ while (<>) {
 
     my $length = $site{end} - $site{start};
 
-    next if $site{attribute} eq q{.}
-    or $length <= 50
-    or $length >= 300;
+    # next if $filter
+    # and $site{attribute} eq q{.}
+    # or $length <= 50
+    # or $length >= 300;
 
     my ($attribute)
-    = $site{attribute} =~ m/gene=.*[*]([\w#\/]+:[-]*\d+:\w+)?.*/;
+    = $site{attribute} =~ m/ID=([^;]+);/;
     $attribute =~ s/:/|/;
 
     print ">$attribute $site{seqname}:$site{start}:$site{end}\n";
