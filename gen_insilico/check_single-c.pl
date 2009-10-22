@@ -42,7 +42,7 @@ while (<ARGV>) {
 
     my @fields = split /\t/, $_;
     my $attribute = $fields[-1];
-    my $chromosomes{$fields[0]}++;
+    $chromosomes{$fields[0]}++;
 
     $total_attrs++ unless $attribute =~ m/c=\d+;t=\d+/;
     $total_lines++;
@@ -54,7 +54,7 @@ print "$ARGV[0]\n";
 print "Lines:\t$total_lines\n";
 print "Comments:\t$total_comms\n";
 print "Bad attrs:\t$total_attrs\n";
-print "Chromosomes:\t", join ", " sort keys %chromosomes, "\n";
+print "Chromosomes:\t", join q{,}, sort keys %chromosomes, "\n";
 
 
 __END__
