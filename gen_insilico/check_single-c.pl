@@ -68,7 +68,7 @@ for my $chr (sort keys %chromosomes) {
 
 my $line_length = length $input_file;
 my $dups        = sum (values %chromosomes);
-my $unsorted    = grep { m/$last{$_}{sorted}/ } keys %last;
+my $unsorted    = grep { m/$last{$_}{sorted}/ == 0 } keys %last;
 #die Dumper \%last, $unsorted;
 print q{=} x $line_length, "\n";
 print "$input_file\n";
