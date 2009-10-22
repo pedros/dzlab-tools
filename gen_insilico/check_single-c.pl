@@ -33,9 +33,7 @@ my $total_comms = 0;
 my $total_attrs = 0;
 my %chromosomes = ();
 
-my $line_length = length $ARGV[0];
-print q{=} x $line_length, "\n";
-print "$ARGV[0]\n";
+my $input_file  = $ARGV[0];
 
 while (<>) {
     if (m/^\s*#/) {
@@ -61,13 +59,18 @@ for my $chr (sort keys %chromosomes) {
     $chromosomes{$chr} = $dups;
 }
 
+my $line_length = length $input_file;
+
+print q{=} x $line_length, "\n";
+print "$input_file\n";
 print q{-} x $line_length, "\n";
 print "Lines:\t\t$total_lines\n";
 print "Comments:\t$total_comms\n";
 print "Bad attrs:\t$total_attrs\n";
-print "Duplicates:\t", sum values %chromosomes, "total\t", join (q{,}, map { "$_:$chromosomes{$_}" } sort keys %chromosomes), "\n";
+print "Duplicates:\t", sum (values %chromosomes), "\t(", join (q{,}, map { "$_:$chromosomes{$_}" } sort keys %chromosomes), ")\n";
 print q{=} x $line_length, "\n";
 
+print STDERR "$input_file looks ", $total_attrs ? 'BAD' : 'OK', "\n";
 
 __END__
 
