@@ -53,6 +53,8 @@ while (<>) {
     $last{$fields[0]}{highest} = $fields[3]
     if !defined $last{$fields[0]}{highest} or $last{$fields[0]}{highest} < $fields[3];
 
+    $last{$fields[0]}{sorted} = 1 if !defined $last{$fields[0]}{sorted};
+
     $last{$fields[0]}{sorted} = 0
     if defined $last{$fields[0]}{highest} and $fields[3] < $last{$fields[0]}{highest};
 }
