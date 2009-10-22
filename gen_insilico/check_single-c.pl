@@ -63,12 +63,12 @@ for my $chr (sort keys %chromosomes) {
         $dups++ if $chromosomes{$chr}{$start} > 1;
     }
     $chromosomes{$chr} = $dups;
-    $last{$chr}{sorted} ||= 1;
+    $last{$chr}{sorted} = 1 if !defined $last{$chr}{sorted};
 }
 
 my $line_length = length $input_file;
 my $dups        = sum (values %chromosomes);
-my $unsorted    = grep { m/$last{$_}{sorted}/ } keys %last;
+my $unsorted    = grep { not m/$last{$_}{sorted}/ } keys %last;
 
 print q{=} x $line_length, "\n";
 print "$input_file\n";
