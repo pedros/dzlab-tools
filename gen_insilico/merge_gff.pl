@@ -12,10 +12,11 @@ pod2usage ( -verbose => 1 )
 unless @ARGV;
 
 my $GFF_DATA   = 'ARGV';
-my $distance   = 50;
+my $distance   = 65535;
 my $sort       = 0;
 my $use_scores = 0;
 my $log_scores = 0;
+my $max_gap    = 1;
 my $feature;
 my $output;
 
@@ -25,6 +26,7 @@ my $result = GetOptions (
     'sort|s'       => \$sort,
     'use-scores|u' => \$use_scores,
     'log-scores|l' => \$log_scores,
+    'max-gap|g=i'  => \$max_gap,
     'feature|f=s'  => \$feature,
     'output|o=s'   => \$output,
     'verbose|v'    => sub { use diagnostics; },
@@ -48,7 +50,6 @@ if ($sort) {
 
 # one-step buffer
 my $previous = undef;
-
 print STDERR 'Merging...';
 while (<$GFF_DATA>) {
 
@@ -58,7 +59,6 @@ while (<$GFF_DATA>) {
 
     my $current = gff_read ($_);
 
-    # check empty windows
     $current->{empty} = ($current->{score} =~ m/\d/ ? 0 : 1)
     if $use_scores;
 
@@ -67,51 +67,83 @@ while (<$GFF_DATA>) {
 
     # if buffer has been flushed, or not initialized
     if (!defined $previous) {
-        $previous = $current;
-        $previous->{last} = $current->{end} unless $current->{empty};
+
+        if ($current->{empty}) { # just print out window if empty
+            gff_print ($current, $feature, $use_scores, $log_scores);
+        }
+        else { # otherwise start filling buffer, and keep track of end and start
+            $previous         = $current;
+            $previous->{last} = $current->{end};
+        }
+
     }
 
     # adjacency rules: two windows in same chromosome, separated by at most $distance
-    # and with no two adjacent empty windows, are concatenated into one large window
+    # and with no $max_gap adjacent empty windows are concatenated into one large window
     elsif ($previous->{seqname} =~ m/$current->{seqname}/i
            and $current->{start} - $previous->{end} <= $distance
-           and ($use_scores == 0 || $previous->{empty} == 0 or $current->{empty} == 0)) {
+           and ($previous->{empty} <= $max_gap)) {
 
-        $previous->{start} = $current->{start}
-        if $previous->{empty};
+        # if very first window in buffer was empty and current window is not
+        # this is the actual start of the extended region
+        # $previous->{first} = $current->{start} 
+        # unless $current->{empty} or $previous->{first};
 
         # extend buffered read to current read's length
         $previous->{end} = $current->{end}
         unless $current->{end} <= $previous->{end};
 
+        # mark this end coord as good is read is not empty
+        $previous->{last} = $current->{end}
+        unless $current->{empty};
+
+        push @{$previous->{to_print}}, $current
+        if $current->{empty};
+
         # concatenate current read's attributes to buffered read
         $previous->{attribute} .= q{; } . $current->{attribute}
-        if defined $current->{attribute} and $current->{attribute} ne q{.}
-        and $current->{attribute} ne q{};
+        if defined $current->{attribute} and $current->{attribute} !~ m/^\.?$/;
 
         if ($use_scores) {
-            if ($log_scores) {
-                $previous->{total} += 2 ** $current->{score} unless $current->{empty};
+            if ($log_scores) { # convert log_2 scores to proper ones if necessary
+                $previous->{score} += 2 ** $current->{score} unless $current->{empty};
             }
-            else {
-                $previous->{total} += $current->{score} unless $current->{empty};
+            else {             # and keep track of total accumulated scores
+                $previous->{score} += $current->{score} unless $current->{empty};
             }
-            $previous->{score}  = $current->{score};
-            $previous->{empty}  = $current->{empty};
-            $previous->{last}   = $current->{end} unless $current->{empty};
         }
+        # if this is a consecutive empty window, accumulate; otherwise, reset
+        $previous->{empty} = $current->{empty} ? $previous->{empty} + $current->{empty} : 0;
     }
 
     # print and flush buffer
     else {
+        # print buffer up to the last non-empty window coordinate
         $previous->{end} = $previous->{last} if $previous->{last};
         gff_print ($previous, $feature, $use_scores, $log_scores);
-        $previous = undef;
-        $previous = $current unless $previous->{empty};
+        
+        # print all remaining empty windows saved in buffer
+        # that actually come after the last printed one
+        for (@{$previous->{to_print}}) {
+            gff_print ($_, $feature, $use_scores, $log_scores)
+            if $_->{start} > $previous->{end}
+        }
+
+        # print the current window if it is empty and reset buffer
+        if ($current->{empty}) {
+            gff_print ($current, $feature, $use_scores, $log_scores);
+            $previous = undef;
+        }
+        # or reset and start buffering windows if current is not empty
+        else {
+            $previous = $current;
+        }
     }
 }
 
-gff_print ($previous, $feature) if defined $previous;
+# flush buffer if there is still something there
+gff_print ($previous, $feature, $use_scores, $log_scores)
+if defined $previous;
 
 print STDERR "done\n";
 ## done
@@ -121,23 +153,20 @@ print STDERR "done\n";
 sub gff_print {
     my ($gff_line, $feature, $use_scores, $log_scores) = @_;
 
-
     $gff_line->{feature}   = $feature || "merged_$gff_line->{feature}";
     $gff_line->{attribute} =~ s/([;=])\s+/$1/g;
     $gff_line->{attribute} =~ s/;/; /g;
 
     if ($use_scores) {
-        $gff_line->{total} = 0 unless defined $gff_line->{total};
 
         if ($log_scores) {
             $gff_line->{score}
-            = sprintf ("%g", ($gff_line->{total} == 0 ? 1 : log ($gff_line->{total}) / log (2)))
+            = sprintf ("%g", ($gff_line->{score} == 0 ? 1 : log ($gff_line->{score}) / log (2)))
         }
-        else {$gff_line->{score} = $gff_line->{total}}
 
-        $gff_line->{score} = q{.} unless $gff_line->{total};
+        $gff_line->{score} ||= q{.};
 
-        $gff_line->{attribute} = s/^\.$//;
+        $gff_line->{attribute} =~ s/^\.$//;
         $gff_line->{attribute} .= 'length=' . ($gff_line->{end} - $gff_line->{start} + 1);
     }
 
@@ -222,7 +251,7 @@ __END__
 
 =head1 OPTIONS
 
- merge_gff.pl [OPTION]... [FILE]...
+ merge_gff.pl [OPTION]... [FILES]...
 
  -d, --distance    maximum distance between adjacent features to be merged
  -s, --sort        sort input files by sequence name and starting coordinate
