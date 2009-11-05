@@ -316,10 +316,10 @@ sub index_gff_annotation {
 
         if (!defined $locus_id) {
             ($locus_id, undef) = split /;/, $locus{attribute};
-            $locus_id =~ s/["\t\r\n]//g;
+            $locus_id ||= q{.};
         }
         else {
-            $locus_id = q{.};
+            $locus_id =~ s/["\t\r\n]//g;
         }
 
         $annotation{$locus{seqname}}{$locus{start}}
