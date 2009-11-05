@@ -63,7 +63,7 @@ while (<$GFF_DATA>) {
     if $use_scores;
 
     $current->{empty} = 1
-    if !$log_scores and $current->{score} == 0;
+    if !$log_scores and $current->{score} =~ m/\d/ and $current->{score} == 0;
 
     # if buffer has been flushed, or not initialized
     if (!defined $previous) {
