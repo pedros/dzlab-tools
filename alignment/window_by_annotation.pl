@@ -109,7 +109,7 @@ for my $chr (sort {$a cmp $b} keys %annotation) {
             print join ("\t",
                         $chr,
                         $annotation{$chr}{$start}[4],
-                        $annotation{$chr}{$start}[5],
+                        ($new_feature||$annotation{$chr}{$start}[5]),
                         $annotation{$chr}{$start}[0],
                         $annotation{$chr}{$start}[1],
                         q{.},
@@ -128,13 +128,15 @@ for my $chr (sort {$a cmp $b} keys %annotation) {
             for my $window (@range) {
                 my @fields = split /\t/, $window;
 
-                my $attr = "$gene_id_field_name=$annotation{$chr}{$start}[2]";
+                my $attr = q{.};
+                $attr = "$gene_id_field_name=$annotation{$chr}{$start}[2]"
+                if $annotation{$chr}{$start}[2] ne q{.};
 
                 print join ("\t",
                             $fields[0],
                             'filtered',
                             $fields[2],
-                            $fields[3],
+                            ($new_feature||$fields[3]),
                             $fields[4],
                             $fields[5]||q{.},
                             $fields[6]||q{.},
@@ -314,9 +316,11 @@ sub index_gff_annotation {
 
         if (!defined $locus_id) {
             ($locus_id, undef) = split /;/, $locus{attribute};
+            $locus_id =~ s/["\t\r\n]//g;
         }
-
-        $locus_id =~ s/["\t\r\n]//g;
+        else {
+            $locus_id = q{.};
+        }
 
         $annotation{$locus{seqname}}{$locus{start}}
         = [$locus{start}, $locus{end}, $locus_id, $locus{strand}, $locus{source}, $locus{feature}, $locus{attribute}];
