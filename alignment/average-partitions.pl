@@ -48,7 +48,7 @@ for my $list (@lists) {
 	my ($gene_id, undef) = split /\t/, $gene;
 
         unless (exists $genes->{$gene_id}) {
-            carp "Can't find $gene_id in $list";
+            print STDERR "Can't find ID $gene_id in ", (split m{/}, $gene_methylation_file)[-1];
             next GENE;
         }
 
