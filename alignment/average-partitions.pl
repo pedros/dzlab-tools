@@ -41,18 +41,16 @@ for my $list (@lists) {
 	= (0, 0, 0, 0, 0, 0, 0, 0);
 
     open my $LIST, '<', $list or croak "Can't open $list";
+  GENE:
     while (my $gene = <$LIST>) {
 
 	chomp $gene;
 	my ($gene_id, undef) = split /\t/, $gene;
 
-        # print join ("\t",
-        #             $gene_id,
-        #             $genes->{$gene_id}->[1],
-	# 	    $genes->{$gene_id}->[2],
-	# 	    ($genes->{$gene_id}->[1] * $genes->{$gene_id}->[3]),
-	# 	    $genes->{$gene_id}->[3] - ($genes->{$gene_id}->[1] * $genes->{$gene_id}->[3]),
-	#     ), "\n"; next;
+        unless (exists $genes->{$gene_id}) {
+            carp "Can't find $gene_id in $list";
+            next GENE;
+        }
 
 	$total_length += $genes->{$gene_id}->[0];
 	$total_score  += $genes->{$gene_id}->[1];
@@ -68,10 +66,10 @@ for my $list (@lists) {
     }
     close $LIST;
 
-    my $arithmetic_mean  = $total_score / $total_genes;
-    my $fractional_meth  = $total_c / ($total_c + $total_t);
-    my $cg_adjusted_mean = $total_cg_adjusted_score / $total_cgsite;
-
+    my $arithmetic_mean  = ($total_genes ? $total_score / $total_genes : 'NaN');
+    my $fractional_meth  = ($total_c or $total_t ? $total_c / ($total_c + $total_t) : 'NaN');
+    my $cg_adjusted_mean = ($total_cgsite ? $total_cg_adjusted_score / $total_cgsite : 'NaN');
+    
     print join ("\t",
                 $i++,
                 $arithmetic_mean,
@@ -80,6 +78,7 @@ for my $list (@lists) {
                 $total_length,
                 $total_genes,
             ), "\n";
+
 }
 
 
@@ -87,8 +86,9 @@ for my $list (@lists) {
 sub index_gff_annotation {
     my ($annotation_file, $gene_id_field_name) = @_;
 
-    open my $GFFH, '<', $annotation_file or croak "Can't read file: $annotation_file";
     my %annotation = ();
+
+    open my $GFFH, '<', $annotation_file or croak "Can't read file: $annotation_file";
     while (<$GFFH>) {
         next if ($_ =~ m/^#.*$|^\s*$/);
         chomp;
@@ -97,23 +97,21 @@ sub index_gff_annotation {
         next if $locus{feature} eq q{.};
 
         my ($locus_id) = $locus{attribute} =~ m/.* $gene_id_field_name [\s=] "? (\w*\d*) "?/x;
-        # ($locus_id) = $locus{attribute} =~ m/.* transcript_id [\s=] "? (\w*\d*) "?/x
-        # unless defined $locus_id;
-
         my ($CG_sites) = $locus{attribute} =~ m/.* total_CG_sites [=\s] "? ([^;]+) "?/x;
         my ($ct_sites) = $locus{attribute} =~ m/.* total_ct [=\s] "? ([^;]+) "?/x;
 
-        next unless $CG_sites and $ct_sites;
+        unless (defined $locus_id) {
+            ($locus_id, undef, undef) = split /;/, $locus{attribute}
+            $locus_id =~ s/["\t\r\n]//g;
+        }
 
-        ($locus_id, undef, undef) = split /;/, $locus{attribute}
-        unless defined $locus_id;
-        
-        $locus_id =~ s/["\t\r\n]//g;
+        next unless $CG_sites and $ct_sites;
 
         $annotation{$locus_id}
         = [ ($locus{end} - $locus{start} + 1), $locus{score}, $CG_sites, $ct_sites ];
     }
     close $GFFH;
+
     return \%annotation;
 }
 
