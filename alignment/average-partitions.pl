@@ -66,6 +66,7 @@ for my $list (@lists) {
         $total_t += $genes->{$gene_id}->[3] - ($genes->{$gene_id}->[1] * $genes->{$gene_id}->[3]);
 
     }
+    close $LIST;
 
     my $arithmetic_mean  = $total_score / $total_genes;
     my $fractional_meth  = $total_c / ($total_c + $total_t);
@@ -96,14 +97,15 @@ sub index_gff_annotation {
         next if $locus{feature} eq q{.};
 
         my ($locus_id) = $locus{attribute} =~ m/.* $gene_id_field_name [\s=] "? (\w*\d*) "?/x;
-        ($locus_id) = $locus{attribute} =~ m/.* transcript_id [\s=] "? (\w*\d*) "?/x
-        unless defined $locus_id;
+        # ($locus_id) = $locus{attribute} =~ m/.* transcript_id [\s=] "? (\w*\d*) "?/x
+        # unless defined $locus_id;
 
         my ($CG_sites) = $locus{attribute} =~ m/.* total_CG_sites [=\s] "? ([^;]+) "?/x;
-
         my ($ct_sites) = $locus{attribute} =~ m/.* total_ct [=\s] "? ([^;]+) "?/x;
 
-        ($locus_id, undef) = split /;/, $locus{attribute}
+        next unless $CG_sites and $ct_sites;
+
+        ($locus_id, undef, undef) = split /;/, $locus{attribute}
         unless defined $locus_id;
         
         $locus_id =~ s/["\t\r\n]//g;
