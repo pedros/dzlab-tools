@@ -1,0 +1,192 @@
+#!/usr/bin/perl
+
+use warnings;
+use strict;
+use Data::Dumper;
+use Carp;
+use Getopt::Long;
+use Pod::Usage;
+
+# Check required command line parameters
+pod2usage ( -verbose => 1 )
+unless @ARGV;
+
+my @lists = ();
+my $gene_methylation_file;
+my $gene_id_field_name = 'ID';
+my $output;
+
+# Grabs and parses command line options
+my $result = GetOptions (
+    'annotation-file|a=s' => \$gene_methylation_file,
+    'lists|l=s{,}'  => \@lists,
+    'output|o=s'    => \$output,
+    'verbose|v'     => sub { use diagnostics; },
+    'quiet|q'       => sub { no warnings; },
+    'help|h'        => sub { pod2usage ( -verbose => 1 ); },
+    'manual|m'      => sub { pod2usage ( -verbose => 2 ); }
+);
+
+if ($output) {
+    open my $USER_OUT, '>', $output or carp "Can't open $output for writing: $!";
+    select $USER_OUT;
+}
+
+my $genes = index_gff_annotation ($gene_methylation_file, $gene_id_field_name);
+
+my $i = 1;
+for my $list (@lists) {
+
+    my ($total_length, $total_score, $total_cgsite, $total_ctsite, $total_cg_adjusted_score, $total_genes, $total_c, $total_t)
+	= (0, 0, 0, 0, 0, 0, 0, 0);
+
+    open my $LIST, '<', $list or croak "Can't open $list";
+    while (my $gene = <$LIST>) {
+
+	chomp $gene;
+	my ($gene_id, undef) = split /\t/, $gene;
+
+        # print join ("\t",
+        #             $gene_id,
+        #             $genes->{$gene_id}->[1],
+	# 	    $genes->{$gene_id}->[2],
+	# 	    ($genes->{$gene_id}->[1] * $genes->{$gene_id}->[3]),
+	# 	    $genes->{$gene_id}->[3] - ($genes->{$gene_id}->[1] * $genes->{$gene_id}->[3]),
+	#     ), "\n"; next;
+
+	$total_length += $genes->{$gene_id}->[0];
+	$total_score  += $genes->{$gene_id}->[1];
+	$total_cgsite += $genes->{$gene_id}->[2];
+	$total_ctsite += $genes->{$gene_id}->[3];
+        $total_cg_adjusted_score += $genes->{$gene_id}->[1] * $genes->{$gene_id}->[2];
+
+        $total_genes++;
+
+        $total_c += ($genes->{$gene_id}->[1] * $genes->{$gene_id}->[3]);
+        $total_t += $genes->{$gene_id}->[3] - ($genes->{$gene_id}->[1] * $genes->{$gene_id}->[3]);
+
+    }
+
+    my $arithmetic_mean  = $total_score / $total_genes;
+    my $fractional_meth  = $total_c / ($total_c + $total_t);
+    my $cg_adjusted_mean = $total_cg_adjusted_score / $total_cgsite;
+
+    print join ("\t",
+                $i++,
+                $arithmetic_mean,
+                $fractional_meth,
+                $cg_adjusted_mean,
+                $total_length,
+                $total_genes,
+            ), "\n";
+}
+
+
+
+sub index_gff_annotation {
+    my ($annotation_file, $gene_id_field_name) = @_;
+
+    open my $GFFH, '<', $annotation_file or croak "Can't read file: $annotation_file";
+    my %annotation = ();
+    while (<$GFFH>) {
+        next if ($_ =~ m/^#.*$|^\s*$/);
+        chomp;
+        my %locus = %{gff_read ($_)};
+
+        next if $locus{feature} eq q{.};
+
+        my ($locus_id) = $locus{attribute} =~ m/.* $gene_id_field_name [\s=] "? (\w*\d*) "?/x;
+        ($locus_id) = $locus{attribute} =~ m/.* transcript_id [\s=] "? (\w*\d*) "?/x
+        unless defined $locus_id;
+
+        my ($CG_sites) = $locus{attribute} =~ m/.* total_CG_sites [=\s] "? ([^;]+) "?/x;
+
+        my ($ct_sites) = $locus{attribute} =~ m/.* total_ct [=\s] "? ([^;]+) "?/x;
+
+        ($locus_id, undef) = split /;/, $locus{attribute}
+        unless defined $locus_id;
+        
+        $locus_id =~ s/["\t\r\n]//g;
+
+        $annotation{$locus_id}
+        = [ ($locus{end} - $locus{start} + 1), $locus{score}, $CG_sites, $ct_sites ];
+    }
+    close $GFFH;
+    return \%annotation;
+}
+
+sub gff_read {
+    my ($seqname, $source, $feature, $start, $end, $score, $strand, $frame, $attribute) = split(/\t/, shift);
+
+    $seqname =~ tr/A-Z/a-z/;
+
+    my %rec = (
+        'seqname'   => $seqname,
+        'source'    => $source,
+        'feature'   => $feature,
+        'start'     => $start,
+        'end'       => $end,
+        'score'     => $score,
+        'strand'    => $strand,
+        'frame'     => $strand,
+        'attribute' => $attribute
+    );
+    return \%rec;
+}
+
+
+__END__
+
+
+=head1 NAME
+
+ name.pl - Short description
+
+=head1 SYNOPSIS
+
+=head1 DESCRIPTION
+
+=head1 OPTIONS
+
+ name.pl [OPTION]... [FILE]...
+
+ -o, --output      filename to write results to (defaults to STDOUT)
+ -v, --verbose     output perl's diagnostic and warning messages
+ -q, --quiet       supress perl's diagnostic and warning messages
+ -h, --help        print this information
+ -m, --manual      print the plain old documentation page
+
+=head1 REVISION
+
+ Version 0.0.1
+
+ $Rev: $:
+ $Author: $:
+ $Date: $:
+ $HeadURL: $:
+ $Id: $:
+
+=head1 AUTHOR
+
+ Pedro Silva <psilva@nature.berkeley.edu/>
+ Zilberman Lab <http://dzlab.pmb.berkeley.edu/>
+ Plant and Microbial Biology Department
+ College of Natural Resources
+ University of California, Berkeley
+
+=head1 COPYRIGHT
+
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+=cut
