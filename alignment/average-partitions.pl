@@ -101,7 +101,7 @@ sub index_gff_annotation {
         my ($ct_sites) = $locus{attribute} =~ m/.* total_ct [=\s] "? ([^;]+) "?/x;
 
         unless (defined $locus_id) {
-            ($locus_id, undef, undef) = split /;/, $locus{attribute}
+            ($locus_id, undef, undef) = split /;/, $locus{attribute};
             $locus_id =~ s/["\t\r\n]//g;
         }
 
