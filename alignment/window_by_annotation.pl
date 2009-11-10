@@ -17,6 +17,7 @@ my $new_feature;
 my $no_add               = 0;
 my $extend_annotation    = 0;
 my $gene_id_field_name   = 'ID';
+my $min_score            = 0;
 my $output               = q{-};
 my $verbose              = 0;
 my $quiet                = 0;
@@ -29,10 +30,11 @@ my $result = GetOptions (
     'gff-annotation-file|g=s' => \$gff_annotation_file,
     'reference-file|r=s'      => \$reference_file,
     'count-CG-sites|cg|c'     => \$count_CG_sites,
-    'new-feature|nf'          => \$new_feature,
+    'new-feature|nf=s'        => \$new_feature,
     'no-add|n'                => \$no_add,
     'extend-annotation|e'     => \$extend_annotation,
     'gene-id-field-name|i=s'  => \$gene_id_field_name,
+    'min-score|s=i'           => \$min_score,
     'output|o:s'              => \$output,
     'verbose|v'               => sub {enable diagnostics;use warnings;},
     'quiet|q'                 => sub {disable diagnostics;no warnings;},
@@ -71,7 +73,7 @@ for my $chr (sort {$a cmp $b} keys %annotation) {
   ANNOTATION:
     for my $start (sort {$a <=> $b} keys %{$annotation{$chr}}) {
  
-        my @range = @{ gff_filter_by_coord ($start, $annotation{$chr}{$start}[1], $last_record, \@{$data{$chr}}, 'filter_by_score') };
+        my @range = @{ gff_filter_by_coord ($start, $annotation{$chr}{$start}[1], $last_record, \@{$data{$chr}}, $min_score) };
 
 	$last_record = shift @range;
         
@@ -109,7 +111,7 @@ for my $chr (sort {$a cmp $b} keys %annotation) {
             print join ("\t",
                         $chr,
                         $annotation{$chr}{$start}[4],
-                        ($new_feature||$annotation{$chr}{$start}[5]),
+                        $new_feature||=$annotation{$chr}{$start}[5],
                         $annotation{$chr}{$start}[0],
                         $annotation{$chr}{$start}[1],
                         q{.},
@@ -135,8 +137,8 @@ for my $chr (sort {$a cmp $b} keys %annotation) {
                 print join ("\t",
                             $fields[0],
                             'filtered',
-                            $fields[2],
-                            ($new_feature||$fields[3]),
+                            $new_feature||$fields[2],
+                            $fields[3],
                             $fields[4],
                             $fields[5]||q{.},
                             $fields[6]||q{.},
@@ -276,7 +278,7 @@ sub add_gff_attribute_range {
 
 
 sub gff_filter_by_coord {
-    my ($lower_bound, $upper_bound, $last_index_seen, $data_ref, $filter_by_score) = @_;
+    my ($lower_bound, $upper_bound, $last_index_seen, $data_ref, $min_score) = @_;
 
     my @filtered;
   WINDOW:
@@ -287,7 +289,7 @@ sub gff_filter_by_coord {
 
 	if ($end_coord >= $lower_bound && $start_coord <= $upper_bound) {
           
-            next WINDOW if $filter_by_score and $score !~ m/\d/;
+            next WINDOW if $min_score and ($score !~ m/\d/ or $score < $min_score);
   
 	    push @filtered, $data_ref->[$i];
 	    $last_index_seen = $i;
