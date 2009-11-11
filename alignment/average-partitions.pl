@@ -83,11 +83,10 @@ for my $list (@lists) {
                 $total_genes,
             ), "\n";
 
+    print STDERR "Couldn't find $missed_gene_count genes out of $total_genes in ",
+    (split m{/}, $gene_methylation_file)[-1], "\n"
+    if $missed_gene_count;
 }
-
-print STDERR "Couldn't find $missed_gene_count genes out of $total_genes in ",
-(split m{/}, $gene_methylation_file)[-1], "\n"
-if $missed_gene_count;
 
 ## done
 
