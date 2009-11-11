@@ -34,7 +34,7 @@ if ($output) {
 
 my $genes = index_gff_annotation ($gene_methylation_file, $gene_id_field_name);
 
-my ($gene_count, $missed_gene_count) = (1, 0);
+my ($percentile, $missed_gene_count) = (1, 0);
 
 for my $list (@lists) {
 
@@ -54,6 +54,7 @@ for my $list (@lists) {
             $missed_gene_count++;
             next GENE;
         }
+        else {$gene_count};
 
 	$total_length += $genes->{$gene_id}->[0];
 	$total_score  += $genes->{$gene_id}->[1];
@@ -74,7 +75,7 @@ for my $list (@lists) {
     my $cg_adjusted_mean = ($total_cgsite ? $total_cg_adjusted_score / $total_cgsite : 'NaN');
     
     print join ("\t",
-                $gene_count++,
+                $percentile++,
                 $arithmetic_mean,
                 $fractional_meth,
                 $cg_adjusted_mean,
@@ -84,7 +85,7 @@ for my $list (@lists) {
 
 }
 
-print STDERR "Couldn't find $missed_gene_count genes out of $gene_count in ",
+print STDERR "Couldn't find $missed_gene_count genes out of $total_genes in ",
 (split m{/}, $gene_methylation_file)[-1], "\n"
 if $missed_gene_count;
 
