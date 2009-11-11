@@ -34,7 +34,8 @@ if ($output) {
 
 my $genes = index_gff_annotation ($gene_methylation_file, $gene_id_field_name);
 
-my $i = 1;
+my $gene_count        = 1;
+my $missed_gene_count = 0;
 for my $list (@lists) {
 
     my ($total_length, $total_score, $total_cgsite, $total_ctsite, $total_cg_adjusted_score, $total_genes, $total_c, $total_t)
@@ -48,7 +49,8 @@ for my $list (@lists) {
 	my ($gene_id, undef) = split /\t/, $gene;
 
         unless (exists $genes->{$gene_id}) {
-            print STDERR "Can't find ID $gene_id in ", (split m{/}, $gene_methylation_file)[-1];
+            print STDERR "Can't find ID $gene_id in ", (split m{/}, $gene_methylation_file)[-1], "\n";
+            $missed_gene_count++;
             next GENE;
         }
 
@@ -71,7 +73,7 @@ for my $list (@lists) {
     my $cg_adjusted_mean = ($total_cgsite ? $total_cg_adjusted_score / $total_cgsite : 'NaN');
     
     print join ("\t",
-                $i++,
+                $gene_count++,
                 $arithmetic_mean,
                 $fractional_meth,
                 $cg_adjusted_mean,
@@ -81,6 +83,9 @@ for my $list (@lists) {
 
 }
 
+print STDERR "Couldn't find $missed_gene_count genes out of $gene_count in ",
+(split m{/}, $gene_methylation_file)[-1], "\n"
+if $missed_gene_count;
 
 
 sub index_gff_annotation {
