@@ -19,12 +19,12 @@ my $output;
 # Grabs and parses command line options
 my $result = GetOptions (
     'annotation-file|a=s' => \$gene_methylation_file,
-    'lists|l=s{,}'  => \@lists,
-    'output|o=s'    => \$output,
-    'verbose|v'     => sub { use diagnostics; },
-    'quiet|q'       => sub { no warnings; },
-    'help|h'        => sub { pod2usage ( -verbose => 1 ); },
-    'manual|m'      => sub { pod2usage ( -verbose => 2 ); }
+    'lists|l=s{,}'        => \@lists,
+    'output|o=s'          => \$output,
+    'verbose|v'           => sub { use diagnostics; },
+    'quiet|q'             => sub { no warnings; },
+    'help|h'              => sub { pod2usage ( -verbose => 1 ); },
+    'manual|m'            => sub { pod2usage ( -verbose => 2 ); }
 );
 
 if ($output) {
@@ -34,12 +34,13 @@ if ($output) {
 
 my $genes = index_gff_annotation ($gene_methylation_file, $gene_id_field_name);
 
-my $gene_count        = 1;
-my $missed_gene_count = 0;
+my ($gene_count, $missed_gene_count) = (1, 0);
+
 for my $list (@lists) {
 
-    my ($total_length, $total_score, $total_cgsite, $total_ctsite, $total_cg_adjusted_score, $total_genes, $total_c, $total_t)
-	= (0, 0, 0, 0, 0, 0, 0, 0);
+    my ($total_length, $total_score, $total_cgsite, $total_ctsite,
+        $total_cg_adjusted_score, $total_genes, $total_c, $total_t)
+    = (0, 0, 0, 0, 0, 0, 0, 0);
 
     open my $LIST, '<', $list or croak "Can't open $list";
   GENE:
@@ -86,6 +87,8 @@ for my $list (@lists) {
 print STDERR "Couldn't find $missed_gene_count genes out of $gene_count in ",
 (split m{/}, $gene_methylation_file)[-1], "\n"
 if $missed_gene_count;
+
+## done
 
 
 sub index_gff_annotation {
