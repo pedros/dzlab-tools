@@ -54,7 +54,6 @@ for my $list (@lists) {
             $missed_gene_count++;
             next GENE;
         }
-        else {$gene_count};
 
 	$total_length += $genes->{$gene_id}->[0];
 	$total_score  += $genes->{$gene_id}->[1];
