@@ -18,6 +18,7 @@ my $no_add               = 0;
 my $extend_annotation    = 0;
 my $gene_id_field_name   = 'ID';
 my $min_score            = 0;
+my $average_scores       = 0;
 my $output               = q{-};
 my $verbose              = 0;
 my $quiet                = 0;
@@ -35,6 +36,7 @@ my $result = GetOptions (
     'extend-annotation|e'     => \$extend_annotation,
     'gene-id-field-name|i=s'  => \$gene_id_field_name,
     'min-score|s=i'           => \$min_score,
+    'average-scores|a'        => \$average_scores,
     'output|o:s'              => \$output,
     'verbose|v'               => sub {enable diagnostics;use warnings;},
     'quiet|q'                 => sub {disable diagnostics;no warnings;},
@@ -148,34 +150,49 @@ for my $chr (sort {$a cmp $b} keys %annotation) {
             }
         }
         else {
-            my ($context, $a_c_count, $a_t_count, $score, $b_c_count, $b_t_count, $a_score, $b_score)
-            = add_gff_attribute_range (\@range);
 
-            my $attribute
-            = "$gene_id_field_name=$annotation{$chr}{$start}[2];c=$a_c_count;t=$a_t_count";
+            my ($actual_score, $actual_attribute, $actual_ct_count, $actual_context);
 
-            my $locus_len
-            = $annotation{$chr}{$start}[1] - $annotation{$chr}{$start}[0] + 1;
+            unless ($average_scores) {
+
+                my ($context, $a_c_count, $a_t_count, $score, $b_c_count, $b_t_count, $a_score, $b_score)
+                = add_gff_attribute_range (\@range);
+
+                my $attribute
+                = "$gene_id_field_name=$annotation{$chr}{$start}[2];c=$a_c_count;t=$a_t_count";
+
+                my $locus_len
+                = $annotation{$chr}{$start}[1] - $annotation{$chr}{$start}[0] + 1;
             
-            my $cent_dist
-            = int (($annotation{$chr}{$start}->[1] - $annotation{$chr}{$start}->[0]) / 2) + $annotation{$chr}{$start}->[0];
+                my $cent_dist
+                = int (($annotation{$chr}{$start}->[1] - $annotation{$chr}{$start}->[0]) / 2) + $annotation{$chr}{$start}->[0];
             
-            $cent_dist
-            = abs ($reference{$chr} - $cent_dist) if $reference_file;
+                $cent_dist
+                = abs ((length $reference{"$chr-seq"}) - $cent_dist) if $reference_file;
 
-            if (@range == 0) {
-                $attribute = "$gene_id_field_name=$annotation{$chr}{$start}[2]";
-                $score     = q{.};
+                if (@range == 0) {
+                    $attribute = "$gene_id_field_name=$annotation{$chr}{$start}[2]";
+                    $score     = q{.};
+                }
+                elsif (defined $b_c_count) {
+                    $score  = sprintf ("%g", $score);
+                    $a_score = sprintf ("%g", $a_score);
+                    $b_score = sprintf ("%g", $b_score);
+                    my $act = sprintf ("%g", $a_c_count + $a_t_count);
+                    my $bct = sprintf ("%g", $b_c_count + $b_t_count);
+                    $attribute = "$gene_id_field_name=$annotation{$chr}{$start}[2];locus_len=$locus_len;cent_dist=$cent_dist;a_score=$a_score;b_score=$b_score;act_score=$act;bct_score=$bct";
+                }
+                else {$score = sprintf ("%g", $score)}
+
+                $actual_score = $score;
+                $actual_attribute = $attribute;
+                $actual_context = $context;
+                $actual_ct_count = $a_c_count + $a_t_count;
             }
-            elsif (defined $b_c_count) {
-                $score  = sprintf ("%g", $score);
-                $a_score = sprintf ("%g", $a_score);
-                $b_score = sprintf ("%g", $b_score);
-                my $act = sprintf ("%g", $a_c_count + $a_t_count);
-                my $bct = sprintf ("%g", $b_c_count + $b_t_count);
-                $attribute = "$gene_id_field_name=$annotation{$chr}{$start}[2];locus_len=$locus_len;cent_dist=$cent_dist;a_score=$a_score;b_score=$b_score;act_score=$act;bct_score=$bct";
+            else {
+                $actual_score = average_gff_score_range (\@range);
+                $actual_attribute = q{.};
             }
-            else {$score = sprintf ("%g", $score)}
 
             my $total_CG_sites;
             if($count_CG_sites) {
@@ -187,21 +204,21 @@ for my $chr (sort {$a cmp $b} keys %annotation) {
                     ),
                     'CG'
                 );
-                $attribute
-                = "$gene_id_field_name=$annotation{$chr}{$start}->[2];total_CG_sites=$total_CG_sites;total_ct="
-                . ($a_c_count + $a_t_count);
+                $actual_attribute
+                = "$gene_id_field_name=$annotation{$chr}{$start}->[2];total_CG_sites=$total_CG_sites";
+                $actual_attribute .= ";total_ct=$actual_ct_count" if $actual_ct_count;
             }
 
             print join ("\t",
                         $chr,
-                        'window',
-                        $context,
+                        'dz_win',
+                        $actual_context||'window',
                         $annotation{$chr}{$start}->[0],
                         $annotation{$chr}{$start}->[1],
-                        $score,
+                        $actual_score,
                         $annotation{$chr}{$start}->[3],
                         q{.},
-                        $attribute,
+                        $actual_attribute,
                     ), "\n";
 
          }
@@ -218,10 +235,29 @@ sub count_sites {
 }
 
 
+sub average_gff_score_range {
+    my $range = shift;
+
+    my ($score_total, $score_count) = (0, 0);
+
+    foreach my $k (@{$range}) {
+        my $current_rec = gff_read ($k);
+
+        next if $current_rec->{score} !~ m/\d/;
+
+        $score_total += $current_rec->{score};
+        $score_count++;
+    }
+
+    return ($score_count ? $score_total / $score_count : 'NaN');
+}
+
 sub add_gff_attribute_range {
     my $range = shift;
     my ($a_c_count, $a_t_count, $b_c_count, $b_t_count, $score, $a_score, $b_score, $context)
     = (0, 0, 0, 0, 0, 0, 0, q{.});
+
+    my ($score_count, $score_total) = (0, 0);
 
     my @attr_fields = ();
     foreach my $k (@{$range}) {
@@ -263,7 +299,7 @@ sub add_gff_attribute_range {
     }
 
     my @scores = ();
-    if (@attr_fields < 5) {
+    if (@attr_fields < 5 and !$score_total) {
         $score = $a_c_count / ($a_c_count + $a_t_count) if $a_c_count + $a_t_count != 0;
         @scores = ($a_c_count, $a_t_count, $score);
     }
