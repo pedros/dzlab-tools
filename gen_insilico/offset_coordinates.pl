@@ -55,6 +55,7 @@ if ($offsets) {
     close $OFFSETS or croak "Can't close $offsets: $!";
 }
 
+LOCUS:
 while (<>) {
     next if ($_ =~ m/^#.*$|^\s*$/);
     my @gff = split /\t/, $_;
@@ -85,18 +86,13 @@ while (<>) {
         }
 
 	$gff[3] = 0 if $gff[3] < 0;
+
+        next LOCUS unless $gff[3] <= $gff[4];
     }
 
     $gff[2] = $new_feature if $new_feature;
 
     print join "\t", @gff;
-}
-
-
-sub extract_offsets_from_annotation {
-    my ($offsets_ref, $gff_ref) = @_;
-
-
 }
 
 
