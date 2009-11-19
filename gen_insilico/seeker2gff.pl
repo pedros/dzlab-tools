@@ -28,28 +28,37 @@ if ($output) {
     select $USER_OUT;
 }
 
+use constant MAX_BUFFER_SIZE => 1_000_000;
+
 my %contexts = (
     x => 'CG',  X => 'CG',
     y => 'CHG', Y => 'CHG',
     z => 'CHH', Z => 'CHH'
 );
 my %c_map;
+my $buffer_size = 0;
 
 while (<$DATA_HANDLE>) {
     chomp;
     my $seeker = parse_seeker ($_);
 
-    update_counts ($seeker, \%c_map, \%contexts);
+    update_counts ($seeker, \%c_map, \%contexts, \$buffer_size);
     
+    sum_counts (\%c_map, \$buffer_size)
+    if $buffer_size > MAX_BUFFER_SIZE;
 }
 
-sum_counts (\%c_map);
+sum_counts (\%c_map, \$buffer_size)
+if %c_map;
 
 
 sub parse_seeker {
     my ($seeker_read) = @_;
     
     my @seeker_fields = split /[\t\s]/, $seeker_read;
+
+    @seeker_fields = @seeker_fields[0, 2 .. 8]
+    if @seeker_fields == 9;
 
     return undef unless @seeker_fields == 8;
 
@@ -71,7 +80,7 @@ sub parse_seeker {
 
 
 sub update_counts {
-    my ($seeker, $c_map, $contexts) = @_;
+    my ($seeker, $c_map, $contexts, $buffer_size) = @_;
 
     for my $idx (0 .. (length $seeker->{summary}) - 1) {
         my $base = chr vec ($seeker->{summary}, $idx, 8);
@@ -85,11 +94,12 @@ sub update_counts {
         $c_map->{$chr}{$con}{$crd}{$met}++;        # increase c or t count
         $c_map->{$chr}{$con}{$crd}{s}              # save strand
             = $seeker->{ref_strand};
+        $$buffer_size++;
     }
 }
 
 sub sum_counts {
-    my ($c_map) = @_;
+    my ($c_map, $buffer_size) = @_;
 
     for my $chr (sort keys %$c_map) {
         for my $con (sort keys %{$c_map->{$chr}}) {
@@ -116,6 +126,9 @@ sub sum_counts {
             }
         }
     }
+
+    $$buffer_size = 0;
+    %{$c_map} = ();
 }
 
 
