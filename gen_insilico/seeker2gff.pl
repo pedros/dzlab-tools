@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 
 use warnings;
 use strict;
@@ -16,7 +16,7 @@ my $result = GetOptions (
     'verbose|v'   => sub { use diagnostics; },
     'quiet|q'     => sub { no warnings; },
     'help|h'      => sub { pod2usage ( -verbose => 1 ); },
-    'manual|m'    => sub { pod2usage ( -verbose => 2 ); }
+    'manual|m'    => sub { pod2usage ( -verbose => 2 ); },
 );
 
 # Check required command line parameters
@@ -40,16 +40,22 @@ my $buffer_size = 0;
 
 while (<$DATA_HANDLE>) {
     chomp;
+
+    # read in seeker line to hashs structure
     my $seeker = parse_seeker ($_);
 
+    # incrementally increase counts
     update_counts ($seeker, \%c_map, \%contexts, \$buffer_size);
     
+    # buffer is full, flush the buffer
     sum_counts (\%c_map, \$buffer_size)
     if $buffer_size > MAX_BUFFER_SIZE;
 }
 
-sum_counts (\%c_map, \$buffer_size)
-if %c_map;
+# wrap up if there is still something to count in %c_map
+sum_counts (\%c_map, \$buffer_size) if %c_map;
+
+## done
 
 
 sub parse_seeker {
@@ -90,7 +96,7 @@ sub update_counts {
         my $con = $contexts->{$base};              # context
         my $crd = $seeker->{coordinate} + $idx;    # coordinate
         my $met = $base =~ m/[xyz]/ ? q{t} : q{c}; # c or t
-        
+
         $c_map->{$chr}{$con}{$crd}{$met}++;        # increase c or t count
         $c_map->{$chr}{$con}{$crd}{s}              # save strand
             = $seeker->{ref_strand};
@@ -105,30 +111,33 @@ sub sum_counts {
         for my $con (sort keys %{$c_map->{$chr}}) {
             for my $crd (sort {$a <=> $b} keys %{$c_map->{$chr}{$con}}) {
 
-                my $c = $c_map->{$chr}{$con}{$crd}{c} || 0;
-                my $t = $c_map->{$chr}{$con}{$crd}{t} || 0;
-                my $s = $c_map->{$chr}{$con}{$crd}{s} || q{+};
+                my $c = $c_map->{$chr}{$con}{$crd}{c} || 0;    # c count
+                my $t = $c_map->{$chr}{$con}{$crd}{t} || 0;    # t count
+                my $s = $c_map->{$chr}{$con}{$crd}{s} || q{+}; # strand
 
+                # fractional methylation (Not a Number if undefined)
                 my $methylation
                     = ($c + $t > 0 ? sprintf ("%g", $c / ($c + $t)) : 'NaN');
                 
+                # print GFF3
                 print join ("\t",
-                            $chr,
-                            'bsseeker',
-                            $con,
-                            $crd,
-                            $crd,
-                            $methylation,
-                            $s,
-                            q{.},
-                            "c=$c; t=$t",
+                            $chr,         # Sequence ID
+                            'bsseeker',   # Source
+                            $con,         # Feature (context)
+                            $crd,         # Start coordinate
+                            $crd,         # End coordinate
+                            $methylation, # Score (fractional methylation)
+                            $s,           # Strand
+                            q{.},         # Frame (n/a)
+                            "c=$c; t=$t", # Attributes
                         ), "\n";
             }
         }
     }
 
-    $$buffer_size = 0;
-    %{$c_map} = ();
+    # flush the buffer
+    $$buffer_size = 0; # reset buffer size count
+    %{$c_map} = ();    # reset c counting structure
 }
 
 
