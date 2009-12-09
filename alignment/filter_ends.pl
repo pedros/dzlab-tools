@@ -33,7 +33,7 @@ if ($output) {
     select $USER_OUT;
 }
 
-$list = index_list ($list);
+$list = index_list ($list) if $list;
 
 ID:
 while (<>) {
@@ -58,7 +58,16 @@ sub index_list {
     while (<$LIST>) {
 
         my ($id, $freq, $alt) = (0, 0, 0);
-        ($id, $freq, $alt) = split /\t/;
+
+        my @fields = split /\t/, $_;
+
+        if (@fields < 9) {
+            ($id, $freq, $alt) = @fields;
+        }
+        else {
+            ($id, $freq, $alt) = @fields[8, 5, 0];
+            $id =~ s/^.*$ends_tag([^;]+).*$/$1/;
+        }
 
         $id =~ s/[\r\n]//g;
         
