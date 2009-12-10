@@ -111,8 +111,7 @@ if ($seqid) {
 
         my $file_name = fileparse ($reference);
 
-        print ">lcl|$file_name|$seqid|$range[0]-$range[1]\n";
-        print $sequence, "\n";
+        print &string_to_fasta ($sequence, "lcl|$file_name|$seqid|$range[0]-$range[1]"), "\n";
 
         exit 0;
     }
@@ -193,6 +192,30 @@ sub index_fasta {
         $reference{$dsc[$j]} = $line;
     }
     return \%reference;
+}
+
+
+sub string_to_fasta {
+    my ($sequence, $header) = @_;
+    return unless $sequence;
+    my $fasta_length   = 80;
+    my $fasta_sequence = q{};
+    
+    $fasta_sequence .= ">$header\n" if $header;
+    
+    my $buffer_size = 0;
+    for (ref $sequence eq 'ARRAY' ? @$sequence : split //, $sequence) {
+
+        if ($buffer_size == $fasta_length - 1) {
+            $fasta_sequence .= "$_\n";
+            $buffer_size = 0;
+        }
+        else {
+            $fasta_sequence .= $_;
+            $buffer_size++
+        }
+    }
+    return $fasta_sequence;
 }
 
 

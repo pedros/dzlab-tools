@@ -38,11 +38,16 @@ while (<>) {
     # or $length <= 50
     # or $length >= 300;
 
-    my ($attribute)
-    = $site{attribute} =~ m/ID=([^;]+);/;
-    $attribute =~ s/:/|/;
+    # my ($attribute)
+    # = $site{attribute} =~ m/ID=([^;]+);/;
+    # $attribute =~ s/:/|/;
 
-    print ">$attribute $site{seqname}:$site{start}:$site{end}\n";
+    my ($attribute)
+    = $site{attribute} =~ m/\*([\w]+):/;
+
+    $attribute ||= 'unknown_locus';
+
+    print ">$attribute|$site{seqname}:$site{start}:$site{end}\n";
     print substr $reference{$site{seqname}}, ($site{start} - 1), ($length);
     print "\n";
 }

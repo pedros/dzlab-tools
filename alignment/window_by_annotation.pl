@@ -190,8 +190,13 @@ for my $chr (sort {$a cmp $b} keys %annotation) {
                 $actual_ct_count = $a_c_count + $a_t_count;
             }
             else {
-                $actual_score = average_gff_score_range (\@range);
-                $actual_attribute = q{.};
+                if (@range) {
+                    $actual_score = average_gff_score_range (\@range);
+                }
+                else {
+                    $actual_score = q{.};
+                }
+                $actual_attribute = "$gene_id_field_name=$annotation{$chr}{$start}[2]" || q{.};
             }
 
             my $total_CG_sites;
@@ -212,7 +217,7 @@ for my $chr (sort {$a cmp $b} keys %annotation) {
             print join ("\t",
                         $chr,
                         'dz_win',
-                        $actual_context||'window',
+                        $new_feature||$actual_context||'window',
                         $annotation{$chr}{$start}->[0],
                         $annotation{$chr}{$start}->[1],
                         $actual_score,
@@ -477,6 +482,7 @@ __END__
  -c,  --count-CG-sites      compute number of CG sites per locus
  -nf, --new-feature         substitute feature ID
  -n,  --no-add              don't try to sum up numeric attributes
+ -a,  --average-scores      disregard attributes fields; only average scores
  -e,  --extend-annotation   'reverse' windowing: extend annotations using overlapping GFF data
  -i,  --gene-id-field-name  GFF attribute locus interest tag [ID]
  -o, --output      filename to write results to (default is STDOUT, unless in batch mode)

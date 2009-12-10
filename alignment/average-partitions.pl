@@ -47,7 +47,17 @@ for my $list (@lists) {
     while (my $gene = <$LIST>) {
 
 	chomp $gene;
-	my ($gene_id, undef) = split /\t/, $gene;
+	my ($gene_id, $freq, $alt);
+
+        my @fields = split /\t/, $gene;
+
+        if (@fields < 9) {
+            ($gene_id, $freq, $alt) = @fields;
+        }
+        else {
+            ($gene_id, $freq, $alt) = @fields[8, 5, 0];
+            $gene_id =~ s/^.*$gene_id_field_name=([^;]+).*$/$1/;
+        }
 
         unless (exists $genes->{$gene_id}) {
             print STDERR "Can't find ID $gene_id in ", (split m{/}, $gene_methylation_file)[-1], "\n";
@@ -112,7 +122,7 @@ sub index_gff_annotation {
             $locus_id =~ s/["\t\r\n]//g;
         }
 
-        next unless $CG_sites and $ct_sites;
+        #next unless $CG_sites and $ct_sites;
 
         $annotation{$locus_id}
         = [ ($locus{end} - $locus{start} + 1), $locus{score}, $CG_sites, $ct_sites ];

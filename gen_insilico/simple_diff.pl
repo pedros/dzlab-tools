@@ -9,8 +9,11 @@ use Pod::Usage;
 use List::Util qw /max/;
 
 my $output;
+my $html = 0;
+
 # Grabs and parses command line options
 my $result = GetOptions (
+    'html|f'              => \$html,
     'output|o=s'          => \$output,
     'verbose|v'           => sub { use diagnostics; },
     'quiet|q'             => sub { no warnings; },
@@ -22,33 +25,45 @@ my $result = GetOptions (
 pod2usage ( -verbose => 1 )
 unless @ARGV and $result;
 
-if ($output) {
-    open my $USER_OUT, '>', $output or croak "Can't open $output for writing: $!";
-    select $USER_OUT;
-}
+my $a_fasta   = index_fasta ($ARGV[0]);
+my $b_fasta   = index_fasta ($ARGV[1]);
+my @a_headers = sort keys %$a_fasta;
+my @b_headers = sort keys %$b_fasta;
+
+open my $USER_OUT_A, '>', "$ARGV[0].snp.fa" or croak "Can't open $ARGV[1].snp.fa for writing: $!";
+open my $USER_OUT_B, '>', "$ARGV[1].snp.fa" or croak "Can't open $ARGV[1].snp.fa for writing: $!";
+
+for my $a_seqid (@a_headers) {
+
+    my $b_seqid = shift @b_headers;
+
+    my $a_string  = [split //, $a_fasta->{$a_seqid}];
+    my $b_string  = [split //, $b_fasta->{$b_seqid}];
+
+    my $positions = vector_difference ($a_string, $b_string);
+    my $totals    = 0;
+
+    my $sequence = q{};
+
+    no warnings; # array indices might go out of bounds for different-sized strings
+    $sequence .= $positions->[$_] ? $a_string->[$_] : uc ($a_string->[$_])
+    for (0 .. @$positions - 1);
+    select $USER_OUT_A; print &string_to_fasta ($sequence, $a_seqid);
     
-my $a_string = (-e $ARGV[0] ? file_to_string ($ARGV[0]) : [split //, $ARGV[0]]);
-my $b_string = (-e $ARGV[1] ? file_to_string ($ARGV[1]) : [split //, $ARGV[1]]);
-my $positions = vector_difference ($a_string, $b_string);
-my $totals = 0;
 
-no warnings; # array indices might go out of bounds for different-sized strings
-print $a_string->[$_]
-for (0 .. @$positions - 1);
+    $sequence  = q{};
+    $sequence .= $positions->[$_] ? $b_string->[$_] : uc ($b_string->[$_])
+    for (0 .. @$positions - 1);
+    select $USER_OUT_B; print &string_to_fasta ($sequence, $b_seqid);
 
-print "\n";
-print $positions->[$_] ? q{ } : q{|}
-for (0 .. @$positions - 1);
+    $totals += $positions->[$_] ? 0 : 1
+    for (0 .. @$positions - 1);
+    
+    print STDERR "$totals mismatch[es] found on $a_seqid versus $b_seqid\n";
+}
 
-print "\n";
-print $b_string->[$_]
-for (0 .. @$positions - 1);
-
-$totals += $positions->[$_] ? 0 : 1
-for (0 .. @$positions - 1);
-
-print "\n";
-print STDERR "$totals mismatch[es] found\n";
+close $USER_OUT_A;
+close $USER_OUT_B;
 
 
 sub file_to_string {
@@ -75,6 +90,70 @@ sub vector_difference {
 
     return \@positions;
 }
+
+
+sub index_fasta {
+    my $reference_file = shift;
+
+    my %reference = ();
+
+    return \%reference unless $reference_file;
+
+    # reads in the reference genome file into @fastaseq
+    open my $REF, '<', "$reference_file" or croak "Can't open $reference_file for reading: $!";
+    my @fastaseq = <$REF>;
+    close $REF;
+
+    # find and store indices for each chromosome change and corresponding descriptions
+    my ( @idx, @dsc ) = ();
+    for my $i ( 0 .. @fastaseq - 1 ) {
+        if ( $fastaseq[$i] =~ m/^>/ ) {
+            $fastaseq[$i] =~ s/>//g;
+            $fastaseq[$i] = ( split /\s/, "$fastaseq[$i]" )[0];
+            $fastaseq[$i] =~ tr/A-Z/a-z/;
+            push @idx, $i;
+            push @dsc, $fastaseq[$i];
+        }
+    }
+
+    for my $j ( 0 .. @idx - 1 ) {
+        my $line;
+        if ( $j == scalar @idx - 1 ) {
+            $line = join( q{}, @fastaseq[ $idx[$j] + 1 .. @fastaseq - 1]);
+        }
+        else {
+            $line = join( q{}, @fastaseq[ $idx[$j] + 1 .. $idx[$j + 1] - 1]);
+        }
+        $line =~ s/[\n\r]//g;
+        $reference{$dsc[$j]} = lc $line;
+    }
+    return \%reference;
+}
+
+
+sub string_to_fasta {
+    my ($sequence, $header, $html) = @_;
+    return unless $sequence;
+    my $fasta_length   = 80;
+    my $fasta_sequence = q{};
+    
+    $fasta_sequence .= ">$header\n" if $header;
+    
+    my $buffer_size = 0;
+    for (ref $sequence eq 'ARRAY' ? @$sequence : split //, $sequence) {
+
+        if ($buffer_size == $fasta_length - 1) {
+            $fasta_sequence .= "$_\n";
+            $buffer_size = 0;
+        }
+        else {
+            $fasta_sequence .= $_;
+            $buffer_size++
+        }
+    }
+    return $fasta_sequence, "\n";
+}
+
 
 __END__
 

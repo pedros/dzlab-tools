@@ -51,8 +51,7 @@ pod2usage ( -verbose => 1 )
 unless @ARGV and $result
 and $gff_annotation
 and ($three_prime xor $five_prime)
-and (($stop_flag != 6 xor $stop_distance) 
-     or ($stop_flag == 6 and $stop_distance))
+and ($stop_flag != 6 or ($stop_flag == 6 and $stop_distance))
 and exists $stop_flag_dispatch->{$stop_flag};
 
 if ($output) {
@@ -74,8 +73,8 @@ my $annotation
 print STDERR "done\n";
 
 my $num_bins           = 2 * int ($distance / $bin_width);
-my @totals_bins        = ();    # will hold the total scores per bin
-my %sorted_annotations = (); # memoized cache for sorting GFF annotation
+my @totals_bins        = ();  # will hold the total scores per bin
+my %sorted_annotations = ();  # memoized cache for sorting GFF annotation
 my $gff_iterator       = make_gff_iterator ($ARGV[0], \&gff_read);
 
 COORD:
@@ -83,7 +82,7 @@ while (my $gff_line = $gff_iterator->()) {
 
     next COORD unless ref $gff_line eq 'HASH'; # &gff_read returns [] for GFF comments, invalid lines, etc.
 
-    print STDERR "Assigning coordinates to bins...$gff_line->{start}\r";
+    #print STDERR "Assigning coordinates to bins...$gff_line->{start}\r";
 
     my $brs = binary_range_search (
         [ $gff_line->{start}, $gff_line->{end} ], # the range reference (look-up key); below is an array of range references to search
@@ -91,7 +90,7 @@ while (my $gff_line = $gff_iterator->()) {
         ||= [ map { $annotation->{$gff_line->{seqname}}{$_} } # map keys to values [start, end, strand, attribute]
               sort { $a <=> $b } # sort keys (keys are start coords)
               keys %{$annotation->{$gff_line->{seqname}}} ] # START HERE: get keys for seqname
-    ) || next COORD;
+    )   || next COORD;
 
     my $reverse    # orientation of search: 5'->3' or 5'<-3' (reverse)
     = ($five_prime and $gff_line->{strand} eq q{-})
@@ -104,8 +103,11 @@ while (my $gff_line = $gff_iterator->()) {
     # divided by the bin width.
     # Eg: gene 100->3500, coordinate 650 and bin width 100 is bin index |100-650|/100 = int(5.5) = 5
     my $index = int abs ($brs->[$reverse] - ($reverse ? $gff_line->{end} : $gff_line->{start})) / $bin_width;
-    $index = $reverse ? $num_bins - 1 - $index : $index; # for 5'<=3', reverse bin index
-    
+
+    next COORD if $index > $num_bins; # this index is outside the range defined
+
+    $index = $reverse ? $num_bins - 1 - $index : $index; # for 5'<-3', reverse the bin index
+
     push @{$totals_bins[$index]}, $gff_line->{score};
 }
 print STDERR "done\n";

@@ -52,7 +52,7 @@ if ($output) {
 $| = 1;
 
 # read in bowtie verbose file
-my $counts = undef;
+my $counts   = undef;
 my $previous = undef;
 
 while (<>) {
@@ -64,7 +64,7 @@ while (<>) {
     $current->{snps}{$current->{snp}->[0]}++;
 
     if ($frequencies) {
-        $counts->{$current->{target}->[0]}{alternatives} += $$current->{alternatives}->[0];
+        $counts->{$current->{target}->[0]}{alternatives} += $current->{alternatives};
         $counts->{$current->{target}->[0]}{frequencies}++;
     }
     else {

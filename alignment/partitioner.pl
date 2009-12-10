@@ -39,7 +39,7 @@ my $index = 1;
 mkdir "$output.$size";
 for (my $i = 0; $i < @data - $size; $i += int ($lines / $size)) {
     open my $PARTITION, '>', "$output.$size/$output." . $index++ or croak "Can't write file: $!";
-    print $PARTITION join (q{}, @data[$i .. $i + $size]);
+    print $PARTITION join (q{}, @data[$i .. $i + ($lines / $size)]);
     close $PARTITION;
 }
 

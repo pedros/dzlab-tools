@@ -84,7 +84,7 @@ while (<>) {
             $gff[3] = $start - $upstream;
             $gff[4] = $start + $downstream;
         }
-
+        
 	$gff[3] = 0 if $gff[3] < 0;
 
         next LOCUS unless $gff[3] <= $gff[4];

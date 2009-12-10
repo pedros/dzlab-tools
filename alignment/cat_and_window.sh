@@ -21,13 +21,12 @@ for i in $groups; do
     for j in $BATCHES; do
         for k in $contexts; do
             cat ${j}/single-c/*[._-]${i}[._-]single-c*${k}*gff >> post-processing/single-c/${NAME}_BS-Seq_${i}_${k}_w1_methylation.gff
-            window_gff.pl -f post-processing/single-c/${NAME}_BS-Seq_${i}_${k}_w1_methylation.gff -w 1 -s 1 >> post-processing/single-c/${NAME}_BS-Seq_${i}_${k}_w1_methylation.gff.merged
-            mv post-processing/single-c/${NAME}_BS-Seq_${i}_${k}_w1_methylation.gff.merged post-processing/single-c/${NAME}_BS-Seq_${i}_${k}_w1_methylation.gff
         done
     done
-    # for k in $contexts; do
-    #     cat  post-processing/single-c/${NAME}_BS-Seq_${i}_${k}_w1_methylation.gff >> post-processing/single-c/${NAME}_BS-Seq_all_${k}_w1_methylation.gff
-    # done
+    for k in $contexts; do
+        window_gff.pl -f post-processing/single-c/${NAME}_BS-Seq_${i}_${k}_w1_methylation.gff -w 1 -s 1 -o post-processing/single-c/${NAME}_BS-Seq_${i}_${k}_w1_methylation.gff.merged
+        mv post-processing/single-c/${NAME}_BS-Seq_${i}_${k}_w1_methylation.gff.merged post-processing/single-c/${NAME}_BS-Seq_${i}_${k}_w1_methylation.gff
+    done
 done
 echo "Done with code: $?"
 

@@ -61,12 +61,12 @@ while (<>) {
     croak "\nCouldn't find the gene id based on the id field name you provided.
 Either you provided an invalid field name or my expression matching skills suck...
 The line in question is $locus{attribute}.\n\n"
-	unless $gene_id;
+    unless $gene_id;
 
     croak "\nCouldn't find the transcript id based on the id field name you provided.
 Either you provided an invalid field name or my expression matching skills suck...
 The line in question is $locus{attribute}.\n\n"
-	unless $transcript_id;
+    unless $transcript_id;
 
     my $chr = $locus{seqname};
 
@@ -110,10 +110,8 @@ for my $chr (sort keys %genes) {
 sub gff_read {
     my ($seqname, $source, $feature, $start, $end, $score, $strand, $frame, $attribute) = split(/\t/, shift);
 
-    $seqname =~ tr/A-Z/a-z/;
-
     my %rec = (
-	'seqname'   => $seqname,
+	'seqname'   => lc $seqname,
 	'source'    => $source,
 	'feature'   => $feature,
 	'start'     => $start,

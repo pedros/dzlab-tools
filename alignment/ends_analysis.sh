@@ -35,16 +35,6 @@ for i in $groups; do
                     fin=${NAME}_BS-Seq_${i}_${j}_w1_methylation.gff
                     fout=${NAME}_BS-Seq_${i}_${j}_${atype}_${l}_flag${cat_flag}
 
-                    # echo '==================='
-                    # echo $atype
-                    # echo $annotation
-                    # echo $fin
-                    # echo $fout
-                    # echo '==================='                   
-                    # if [ ! -e post-processing/single-c/$fin ]; then
-                    #     echo $fin "DOES NOT EXIST"
-                    # fi
-
                     makeDist.pl $annotation post-processing/single-c/${fin} ${OUTDIR}/${fout} 100 5000 $FLAG $l
                     mv ${OUTDIR}/${fout}.log ${OUTDIR}/log/${fout}.log
                     average.pl ${OUTDIR}/${fout}.ends 100 100 > ${OUTDIR}/dat/${fout}.dat
@@ -65,7 +55,7 @@ for j in $contexts; do
             atype=`echo $k | cut -d'|' -f1`
             cat_flag=`echo $FLAG | sed 's/ /-/'`
 
-            cat-dat.pl ${OUTDIR}/dat/${NAME}_BS_Seq_*_${j}_${atype}_${l}_flag${cat_flag}.dat
+            cat-dat.pl ${OUTDIR}/dat/${NAME}_BS-Seq_*_${j}_${atype}_${l}_flag${cat_flag}.dat > ${OUTDIR}/dat/${NAME}_BS-Seq_all_per_chr_${j}_${atype}_${l}_flag${cat_flag}.dat
             
         done
     done
