@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use Data::Dumper;
 use Carp;
-use Getopt::Long;
+use Getopt::Long; Getopt::Long::Configure ("bundling");
 use Pod::Usage;
 
 # Check required command line parameters
@@ -12,14 +12,16 @@ pod2usage ( -verbose => 1 )
 unless @ARGV;
 
 my $list;
-my $score = 0;
+my $min_score = 0;
+my $max_score = 0;
 my $ends_tag = 'ID=';
 my $output;
 
 # Grabs and parses command line options
 my $result = GetOptions (
     'list|l=s'     => \$list,
-    'score|s=i'    => \$score,
+    'min-score|s=i'    => \$min_score,
+    'max-score|S=i'    => \$max_score,
     'ends-tag|t=s' => \$ends_tag,
     'output|o=s'   => \$output,
     'verbose|v'    => sub { use diagnostics; },
@@ -43,8 +45,8 @@ while (<>) {
 
     next ID unless
     exists $list->{$id}
-    and ($score == 0
-         or $list->{$id}->[0] > $score);
+    and ($min_score == 0 or $list->{$id}->[0] >= $min_score)
+    and ($max_score == 0 or $list->{$id}->[0] <= $max_score);
 
     print $_;
 }
@@ -96,6 +98,7 @@ __END__
 
  -l, --list        filename with one or two fields: ID (required) and score (optional)
  -s, --min-score   minimum score to filter by (0 by default)
+ -S, --max-score   maximum score to filter by (0 by default)
  -o, --output      filename to write results to (defaults to STDOUT)
  -v, --verbose     output perl's diagnostic and warning messages
  -q, --quiet       supress perl's diagnostic and warning messages
