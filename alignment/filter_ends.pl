@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use Data::Dumper;
 use Carp;
-use Getopt::Long; Getopt::Long::Configure ("bundling");
+use Getopt::Long; Getopt::Long::Configure ('bundling');
 use Pod::Usage;
 
 # Check required command line parameters
@@ -19,15 +19,15 @@ my $output;
 
 # Grabs and parses command line options
 my $result = GetOptions (
-    'list|l=s'     => \$list,
+    'list|l=s'         => \$list,
     'min-score|s=i'    => \$min_score,
     'max-score|S=i'    => \$max_score,
-    'ends-tag|t=s' => \$ends_tag,
-    'output|o=s'   => \$output,
-    'verbose|v'    => sub { use diagnostics; },
-    'quiet|q'      => sub { no warnings; },
-    'help|h'       => sub { pod2usage ( -verbose => 1 ); },
-    'manual|m'     => sub { pod2usage ( -verbose => 2 ); }
+    'ends-tag|t=s'     => \$ends_tag,
+    'output|o=s'       => \$output,
+    'verbose|v'        => sub { use diagnostics; },
+    'quiet|q'          => sub { no warnings; },
+    'help|h'           => sub { pod2usage ( -verbose => 1 ); },
+    'manual|m'         => sub { pod2usage ( -verbose => 2 ); }
 );
 
 if ($output) {
@@ -44,9 +44,9 @@ while (<>) {
     $id =~ s/$ends_tag//;
 
     next ID unless
-    exists $list->{$id}
-    and ($min_score == 0 or $list->{$id}->[0] >= $min_score)
-    and ($max_score == 0 or $list->{$id}->[0] <= $max_score);
+    exists $list->{$id} or 
+    (and ($min_score == 0 or $list->{$id}->[0] >= $min_score)
+     and ($max_score == 0 or $list->{$id}->[0] <= $max_score));
 
     print $_;
 }
