@@ -44,9 +44,9 @@ while (<>) {
     $id =~ s/$ends_tag//;
 
     next ID unless
-    exists $list->{$id} or 
-    (and ($min_score == 0 or $list->{$id}->[0] >= $min_score)
-     and ($max_score == 0 or $list->{$id}->[0] <= $max_score));
+    exists $list->{$id}
+    and ($min_score == 0 or $list->{$id}->[0] >= $min_score)
+    and ($max_score == 0 or $list->{$id}->[0] <= $max_score);
 
     print $_;
 }
