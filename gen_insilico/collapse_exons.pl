@@ -8,63 +8,100 @@ use Getopt::Long;
 use Pod::Usage;
 
 my $DATA_HANDLE = 'ARGV';
-my $locus_id = 'ID';
+my $genes;
+my $exons;
 my $output;
 
 # Grabs and parses command line options
 my $result = GetOptions (
-    'locus-id|i=s' => \$locus_id,
-    'output|o=s'  => \$output,
-    'verbose|v'   => sub { use diagnostics; },
-    'quiet|q'     => sub { no warnings; },
-    'help|h'      => sub { pod2usage ( -verbose => 1 ); },
-    'manual|m'    => sub { pod2usage ( -verbose => 2 ); }
+    'genes|g=s'    => \$genes,
+    'exons|e=s'    => \$exons,
+    'output|o=s'   => \$output,
+    'verbose|v'    => sub { use diagnostics; },
+    'quiet|q'      => sub { no warnings; },
+    'help|h'       => sub { pod2usage ( -verbose => 1 ); },
+    'manual|m'     => sub { pod2usage ( -verbose => 2 ); }
 );
 
 # Check required command line parameters
 pod2usage ( -verbose => 1 )
-unless @ARGV and $result;
+unless $result;
 
 if ($output) {
     open my $USER_OUT, '>', $output or croak "Can't open $output for writing: $!";
     select $USER_OUT;
 }
 
-my %loci = ();
+my %exons = %{ index_gff ($exons) };
+my %genes = %{ index_gff ($genes) };
 
-FEATURE:
-while (<$DATA_HANDLE>) {
-    next if m/^\s*#/;
-    chomp;
 
-    my %locus = %{gff_read ($_)};
-    
-    my ($locus_id) = $locus{attribute} =~ m/$locus_id[=\s]?([^;]+)/;
-    
-    my ($c, $t);
-    if (!defined $locus_id) {
-        ($locus_id, $c, $t) = split /;/, $locus{attribute};
-        $locus_id ||= q{.};
-    }
-    else {
-        $locus_id =~ s/["\t\r\n]//g;
-    }
-    
-    if (!defined $c or !defined $t) {
-        next FEATURE;
+for my $locus (sort keys %exons) {
+
+    next unless exists $genes{$locus};
+
+    my ($ec, $et) = @{$exons{$locus}};
+    my ($gc, $gt) = @{$genes{$locus}};
+    my ($escore, $gscore);
+
+    # if ($ec + $et > 0) {
+    #     $escore = sprintf ("%g", ($ec/($ec+$et)));
+    #     print join ("\t", $locus, $escore, $ec, $et), "\n";
+    # }
+
+    if ($gc + $gt > 0) {
+        $gscore = sprintf ("%g", ($gc/($gc+$gt)));
+        print join ("\t", $locus, $gscore, $gc, $gt), "\n";
     }
 
-    $loci{$locus}->[0] += $c;
-    $loci{$locus}->[1] += $t;
-}
+    my $c = ($gc - $ec);
+    my $t = ($gt - $et);
 
-
-for my $locus (sort keys %loci) {
     if ($c + $t > 0) {
-        my $score = sprintf ("%g", ($c/($c+$t)));
-        print join ("\t", $locus, $score, $c, $t), "\n";
+        my $score =  $c / ($c + $t);
+        # print join ("\t",
+        #             $locus,
+        #             sprintf ("%g", $score),
+        #             $c,
+        #             $t,
+        #         ), "\n";
     }
 }
+
+
+
+sub index_gff {
+    my $gff_file = shift;
+
+    my %exons = ();
+
+    open my $GFF, '<', $gff_file or croak "Can't open $gff_file: $!";
+
+  FEATURE:
+    while (<$GFF>) {
+        next if m/^\s*#/;
+        chomp;
+
+        my %locus = %{gff_read ($_)};
+        
+        my ($locus_id, $c, $t) = split /;/, $locus{attribute};
+        $locus_id ||= q{.};
+        
+        if (!defined $c or !defined $t) {
+            next FEATURE;
+        }
+        else {
+            $locus_id =~ s/ID=//;
+            $c =~ s/c=//;
+            $t =~ s/t=//;
+        }
+
+        $exons{$locus_id}->[0] += $c;
+        $exons{$locus_id}->[1] += $t;
+    }
+    return \%exons;
+}
+
 
 
 sub gff_read {
@@ -84,35 +121,6 @@ sub gff_read {
     };
 }
 
-
-
-sub index_gff_annotation {
-    my ($annotation_file, $gene_id_field_name) = @_;
-
-    open my $GFFH, '<', $annotation_file or croak "Can't read file: $annotation_file";
-    my %annotation = ();
-    while (<$GFFH>) {
-        next if ($_ =~ m/^#.*$|^\s*$/);
-        chomp;
-        s/[\r\n]//g;
-        my %locus = %{gff_read ($_)};
-
-        my ($locus_id) = $locus{attribute} =~ m/$gene_id_field_name[=\s]?([^;]+)/;
-
-        if (!defined $locus_id) {
-            ($locus_id, undef) = split /;/, $locus{attribute};
-            $locus_id ||= q{.};
-        }
-        else {
-            $locus_id =~ s/["\t\r\n]//g;
-        }
-
-        $annotation{$locus{seqname}}{$locus{start}}
-        = [$locus{start}, $locus{end}, $locus_id, $locus{strand}, $locus{source}, $locus{feature}, $locus{attribute}];
-    }
-    close $GFFH;
-    return \%annotation;
-}
 
 
 

@@ -20,8 +20,8 @@ my $output;
 # Grabs and parses command line options
 my $result = GetOptions (
     'list|l=s'         => \$list,
-    'min-score|s=i'    => \$min_score,
-    'max-score|S=i'    => \$max_score,
+    'min-score|s=f'    => \$min_score,
+    'max-score|S=f'    => \$max_score,
     'ends-tag|t=s'     => \$ends_tag,
     'output|o=s'       => \$output,
     'verbose|v'        => sub { use diagnostics; },
@@ -45,6 +45,7 @@ while (<>) {
 
     next ID unless
     exists $list->{$id}
+    and $list->{$id}->[0] ne q{.}
     and ($min_score == 0 or $list->{$id}->[0] >= $min_score)
     and ($max_score == 0 or $list->{$id}->[0] <= $max_score);
 

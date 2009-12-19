@@ -60,29 +60,36 @@ for my $list (@lists) {
         }
 
         unless (exists $genes->{$gene_id}) {
-            print STDERR "Can't find ID $gene_id in ", (split m{/}, $gene_methylation_file)[-1], "\n";
+            # print STDERR "Can't find ID $gene_id in ", (split m{/}, $gene_methylation_file)[-1], "\n";
             $missed_gene_count++;
             next GENE;
         }
 
+	if ($genes->{$gene_id}->[1] eq 'NaN') {
+	    next GENE;
+	}
+
 	$total_length += $genes->{$gene_id}->[0];
 	$total_score  += $genes->{$gene_id}->[1];
 	$total_cgsite += $genes->{$gene_id}->[2];
-	$total_ctsite += $genes->{$gene_id}->[3];
-        $total_cg_adjusted_score += $genes->{$gene_id}->[1] * $genes->{$gene_id}->[2];
+	$total_ctsite += $genes->{$gene_id}->[3] if defined $genes->{$gene_id}->[3];
+        $total_cg_adjusted_score += $total_score * $total_cgsite;
 
         $total_genes++;
 
-        $total_c += ($genes->{$gene_id}->[1] * $genes->{$gene_id}->[3]);
-        $total_t += $genes->{$gene_id}->[3] - ($genes->{$gene_id}->[1] * $genes->{$gene_id}->[3]);
-
+	if ($total_ctsite) {
+	    $total_c += ($genes->{$gene_id}->[1] * $genes->{$gene_id}->[3]);
+	    $total_t += $genes->{$gene_id}->[3] - ($genes->{$gene_id}->[1] * $genes->{$gene_id}->[3]);
+	}
     }
     close $LIST;
 
-    my $arithmetic_mean  = ($total_genes ? $total_score / $total_genes : 'NaN');
-    my $fractional_meth  = ($total_c or $total_t ? $total_c / ($total_c + $total_t) : 'NaN');
-    my $cg_adjusted_mean = ($total_cgsite ? $total_cg_adjusted_score / $total_cgsite : 'NaN');
-    
+    my $arithmetic_mean  = ($total_genes ? ($total_score / $total_genes) : 'NaN');
+    my $fractional_meth  = ($total_ctsite and ($total_c or $total_t)
+			    ? ($total_c / ($total_c + $total_t))
+			    : 'NaN');
+    my $cg_adjusted_mean = ($total_cgsite ? ($total_cg_adjusted_score / $total_cgsite) : 'NaN');
+
     print join ("\t",
                 $percentile++,
                 $arithmetic_mean,
@@ -92,9 +99,11 @@ for my $list (@lists) {
                 $total_genes,
             ), "\n";
 
-    print STDERR "Couldn't find $missed_gene_count genes out of $total_genes in ",
-    (split m{/}, $gene_methylation_file)[-1], "\n"
-    if $missed_gene_count;
+    if ($missed_gene_count) {
+	# print STDERR "Couldn't find $missed_gene_count out of " . ($missed_gene_count + $total_genes) . " IDs in ",
+	# (split m{/}, $gene_methylation_file)[-1], "\n";
+	$missed_gene_count = 0;
+    }
 }
 
 ## done
@@ -122,7 +131,7 @@ sub index_gff_annotation {
             $locus_id =~ s/["\t\r\n]//g;
         }
 
-        #next unless $CG_sites and $ct_sites;
+        # next unless $CG_sites and $ct_sites;
 
         $annotation{$locus_id}
         = [ ($locus{end} - $locus{start} + 1), $locus{score}, $CG_sites, $ct_sites ];

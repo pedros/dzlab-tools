@@ -1,43 +1,46 @@
 #!/usr/bin/perl
 
-use strict;
 use warnings;
+use strict;
+use Data::Dumper;
+use Carp;
+use Getopt::Long;
+use Pod::Usage;
 
-my $infile  = $ARGV[0];
-my $logfile = $infile;
-$logfile =~ s/peaks/STDOUT/;
+my $output;
+# Grabs and parses command line options
+my $result = GetOptions (
+    'output|o=s'  => \$output,
+    'verbose|v'   => sub { use diagnostics; },
+    'quiet|q'     => sub { no warnings; },
+    'help|h'      => sub { pod2usage ( -verbose => 1 ); },
+    'manual|m'    => sub { pod2usage ( -verbose => 2 ); }
+);
 
-open my $LOG, '<', $logfile or die "Can't open $logfile";
-my @log = <$LOG>;
-close $LOG or die "Can't close $logfile";
+# Check required command line parameters
+pod2usage ( -verbose => 1 )
+unless @ARGV and $result;
 
-@log = grep {
-    m/alpha.*=/
-} @log;
+if ($output) {
+    open my $USER_OUT, '>', $output or croak "Can't open $output for writing: $!";
+    select $USER_OUT;
+}
 
-my $pattern = '[+-]?\.*(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?';
-
-my @feature
-= split /,/, $log[0];
-
-($feature[0]) = $feature[0] =~ m/($pattern)/;
-($feature[1]) = $feature[1] =~ m/($pattern)/;
-
-$feature[2]
-= 'a=' . sprintf("%g", $feature[0]) . ';t=' . sprintf("%g", $feature[1]);
+print "##gff-version 3\n";
 
 while (<>) {
-    my @fields = split /\t/, $_;
+    chomp;
+    my @fields = split /\t/;
     print join ("\t",
                 $fields[1],
-                q{.},
-                $feature[2],
+                'chipotle',
+                'locus',
                 $fields[2],
                 $fields[3],
                 $fields[4],
                 q{.},
                 q{.},
-                $fields[5],
+                "ID=$fields[0];p=$fields[5];maxwin=$fields[6]",
                 "\n"
             );
 }

@@ -14,7 +14,7 @@ width=50
 step=50
 
 cd $NAME
-#rm -r post-processing/single-c
+rm -r post-processing/single-c
 echo "Concatenating single c files..."
 mkdir -p post-processing/single-c
 for i in $groups; do
@@ -31,15 +31,15 @@ done
 echo "Done with code: $?"
 
 
-# echo "Merging and windowing concatenated single c files"
-# #rm -r post-processing/windows
-# mkdir -p post-processing/windows
-# for i in $groups; do
-#     for j in $contexts; do
-#         window_gff.pl --gff-file post-processing/single-c/${NAME}_BS-Seq_${i}_${j}_w1_methylation.gff --width ${width} --step ${step} --no-skip --output post-processing/windows/${NAME}_BS-Seq_${i}_${j}_w${width}_methylation.gff
-# #        cat post-processing/windows/${NAME}_BS-Seq_${i}_${j}_w${width}_methylation.gff >> post-processing/windows/${NAME}_BS-Seq_all_${j}_w${width}_methylation.gff
-#     done
-# done
+echo "Merging and windowing concatenated single c files"
+rm -r post-processing/windows
+mkdir -p post-processing/windows
+for i in $groups; do
+    for j in $contexts; do
+        window_gff.pl --gff-file post-processing/single-c/${NAME}_BS-Seq_${i}_${j}_w1_methylation.gff --width ${width} --step ${step} --no-skip --output post-processing/windows/${NAME}_BS-Seq_${i}_${j}_w${width}_methylation.gff
+#        cat post-processing/windows/${NAME}_BS-Seq_${i}_${j}_w${width}_methylation.gff >> post-processing/windows/${NAME}_BS-Seq_all_${j}_w${width}_methylation.gff
+    done
+done
 echo "Done with code: $?"
 cd ..
 

@@ -49,7 +49,7 @@ if ($output) {
     select $USER_OUT;
 }
 
-$| = 1;
+$| = 1; # flush buffer immediately
 
 # read in bowtie verbose file
 my $counts   = undef;

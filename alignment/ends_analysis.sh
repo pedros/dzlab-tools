@@ -34,7 +34,6 @@ for i in $groups; do
                     cat_flag=`echo $FLAG | sed 's/ /-/'`
                     fin=${NAME}_BS-Seq_${i}_${j}_w1_methylation.gff
                     fout=${NAME}_BS-Seq_${i}_${j}_${atype}_${l}_flag${cat_flag}
-
                     makeDist.pl $annotation post-processing/single-c/${fin} ${OUTDIR}/${fout} 100 5000 $FLAG $l
                     mv ${OUTDIR}/${fout}.log ${OUTDIR}/log/${fout}.log
                     average.pl ${OUTDIR}/${fout}.ends 100 100 > ${OUTDIR}/dat/${fout}.dat
