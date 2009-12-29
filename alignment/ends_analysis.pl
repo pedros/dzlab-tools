@@ -20,7 +20,7 @@ my $attribute_id   = 'ID';
 my $output;
 
 # Grabs and parses command line options
-my $result = GetOptions (
+my $result = GetOptions(
     'gff-annotation|g=s' => \$gff_annotation,
     'bin-width|b=i'      => \$bin_width,
     'distance|d=i'       => \$distance,
@@ -32,215 +32,324 @@ my $result = GetOptions (
     'output|o=s'         => \$output,
     'verbose|v'          => sub { use diagnostics; },
     'quiet|q'            => sub { no warnings; },
-    'help|h'             => sub { pod2usage ( -verbose => 1 ); },
-    'manual|m'           => sub { pod2usage ( -verbose => 2 ); }
+    'help|h'             => sub { pod2usage( -verbose => 1 ); },
+    'manual|m'           => sub { pod2usage( -verbose => 2 ); }
 );
 
+# Add additional stop strategies here and implement the corresponding function
 my $stop_flag_dispatch = {
-    0 => \&stop_flag_0,
+    0 => \&stop_flag_0,    # implemented; passed tests
     1 => \&stop_flag_1,
-    2 => \&stop_flag_2,         # implemented
+    2 => \&stop_flag_2,    # implemented; check embedded loci
     3 => \&stop_flag_3,
     4 => \&stop_flag_4,
     5 => \&stop_flag_5,
-    6 => \&stop_flag_6,         # implemented
+    6 => \&stop_flag_6,    # implemented: see #2
 };
 
 # Check required command line parameters
-pod2usage ( -verbose => 1 )
-unless @ARGV and $result
-and $gff_annotation
-and ($three_prime xor $five_prime)
-and ($stop_flag != 6 or ($stop_flag == 6 and $stop_distance))
-and exists $stop_flag_dispatch->{$stop_flag};
+pod2usage( -verbose => 1 )
+    unless @ARGV
+    and $result
+    and $gff_annotation
+    and ( $three_prime xor $five_prime )
+    and ( $stop_flag != 6 or ( $stop_flag == 6 and $stop_distance ) )
+    and exists $stop_flag_dispatch->{$stop_flag},
+    and $bin_width > 0;
 
 if ($output) {
     open my $USER_OUT, '>', $output or croak "Can't read $output: $!";
     select $USER_OUT;
 }
 
-print STDERR 'Indexing and offsetting annotation file...';
-my $annotation
-= offset_gff_annotation (index_gff_annotation ($gff_annotation, $attribute_id),
-                         $stop_flag_dispatch->{$stop_flag},
-                         {
-                             -three_prime   => $three_prime,
-                             -five_prime    => $five_prime,
-                             -distance      => $distance,
-                             -stop_flag     => $stop_flag,
-                             -stop_distance => $stop_distance
-                         });
-print STDERR "done\n";
+# index and offset the loci annotations data based on stop flag
+my $annotation = offset_gff_annotation(
+    index_gff_annotation( $gff_annotation, $attribute_id ),
+    $stop_flag_dispatch->{$stop_flag},
+    {   -three_prime   => $three_prime,
+        -five_prime    => $five_prime,
+        -distance      => $distance,
+        -stop_flag     => $stop_flag,
+        -stop_distance => $stop_distance
+    }
+);
 
-my $num_bins           = 2 * int ($distance / $bin_width);
-my @totals_bins        = ();  # will hold the total scores per bin
-my %sorted_annotations = ();  # memoized cache for sorting GFF annotation
-my $gff_iterator       = make_gff_iterator ($ARGV[0], \&gff_read);
+my $num_bins           = 2 * int( $distance / $bin_width );
+my %genes              = (); # hash of loci id hashes with scores/strand keys
+my %sorted_annotations = (); # cache for sorted GFF annotations
+my $gff_iterator       = make_gff_iterator( $ARGV[0], \&gff_read );
 
 COORD:
-while (my $gff_line = $gff_iterator->()) {
+while ( my $gff_line = $gff_iterator->() ) {
 
-    next COORD unless ref $gff_line eq 'HASH'; # &gff_read returns [] for GFF comments, invalid lines, etc.
+    # Step 1: Parsing GFF line
+    # &gff_read returns [] for GFF comments, invalid lines, etc.
+    next COORD unless ref $gff_line eq 'HASH';
 
-    #print STDERR "Assigning coordinates to bins...$gff_line->{start}\r";
+    # Step 2: Memoization
+    # has this been done before? use it : otherwise cache it
+    unless ( exists $sorted_annotations{ $gff_line->{seqname} } ) {
 
-    my $brs = binary_range_search (
-        [ $gff_line->{start}, $gff_line->{end} ], # the range reference (look-up key); below is an array of range references to search
-        $sorted_annotations{$gff_line->{seqname}} # has this been done before? use it : otherwise save it and use it
-        ||= [ map { $annotation->{$gff_line->{seqname}}{$_} } # map keys to values [start, end, strand, attribute]
-              sort { $a <=> $b } # sort keys (keys are start coords)
-              keys %{$annotation->{$gff_line->{seqname}}} ] # START HERE: get keys for seqname
-    )   || next COORD;
+        my @loci_coords   = keys %{ $annotation->{ $gff_line->{seqname} } };
+        my @sorted_coords = sort { $a <=> $b } @loci_coords;
 
-    my $reverse    # orientation of search: 5'->3' or 5'<-3' (reverse)
-    = ($five_prime and $gff_line->{strand} eq q{-})
-    || ($three_prime and $gff_line->{strand} eq q{+})
-    || 0;
-
-    # the bin index is:
-    # the gene 5' (forward) or 3' (reverse) coordinate
-    # minus the current start (forward) or end (reverse) coordinate
-    # divided by the bin width.
-    # Eg: gene 100->3500, coordinate 650 and bin width 100 is bin index |100-650|/100 = int(5.5) = 5
-    my $index = int abs ($brs->[$reverse] - ($reverse ? $gff_line->{end} : $gff_line->{start})) / $bin_width;
-
-    next COORD if $index > $num_bins; # this index is outside the range defined
-
-    $index = $reverse ? $num_bins - 1 - $index : $index; # for 5'<-3', reverse the bin index
-
-    push @{$totals_bins[$index]}, $gff_line->{score};
-}
-print STDERR "done\n";
-
-
-print STDERR 'Computing scores...';
-BIN:
-for my $index (0 .. $num_bins - 1) {
-
-    if (defined $totals_bins[$index]) {
-        $totals_bins[$index] = sum (@{$totals_bins[$index]}) / @{$totals_bins[$index]};
-    } else {
-        $totals_bins[$index] = 'NaN';
+        # map to values [start, end, strand, locus id]
+        $sorted_annotations{ $gff_line->{seqname} } = [
+            map { $annotation->{ $gff_line->{seqname} }{$_} }
+                @sorted_coords
+        ];
     }
-    print $index * $num_bins - $distance, "\t", sprintf("%g", $totals_bins[$index]), "\n";
+
+    # Step 3: Searching loci where this score fits into
+    # the look-up key is a range reference, brs searches an array of range references
+    my $locus = binary_range_search(
+        [ $gff_line->{start}, $gff_line->{end} ],
+        $sorted_annotations{ $gff_line->{seqname} },
+    ) || next COORD;
+
+    # Step 4: Reverse search if needed
+    # orientation of search: 5'->3' or 5'<-3' (reverse)
+    my $reverse
+        = ( $five_prime and $locus->[2] eq q{-} )
+            || ( $three_prime and $locus->[2] eq q{+} )
+                || 0;
+
+    # Step 5: Locate bin of width bin_width where this score fits into
+    # the bin index is the locus 5' or 3' coordinate
+    # minus the current start coordinate
+    # minus bin_width * (num_bins / 2)
+    # divided by the negative bin width.
+    # note: $reverse + 4 accesses original start or end coordinate for this locus
+    my $index = int(
+        (         $locus->[ $reverse + 4 ] 
+                      - $bin_width * ( $num_bins / 2 )
+                          - $gff_line->{start}
+                      ) / -$bin_width
+                  );
+
+    # Step 6: Weight score by amount of overlap
+    my $score = weight_score( $locus, $gff_line, $gff_line->{score} );
+
+    # Step 7: Save score into its appropriate bin, record its strand
+    push @{ $genes{ $locus->[3] }->{scores}[$index] }, $score;
+    $genes{ $locus->[3] }->{strand} = $locus->[2];
 }
-print STDERR "done\n";
+
+# Step 8: Iterate over scores for each gene and print those
+my $scores_iterator = make_scores_iterator( \%genes );
+while ( my ( $locus, $scores_ref ) = $scores_iterator->($num_bins) ) {
+    print join( "\t", $locus, @{$scores_ref} ), "\n";
+}
 
 
+## done
 
+
+sub weight_score {
+    my ( $locus, $gff_line, $score ) = @_;
+
+    my $bin_low  = max( $locus->[0], $gff_line->{start} );
+    my $bin_high = min( $locus->[1], $gff_line->{end} );
+    my $overlap  = $bin_low - $bin_high + 1;
+    my $weight   = $overlap / ( $gff_line->{end} - $gff_line->{start} + 1 );
+
+    return $gff_line->{score} * $weight;
+}
+
+sub make_scores_iterator {
+    my ($genes_ref) = @_;
+    my @genes = sort keys %{$genes_ref};
+
+    return sub {
+        my ($num_bins) = @_;
+
+        my $gene = shift @genes || return;
+        my @scores = ();
+
+        for my $index ( 0 .. $num_bins - 1 ) {
+
+            # reverse bin orientation for reverse strand genes
+            $index = $num_bins - $index - 1
+                if $genes{$gene}->{strand} eq q{-};
+
+            push @scores,
+                (
+                defined $genes{$gene}->{scores}[$index]
+                ? sprintf( "%g",
+                    ( sum @{ $genes{$gene}->{scores}[$index] } )
+                        / @{ $genes{$gene}->{scores}[$index] } )
+                : 'na'
+                );
+        }
+        return ( $gene, \@scores );
+    }
+}
 
 sub binary_range_search {
-    my ($range, $ranges) = @_;
-    my ($low, $high)     = (0, @{$ranges} - 1);
-    while ($low <= $high) {
-        my $try = int (($low + $high) / 2);
-        $low  = $try + 1, next if $ranges->[$try][1] < $range->[0];
+    my ( $range, $ranges ) = @_;
+    my ( $low, $high ) = ( 0, @{$ranges} - 1 );
+    while ( $low <= $high ) {
+
+        my $try = int( ( $low + $high ) / 2 );
+
+        $low = $try + 1, next if $ranges->[$try][1] < $range->[0];
         $high = $try - 1, next if $ranges->[$try][0] > $range->[1];
+
+        # range_assert ($range->[0], @{$ranges->[$try]});
         return $ranges->[$try];
     }
     return;
 }
 
+sub range_assert {
+    my ( $coord, $low, $high ) = @_;
+
+    if ( $coord < $low or $coord > $high ) {
+        croak "NOT OK: ", $coord, "\t$low-$high\n";
+    }
+}
+
 sub make_gff_iterator {
-    my ($gff_file_name, $gff_parser) = @_;
-    
-    open my $GFF_FILE, '<', $gff_file_name or croak "Can't read $gff_file_name: $!";
-    
-    return sub { $gff_parser->(scalar <$GFF_FILE>) };
+    my ( $gff_file_name, $gff_parser ) = @_;
+
+    open my $GFF_FILE, '<', $gff_file_name
+        or croak "Can't read $gff_file_name: $!";
+
+    return sub { $gff_parser->( scalar <$GFF_FILE> ) };
 }
 
 sub gff_read {
-    return [] if $_[0] =~ m/^\s*#+/;
+    return [] if $_[0] =~ m/^
+                            \s*
+                            \#+
+                           /mx;
 
-    my ($seqname, $source, $feature, $start, $end, $score, $strand, $frame, $attribute)
-    = split /\t/, shift || return;
+    my ($seqname, $source, $feature, $start, $end,
+        $score,   $strand, $frame,   $attribute
+    ) = split m/\t/xm, shift || return;
 
-    $attribute =~ s/[\r\n]//g;
+    $attribute =~ s/[\r\n]//mxg;
 
     return {
-	'seqname'   => lc $seqname,
-	'source'    => $source,
-	'feature'   => $feature,
-	'start'     => $start,
-	'end'       => $end,
-	'score'     => $score,
-	'strand'    => $strand,
-	'frame'     => $frame,
-	'attribute' => $attribute
+        'seqname'   => lc $seqname,
+        'source'    => $source,
+        'feature'   => $feature,
+        'start'     => $start,
+        'end'       => $end,
+        'score'     => $score,
+        'strand'    => $strand,
+        'frame'     => $frame,
+        'attribute' => $attribute
     };
 }
 
 sub index_gff_annotation {
-    my ($gff_file_name, $attribute_id) = @_;
+    my ( $gff_file_name, $attribute_id ) = @_;
 
     my $gff_annotation = {};
-    my $gff_iterator   = make_gff_iterator ($gff_file_name, \&gff_read);
-    
-    while (my $gff_line = $gff_iterator->()) {
+    my $gff_iterator = make_gff_iterator( $gff_file_name, \&gff_read );
+
+ GFF:
+    while ( my $gff_line = $gff_iterator->() ) {
+
+        next GFF unless ref $gff_line eq 'HASH';
 
         $gff_line->{attribute} =~ s/.*
                                     $attribute_id
                                     [=\s]?
                                     ([^;\s]+)
                                     .*
-                                   /$1/x
-                                   if $attribute_id;
-        
-        $gff_annotation->{$gff_line->{seqname}}{$gff_line->{start}}
-        = [$gff_line->{start}, $gff_line->{end}, $gff_line->{strand}, $gff_line->{attribute}];
-    }
+                                   /$1/mx
+                                       if $attribute_id;
 
+        $gff_annotation->{ $gff_line->{seqname} }{ $gff_line->{start} } = [
+            $gff_line->{start},  $gff_line->{end},
+            $gff_line->{strand}, $gff_line->{attribute}
+        ];
+    }
     return $gff_annotation;
 }
 
 sub offset_gff_annotation {
-    my ($gff_annotation, $flag_parser, $parameters) = @_;
+    my ( $gff_annotation, $flag_parser, $parameters ) = @_;
+    my $offset_gff_annotation = {};
 
     return unless $gff_annotation and $flag_parser;
-    
-    for my $seqid (sort keys %{$gff_annotation}) {
 
-        my @memory = ([0, 0, q{+}, q{}]);
+    for my $seqid ( sort keys %{$gff_annotation} ) {
 
-        for my $start (sort {$a <=> $b} keys %{$gff_annotation->{$seqid}}) {
+        # every count of 3 genes, we offset the middle one
+        # this ensures that we don't miss the first gene
+        my @memory = ( [ 0, 0, q{+}, q{} ] );
 
-            push @memory, $gff_annotation->{$seqid}{$start} if @memory < 3;
+        for my $start (
+            sort { $a <=> $b }
+                keys %{ $gff_annotation->{$seqid} }
+            ) {
 
-            if (@memory == 3) {
-                my ($flag_start, $flag_end)
-                = $flag_parser->($parameters, @memory);
+            push @memory, $gff_annotation->{$seqid}{$start};
 
-                delete $gff_annotation->{$seqid}{$start};
-                $gff_annotation->{$seqid}{$flag_start}
-                = [$flag_start, $flag_end, $memory[1]->[2], $memory[1]->[3]];
+            # buffer is full, offset middle gene and delete first gene
+            if ( @memory == 3 ) {
+                check_neighbourhood( $offset_gff_annotation, $flag_parser,
+                    $parameters, $seqid, @memory );
                 shift @memory;
             }
         }
+
+        # this ensures that we don't miss the last gene
+        push @memory, [ 0, 0, q{+}, q{} ];
+        check_neighbourhood( $offset_gff_annotation, $flag_parser,
+            $parameters, $seqid, @memory );
+
     }
-    return $gff_annotation;
+    return $offset_gff_annotation;
+}
+
+sub check_neighbourhood {
+    my ( $offset_gff_annotation, $flag_parser, $parameters, $seqid, @memory )
+        = @_;
+
+    # offset gene coordinates using appropriate flag method
+    my ( $flag_start, $flag_end ) = $flag_parser->( $parameters, @memory );
+
+    $offset_gff_annotation->{$seqid}{$flag_start} = [
+        $flag_start,     $flag_end,       $memory[1]->[2],
+        $memory[1]->[3], $memory[1]->[0], $memory[1]->[1]
+    ]
+        if $flag_start <= $flag_end;
+
+    return 1;
 }
 
 
-sub stop_flag_2 {
-    my ($parameters, $previous, $current, $next) = @_;
-
-    my ($prev_end, $next_start) = ($previous->[1], $next->[0]);
-    my ($minimum, $maximum)     = min_max_distance ($current, $parameters);
-
-    my $flag_start = max ($prev_end, $minimum);
-    my $flag_end   = min ($next_start, $maximum);
-    
-    return ($flag_start, $flag_end);
-}
 
 sub stop_flag_0 {
-    croak "Not yet implemented";
+    my ( $parameters, $previous, $current, $next ) = @_;
+
+    return ( min_max_distance( $current, $parameters ) );
 }
 
 sub stop_flag_1 {
     croak "Not yet implemented";
 }
 
+sub stop_flag_2 {
+    my ( $parameters, $previous, $current, $next ) = @_;
+
+    my ( $minimum, $maximum ) = min_max_distance( $current, $parameters );
+
+    if (   $parameters->{-five_prime} and $current->[2] eq q{-}
+        or $parameters->{-three_prime} and $current->[2] eq q{+} )
+    {
+        return ( max( $current->[0], $previous->[1], $minimum ),
+            min( $next->[0], $maximum ) );
+    }
+    else {
+        return ( max( $previous->[1], $minimum ),
+            min( $current->[1], $next->[0], $maximum ) );
+    }
+}
 
 sub stop_flag_3 {
     croak "Not yet implemented";
@@ -255,41 +364,54 @@ sub stop_flag_5 {
 }
 
 sub stop_flag_6 {
-    my ($parameters, $previous, $current, $next) = @_;
+    my ( $parameters, $previous, $current, $next ) = @_;
 
     croak "Flag 6 requires the stop distance parameter (-k)"
-    unless $parameters->{-stop_distance};
+        unless $parameters->{-stop_distance};
 
-    my ($prev_end, $next_start) = ($previous->[1], $next->[0]);
-    my ($prev_dist, $next_dist) = ($prev_end   + $parameters->{-stop_distance},
-                                   $next_start - $parameters->{-stop_distance});
-    my ($minimum, $maximum)     = min_max_distance ($current, $parameters);
+    my ( $minimum, $maximum ) = min_max_distance( $current, $parameters );
 
-    my $flag_start = max ($prev_end, $minimum, $prev_dist);
-    my $flag_end   = min ($next_start, $maximum, $next_dist);
-    
-    return ($flag_start, $flag_end);
+    if (   $parameters->{-five_prime} and $current->[2] eq q{-}
+        or $parameters->{-three_prime} and $current->[2] eq q{+} )
+    {
+        return (
+            max($current->[0], $previous->[1] + $parameters->{-stop_distance},
+                $minimum
+            ),
+            min( $next->[0] - $parameters->{-stop_distance}, $maximum )
+        );
+    }
+    else {
+        return (
+            max( $previous->[1] + $parameters->{-stop_distance}, $minimum ),
+            min($current->[1], $next->[0] - $parameters->{-stop_distance},
+                $maximum
+            )
+        );
+    }
 }
 
 sub min_max_distance {
-    my ($current, $parameters) = @_;
+    my ( $current, $parameters ) = @_;
 
-    my ($minimum, $maximum);
+    my ( $minimum, $maximum );
 
-    if ($parameters->{-five_prime} and $current->[2] eq q{-}
-        or $parameters->{-three_prime} and $current->[2] eq q{+}) {
+    if (   $parameters->{-five_prime} and $current->[2] eq q{-}
+        or $parameters->{-three_prime} and $current->[2] eq q{+} )
+    {
 
         $minimum = $current->[1] - $parameters->{-distance};
         $maximum = $current->[1] + $parameters->{-distance};
 
-    } else {
+    }
+    else {
         $minimum = $current->[0] - $parameters->{-distance};
         $maximum = $current->[0] + $parameters->{-distance};
     }
 
-    $minimum = ($minimum < 0 ? 0 : $minimum);
+    $minimum = ( $minimum < 0 ? 0 : $minimum );
 
-    return ($minimum, $maximum);
+    return ( $minimum, $maximum );
 }
 
 __END__
@@ -335,7 +457,7 @@ __END__
 
 =head1 AUTHOR
 
- Pedro Silva <psilva@nature.berkeley.edu/>
+ Pedro Silva <pedros@berkeley.edu/>
  Zilberman Lab <http://dzlab.pmb.berkeley.edu/>
  Plant and Microbial Biology Department
  College of Natural Resources
@@ -357,3 +479,17 @@ __END__
  along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 =cut
+472:	final indentation level: 1
+
+Final nesting depth of '{'s is 1
+The most recent un-matched '{' is on line 83
+83: while ( my $gff_line = $gff_iterator->() ) {
+                                               ^
+472:	To save a full .LOG file rerun with -g
+485:	final indentation level: 1
+
+Final nesting depth of '{'s is 1
+The most recent un-matched '{' is on line 83
+83: while ( my $gff_line = $gff_iterator->() ) {
+                                               ^
+485:	To save a full .LOG file rerun with -g
