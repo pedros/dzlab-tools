@@ -12,6 +12,7 @@ use Pod::Usage;
 my $ratio_file = q{-}; # gff file with expression, binding sites, etc. data
 my $annotation_file;   # gff annotation file
 my $distance = 1000;   # distance from center of each probe/window on each side to search
+my $overlap  = 0;
 my $output   = q{-};
 my $verbose  = 0;
 my $quiet    = 0;
@@ -21,6 +22,7 @@ my $result = GetOptions (
     'ratio-file|f=s'      => \$ratio_file,
     'annotation-file|a=s' => \$annotation_file,
     'distance|d=i'        => \$distance,
+    'overlap|p'           => \$overlap,
     'output|o:s'          => \$output,
     'verbose|v'           => sub {enable diagnostics;use warnings;},
     'quiet|q'             => sub {disable diagnostics;no warnings;},
@@ -30,7 +32,7 @@ my $result = GetOptions (
 
 # Check required command line parameters
 pod2usage(-verbose => 1)
-unless $result && $ratio_file && $annotation_file;
+unless $result && $ratio_file && $annotation_file and ($distance or $overlap);
 
 # redirects STDOUT to file if specified by user
 open STDOUT, '>', "$output" or croak "Can't redirect STDOUT to file: $output"
@@ -57,7 +59,7 @@ close $RATIO or croak "Can't close file: $ratio_file";
 # main logic: process each (sorted) sequence id in turn
 # for each one, process each (sorted) window/probe
 # expects to find gff formatted line output from chipotle and pre-processed
-# to re-arrange columns into standard gff format
+# to re-arrange columns into standard gff format (chi2gff.pl)
 for my $chr (sort {$a cmp $b} keys %data) {
 
     for my $window (sort {(split /\t/, $a)[3] <=> (split /\t/, $b)[3]} @{$data{$chr}}) {
@@ -73,7 +75,10 @@ for my $chr (sort {$a cmp $b} keys %data) {
         # grab all the loci from the annotation file that fall within that region
         # this is a first filtering step, very coarse. see gff_filter_by_coord
         my @range
-        = @{ gff_filter_by_coord ($lower_bound, $upper_bound, $annotation{$chr}) };
+        = @{ gff_filter_by_coord (
+            ($overlap ? ($start, $end) : ($lower_bound, $upper_bound)),
+            $annotation{$chr}, $overlap
+        ) };
 
         # for current window/probe, go through each locus and
         # arrange its parameters (id, distance to center of probe, direction)
@@ -155,14 +160,13 @@ for my $chr (sort {$a cmp $b} keys %data) {
 
 
 sub gff_filter_by_coord {
-    my ($lower_bound, $upper_bound, $data_ref) = @_;
+    my ($lower_bound, $upper_bound, $data_ref, $overlap) = @_;
 
     my @filtered;
     for (my $i = 0; $i < @{$data_ref} - 1; $i++) {
 
         my $start_coord  = $data_ref->[$i][0];
         my $end_coord    = $data_ref->[$i][1];
-        my $center_coord = int (($end_coord - $start_coord) / 2 + $start_coord);
 
 	if (($end_coord >= $lower_bound && $start_coord <= $upper_bound)
             or ($start_coord <= $lower_bound && $end_coord >= $upper_bound)) {
