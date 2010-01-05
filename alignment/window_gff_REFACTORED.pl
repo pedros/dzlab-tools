@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 
 use warnings;
 use strict;
@@ -18,26 +18,26 @@ my $average = 0;
 
 # Grabs and parses command line options
 my $result = GetOptions(
-    'width|w=i'        => \$width,
-    'step|s=i'         => \$step,
-    'average|a'        => \$average,
-    'merge|m'          => \$merge,
-    'no-sort|n'        => \$no_sort,
-    'no-skip|k'        => \$no_skip,
-    'output|o=s'       => \$output,
-    'verbose'          => sub { use diagnostics; },
-    'quiet'            => sub { no warnings; },
-    'help'             => sub { pod2usage( -verbose => 1 ); },
-    'manual'           => sub { pod2usage( -verbose => 2 ); }
+    'width|w=i'  => \$width,
+    'step|s=i'   => \$step,
+    'average|a'  => \$average,
+    'merge|m'    => \$merge,
+    'no-sort|n'  => \$no_sort,
+    'no-skip|k'  => \$no_skip,
+    'output|o=s' => \$output,
+    'verbose'    => sub { use diagnostics; },
+    'quiet'      => sub { no warnings; },
+    'help'       => sub { pod2usage( -verbose => 1 ); },
+    'manual'     => sub { pod2usage( -verbose => 2 ); }
 );
 
 # Check required command line parameters
 pod2usage( -verbose => 1 )
-unless @ARGV and $result;
+    unless @ARGV and $result;
 
 if ($output) {
     open my $USER_OUT, '>', $output
-    or croak "Can't open $output for writing: $!";
+        or croak "Can't open $output for writing: $!";
     select $USER_OUT;
 }
 
@@ -70,7 +70,12 @@ for my $sequence ( sort keys %gff_records ) {
     }
 
  WINDOW:
-    for (my $i = 1; $i <  @{ $gff_records{$sequence} } - $width; $i += $step) {
+    for (
+        my $i = 1;
+        $i < $gff_records{$sequence}[-1]->{end} - $width;
+        $i += $step
+        )
+    {
 
         my $brs_iterator = binary_range_search(
             range    => [ $i, $i + $width - 1 ],
@@ -78,60 +83,46 @@ for my $sequence ( sort keys %gff_records ) {
             iterator => 1,
         );
 
-        my ($score, $attribute) = '.';
+        my $scores_ref
+            = $average
+            ? average_scores($brs_iterator)
+            : fractional_methylation($brs_iterator);
 
-        if ($average) {
-            my ($score_avg, $score_std, $score_var, $score_count)
-                = average_scores ($brs_iterator);
+        my ( $score, $attribute ) = qw(. .);
 
-            if ($score_count) {
-                $score     = sprintf ("%g", $score_avg);
-                $attribute = 'std=' . sprintf ("%g", $score_std)
-                     . '; var=' . sprintf ("%g", $score_var)
-                       . '; n=' . sprintf ("%g", $score_count);
-            }
+        if ( ref $scores_ref eq 'HASH' ) {
+
+            $score = sprintf( "%g", $scores_ref->{score} );
+            delete $scores_ref->{score};
+
+            $attribute = join q{; }, map { "$_=" . $scores_ref->{$_} }
+                sort keys %{$scores_ref};
+
         }
-        else {
-            my ($fractional_methylation, $c_count, $t_count, $score_count)
-                = fractional_methylation ($brs_iterator);
 
-            if ($score_count) {
-                $score     = $fractional_methylation;
-                $attribute = 'c=' . sprintf ("%g", $c_count)
-                    . '; t=' . sprintf ("%g", $t_count)
-                        . '; n=' . sprintf ("%g", $score_count);
-            }
-        }
-        
-        print join ("\t",
-                    $sequence,
-                    'dzlab',
-                    "w$width",
-                    $i,
-                    $i + $width - 1,
-                    $score,
-                    '.',
-                    '.',
-                    $attribute,
-                ), "\n";
+        print join( "\t",
+            $sequence, 'dzlab',         "w$width",
+            $i,        $i + $width - 1, $score,
+            q{.},      q{.},            $attribute,
+            ),
+            "\n";
 
     }
 
-    @{ $gff_records{$sequence} } = ();
+    delete $gff_records{$sequence};
 }
 
 sub fractional_methylation {
     my ($brs_iterator) = @_;
-    
-    my ($c_count, $t_count, $score_count)
-        = (0, 0, 0);
 
- COORD:
-    while (my $gff_line = $brs_iterator->()) {
+    my ( $c_count, $t_count, $score_count ) = ( 0, 0, 0 );
+
+COORD:
+    while ( my $gff_line = $brs_iterator->() ) {
 
         next COORD unless ref $gff_line eq 'HASH';
 
-        my ($c, $t) = $gff_line->{attribute} =~ m/
+        my ( $c, $t ) = $gff_line->{attribute} =~ m/
                                                      c=(\d+)
                                                      .*
                                                      t=(\d+)
@@ -141,45 +132,51 @@ sub fractional_methylation {
         $t_count += $t;
         $score_count++;
     }
-    
-        
-    if ($score_count and ($c_count or $t_count)) {
-        return $c_count / ($c_count + $t_count), $c_count, $t_count, $score_count;
+
+    if ( $score_count and ( $c_count or $t_count ) ) {
+        return {
+            score => $c_count / ( $c_count + $t_count ),
+            c     => $c_count,
+            t     => $t_count,
+            n     => $score_count,
+        };
     }
 }
 
-    
 sub average_scores {
     my ($brs_iterator) = @_;
 
-    my ($score_avg, $score_std, $score_var, $score_count)
-        = (0, 0, 0, 0);
+    my ( $score_avg, $score_std, $score_var, $score_count ) = ( 0, 0, 0, 0 );
 
- COORD:
-    while (my $gff_line = $brs_iterator->()) {
+COORD:
+    while ( my $gff_line = $brs_iterator->() ) {
 
         next COORD unless ref $gff_line eq 'HASH';
-            
+
+        my $previous_score_avg = $score_avg;
+
         $score_avg = $score_avg
-            + ($gff_line->{score} - $score_avg)
-                / ++$score_count;
+            + ( $gff_line->{score} - $score_avg ) / ++$score_count;
 
-        $score_std = $score_std
-            + ($gff_line->{score} - $score_avg)
-                * ($gff_line->{score} - $score_avg);
+        $score_std
+            = $score_std
+            + ( $gff_line->{score} - $previous_score_avg )
+            * ( $gff_line->{score} - $score_avg );
 
-        $score_var = $score_std / ($score_count - 1)
+        $score_var = $score_std / ( $score_count - 1 )
             if $score_count > 1;
-            
-        # range_assert ($gff_line->{start}, $i, $i + $width - 1);
+
     }
 
     if ($score_count) {
-        return $score_avg, $score_std, $score_var, $score_count;
+        return {
+            score => $score_avg,
+            std   => sqrt ($score_var),
+            var   => $score_var,
+            n     => $score_count,
+        };
     }
 }
-
-
 
 sub range_assert {
     my ( $coord, $low, $high ) = @_;
@@ -202,32 +199,34 @@ sub binary_range_search {
 
         my $try = int( ( $low + $high ) / 2 );
 
-        $low  = $try + 1, next if $ranges->[$try]{end}   < $range->[0];
+        $low = $try + 1, next if $ranges->[$try]{end} < $range->[0];
         $high = $try - 1, next if $ranges->[$try]{start} > $range->[1];
 
-        my ($down, $up) = ($try) x 2;
-        
-        my %seen = ();
-        
-        my $brs_iterator = sub {};
-        $brs_iterator    = sub {
+        my ( $down, $up ) = ($try) x 2;
 
-            if ($ranges->[ $up + 1 ]{end} >= $range->[0]
-                    and $ranges->[ $up + 1 ]{start} <= $range->[1]
-                        and !exists $seen{$up + 1}) {
-                
-                $seen{$up + 1} = undef;
-                return $ranges->[++$up];
-            }            
-            elsif ($ranges->[ $down - 1]{end} >= $range->[0]
-                       and $ranges->[ $down + 1]{start} <= $range->[1]
-                           and !exists $seen{$down - 1}
-                               and $down > 0) {
-                
-                $seen{$down - 1} = undef;
-                return $ranges->[--$down];
+        my %seen = ();
+
+        my $brs_iterator = sub { };
+        $brs_iterator = sub {
+
+            if (    $ranges->[ $up + 1 ]{end} >= $range->[0]
+                and $ranges->[ $up + 1 ]{start} <= $range->[1]
+                and !exists $seen{ $up + 1 } )
+            {
+
+                $seen{ $up + 1 } = undef;
+                return $ranges->[ ++$up ];
             }
-            elsif(!exists $seen{$try}) {
+            elsif ( $ranges->[ $down - 1 ]{end} >= $range->[0]
+                and $ranges->[ $down + 1 ]{start} <= $range->[1]
+                and !exists $seen{ $down - 1 }
+                and $down > 0 )
+            {
+
+                $seen{ $down - 1 } = undef;
+                return $ranges->[ --$down ];
+            }
+            elsif ( !exists $seen{$try} ) {
                 $seen{$try} = undef;
                 return $ranges->[$try];
             }
@@ -236,9 +235,9 @@ sub binary_range_search {
             }
         };
         return $brs_iterator;
-        
+
     }
-    return sub {};
+    return sub { };
 }
 
 sub gff_read {
@@ -274,15 +273,19 @@ sub make_gff_iterator {
     my $GFF_HANDLE = $options{handle};
 
     croak
-    "Need parser function reference and file name or handle to build iterator"
-    unless $parser
-    and ref $parser eq 'CODE'
-    and ( ( defined $file and -e $file )
-          xor( defined $GFF_HANDLE and ref $GFF_HANDLE eq 'GLOB' or $GFF_HANDLE eq 'ARGV' ) );
+        "Need parser function reference and file name or handle to build iterator"
+        unless $parser
+            and ref $parser eq 'CODE'
+            and (
+                ( defined $file and -e $file )
+                xor(defined $GFF_HANDLE and ref $GFF_HANDLE eq 'GLOB'
+                        or $GFF_HANDLE eq 'ARGV'
+                )
+            );
 
     if ($file) {
         open $GFF_HANDLE, '<', $file
-        or croak "Can't read $file: $!";
+            or croak "Can't read $file: $!";
     }
 
     return sub {
