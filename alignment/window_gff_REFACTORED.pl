@@ -112,6 +112,75 @@ for my $sequence ( sort keys %gff_records ) {
     delete $gff_records{$sequence};
 }
 
+
+sub make_window_iterator {
+    my ($options) = @_;
+
+    if ($options->{windows}) {
+        my $width = $options->{windows}{width};
+        my $step  = $options->{windows}{step};
+        my $lower = $options->{windows}{lower};
+        my $upper = $options->{windows}{upper};
+        
+        return sub {
+            my $i      = $lower;
+            my $lower += $step;
+
+            if ($i <= $upper - $width + 1) {
+                return $i, $i + $width - 1;
+            }
+            else {
+                return undef;
+            }
+        }
+    }
+    elsif ($options->{gff}) {
+
+        my $annotation_file = $options->{gff}{file};
+        my $locus_tag       = $options->{gff}{tag}   || 'ID';
+        my $merge_exons     = $options->{gff}{merge} || 0;
+        
+        open my $GFFH, '<', $annotation_file or croak "Can't read file: $annotation_file";
+
+        my $gff_iterator
+        = make_gff_iterator( parser => \&gff_read, handle => $GFFH );
+
+        my %annotation = ();
+
+        while ( my $locus = $gff_iterator->() ) {
+
+            # &gff_read returns [] for GFF comments, invalid lines, etc.
+            next LOAD unless ref $locus eq 'HASH';
+
+            my ($locus_id) = $locus->{attribute} =~ m/$locus_tag[=\s]?([^;]+)/;
+
+            if (!defined $locus_id) {
+                ($locus_id, undef) = split /;/, $locus->{attribute};
+                $locus_id ||= q{.};
+            } else {
+                $locus_id =~ s/["\t\r\n]//g;
+                $locus_id =~ s/\.\d$// if $merge_exons;
+            }
+
+            push @{ $annotation{$locus->{seqname}}{$locus->{start}}},
+            [$locus->{start}, $locus->{end}, $locus_id, $locus->{strand}, $locus->{source}, $locus->{feature}, $locus->{attribute}];
+        }
+        close $GFFH;
+
+        my @annotation_keys = sort keys %annotation;
+
+        return sub { 
+            if (my $locus = $annotation{shift @annotation_keys}) {
+                return @{ $locus }[0 .. 2];
+            }
+            else {
+                return undef;
+            }
+        };
+    }
+}
+
+
 sub fractional_methylation {
     my ($brs_iterator) = @_;
 
