@@ -11,28 +11,30 @@ use Pod::Usage;
 # Globals, passed as command line options
 my $ratio_file = q{-}; # gff file with expression, binding sites, etc. data
 my $annotation_file;   # gff annotation file
-my $distance = 1000;   # distance from center of each probe/window on each side to search
+my $distance = 0;      # distance from center of each probe/window on each side to search
 my $overlap  = 0;
+my $distance_overlap = 0;
 my $output   = q{-};
 my $verbose  = 0;
 my $quiet    = 0;
 
 # Grabs and parses command line options
 my $result = GetOptions (
-    'ratio-file|f=s'      => \$ratio_file,
-    'annotation-file|a=s' => \$annotation_file,
-    'distance|d=i'        => \$distance,
-    'overlap|p'           => \$overlap,
-    'output|o:s'          => \$output,
-    'verbose|v'           => sub {enable diagnostics;use warnings;},
-    'quiet|q'             => sub {disable diagnostics;no warnings;},
-    'help|usage|h'        => sub {pod2usage(-verbose => 1);},
-    'manual|man|m'        => sub {pod2usage(-verbose => 2);}
+    'ratio-file|f=s'        => \$ratio_file,
+    'annotation-file|a=s'   => \$annotation_file,
+    'distance|d=i'          => \$distance,
+    'overlap|p'             => \$overlap,
+    'distance-overlap|dp|i' => \$distance_overlap,
+    'output|o:s'            => \$output,
+    'verbose|v'             => sub {enable diagnostics;use warnings;},
+    'quiet|q'               => sub {disable diagnostics;no warnings;},
+    'help|usage|h'          => sub {pod2usage(-verbose => 1);},
+    'manual|man|m'          => sub {pod2usage(-verbose => 2);}
 );
 
 # Check required command line parameters
 pod2usage(-verbose => 1)
-unless $result && $ratio_file && $annotation_file and ($distance or $overlap);
+unless $result && $ratio_file && $annotation_file and ($distance xor $overlap xor $distance_overlap);
 
 # redirects STDOUT to file if specified by user
 open STDOUT, '>', "$output" or croak "Can't redirect STDOUT to file: $output"
@@ -56,6 +58,21 @@ while (<$RATIO>) {
 }
 close $RATIO or croak "Can't close file: $ratio_file";
 
+my %logic_dispatch = (
+    distance         => sub {
+        my $center = int (($_[1] - $_[0]) / 2 + $_[0]);
+        return ($center - int $_[2], $center + int $_[2]);
+    },
+    
+    overlap          => sub {
+        return ($_[0], $_[1]);
+    },
+
+    distance_overlap => sub {
+        return ($_[0] - int $_[2], $_[1] + int $_[2]);
+    },
+);
+        
 # main logic: process each (sorted) sequence id in turn
 # for each one, process each (sorted) window/probe
 # expects to find gff formatted line output from chipotle and pre-processed
@@ -67,16 +84,31 @@ for my $chr (sort {$a cmp $b} keys %data) {
         my ($feature, $start, $end, $mean, $pvalue)
         = (split /\t/, $window)[2, 3, 4, 5, 8];
 
-        # assume normal distribution within a window (ie peaks are in center of window)
         my $center = int (($end - $start) / 2 + $start);
-        my $lower_bound = $center - int $distance; # where to search in surrounding region
-        my $upper_bound = $center + int $distance;
+        my $lower_bound;
+        my $upper_bound;
+
+        # assume normal distribution within a window (ie peaks are in center of window)
+        if ($distance) {
+            ($lower_bound, $upper_bound)
+            = $logic_dispatch{distance}->($start, $end, $distance);
+        }
+        # don't assume anything, use overlaps to find genes
+        elsif ($overlap) {
+            ($lower_bound, $upper_bound)
+            = $logic_dispatch{overlap}->($start, $end);
+        }
+        # go a little $distance beyond the window bounds
+        elsif ($distance_overlap) {
+            ($lower_bound, $upper_bound)
+            = $logic_dispatch{distance_overlap}->($start, $end, $distance_overlap);
+        }
 
         # grab all the loci from the annotation file that fall within that region
         # this is a first filtering step, very coarse. see gff_filter_by_coord
         my @range
         = @{ gff_filter_by_coord (
-            ($overlap ? ($start, $end) : ($lower_bound, $upper_bound)),
+            $lower_bound, $upper_bound,
             $annotation{$chr}, $overlap
         ) };
 
@@ -105,7 +137,6 @@ for my $chr (sort {$a cmp $b} keys %data) {
             }
             $gene_list .= q{,}; # gene list separator
         }
-
         $gene_list =~ s/,$// if @range; # delete the last comma
 
         # final post-processing to resolve multiple targets
@@ -245,14 +276,16 @@ __END__
 
  find_loci.pl [OPTION]... [FILE]...
 
- -f, --ratio-file      gff file with expression, binding sites, etc. data
- -a, --annotation-file gff annotation file
- -d, --distance        istance from center of each probe/window on each side to search
- -o, --output          filename to write results to (default is STDOUT, unless in batch mode)
- -v, --verbose         output perl's diagnostic and warning messages
- -q, --quiet           supress perl's diagnostic and warning messages
- -h, --help            print this information
- -m, --manual          print the plain old documentation page
+ -f,  --ratio-file       gff file with expression, binding sites, etc. data
+ -a,  --annotation-file  gff annotation file
+ -d,  --distance         distance from center of each probe/window on each side to search
+ -p,  --overlap          search whole probe for overlapping genes
+ -dp, --distance-overlap search whole probe for overlapping genes and go extra distance beyond bounds
+ -o,  --output           filename to write results to (default is STDOUT, unless in batch mode)
+ -v,  --verbose          output perl's diagnostic and warning messages
+ -q,  --quiet            supress perl's diagnostic and warning messages
+ -h,  --help             print this information
+ -m,  --manual           print the plain old documentation page
 
 =head1 REVISION
 
