@@ -15,6 +15,8 @@ my $merge   = 0;
 my $no_sort = 0;
 my $no_skip = 0;
 my $average = 0;
+my $gff;
+my $tag     = 'ID';
 
 # Grabs and parses command line options
 my $result = GetOptions(
@@ -24,6 +26,8 @@ my $result = GetOptions(
     'merge|m'    => \$merge,
     'no-sort|n'  => \$no_sort,
     'no-skip|k'  => \$no_skip,
+    'gff|g=s'    => \$gff,
+    'tag|t=s'    => \$tag,
     'output|o=s' => \$output,
     'verbose'    => sub { use diagnostics; },
     'quiet'      => sub { no warnings; },
@@ -69,16 +73,38 @@ for my $sequence ( sort keys %gff_records ) {
             @{ $gff_records{$sequence} };
     }
 
- WINDOW:
-    for (
-        my $i = 1;
-        $i < $gff_records{$sequence}[-1]->{end} - $width;
-        $i += $step
-        )
-    {
+    my $parameters;
+
+    if ($gff) {
+        $parameters = {  
+            gff => {
+                file  => $gff,
+                tag   => $tag,
+                merge => $merge,
+            }
+        };
+    }
+    else {
+        $parameters = {
+            windows => {
+                width => $width,
+                step  => $step,
+                lower => 1,
+                upper => $gff_records{$sequence}[-1]->{end},
+            }
+        };
+    }
+
+    my $window_iterator 
+    = make_window_iterator ($parameters);
+
+  WINDOW:
+    while ( my ($start, $end) = $window_iterator->() ) {
+
+        print STDERR "$start\t$end\n";next WINDOW;
 
         my $brs_iterator = binary_range_search(
-            range    => [ $i, $i + $width - 1 ],
+            range    => [$start, $end],
             ranges   => $gff_records{$sequence},
             iterator => 1,
         );
@@ -101,17 +127,16 @@ for my $sequence ( sort keys %gff_records ) {
         }
 
         print join( "\t",
-            $sequence, 'dzlab',         "w$width",
-            $i,        $i + $width - 1, $score,
-            q{.},      q{.},            $attribute,
-            ),
-            "\n";
+                    $sequence, 'dzlab',         "w$width",
+                    $start,        $end, $score,
+                    q{.},      q{.},            $attribute,
+                ),
+                "\n";
 
     }
 
     delete $gff_records{$sequence};
 }
-
 
 sub make_window_iterator {
     my ($options) = @_;
@@ -124,7 +149,7 @@ sub make_window_iterator {
         
         return sub {
             my $i      = $lower;
-            my $lower += $step;
+            $lower    += $step;
 
             if ($i <= $upper - $width + 1) {
                 return $i, $i + $width - 1;
@@ -140,7 +165,8 @@ sub make_window_iterator {
         my $locus_tag       = $options->{gff}{tag}   || 'ID';
         my $merge_exons     = $options->{gff}{merge} || 0;
         
-        open my $GFFH, '<', $annotation_file or croak "Can't read file: $annotation_file";
+        open my $GFFH, '<', $annotation_file 
+        or croak "Can't read file: $annotation_file";
 
         my $gff_iterator
         = make_gff_iterator( parser => \&gff_read, handle => $GFFH );
@@ -162,15 +188,16 @@ sub make_window_iterator {
                 $locus_id =~ s/\.\d$// if $merge_exons;
             }
 
-            push @{ $annotation{$locus->{seqname}}{$locus->{start}}},
+            push @{ $annotation{$locus->{start}}},
             [$locus->{start}, $locus->{end}, $locus_id, $locus->{strand}, $locus->{source}, $locus->{feature}, $locus->{attribute}];
         }
         close $GFFH;
 
-        my @annotation_keys = sort keys %annotation;
+        my @annotation_keys = sort {$a <=> $b} keys %annotation;
 
         return sub { 
-            if (my $locus = $annotation{shift @annotation_keys}) {
+            if (my $locus = shift @{$annotation{shift @annotation_keys}}) {
+
                 return @{ $locus }[0 .. 2];
             }
             else {
