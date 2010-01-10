@@ -2,7 +2,7 @@
 
 eval 'exec /usr/bin/perl -w -S $0 ${1+"$@"}'
     if 0; # not running under some shell
-# $Id: bp_seqret.PLS 15088 2008-12-04 02:49:09Z bosborne $
+# $Id$
 # -*-Perl-*- mode (for emacs)
 
 =head1 NAME

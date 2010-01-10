@@ -149,11 +149,11 @@ __END__
 
  Version 0.0.1
 
- $Rev: $:
- $Author: $:
- $Date: $:
- $HeadURL: $:
- $Id: $:
+ $Rev$:
+ $Author$:
+ $Date$:
+ $HeadURL$:
+ $Id$:
 
 =head1 AUTHOR
 
