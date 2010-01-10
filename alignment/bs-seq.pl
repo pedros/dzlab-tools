@@ -173,7 +173,7 @@ elsif ($aligner eq 'bowtie') {
     # align with bowtie
     run_cmd ("bowtie $reference.c2t -f -B 1 -v $mismatches -5 $l5trim -3 $l3trim --best --strata -k $max_hits -p $pthreads --norc $files{lc2t} $files{lel3}")   unless file_exists($files{lel3});
     unless ($single_ends) {
-        run_cmd ("bowtie $reference.g2a -f -B 1 -v $mismatches -5 $r5trim -3 $r3trim --best --strata -k $max_hits -p $pthreads --norc $files{rc2t} $files{rel3}") unless file_exists($files{rel3});
+        run_cmd ("bowtie $reference.g2a -f -B 1 -v $mismatches -5 $r5trim -3 $r3trim --best --strata -k $max_hits -p $pthreads --norc $files{rg2a} $files{rel3}") unless file_exists($files{rel3});
     }
     else {
         run_cmd ("bowtie $reference.c2t -f -B 1 -v $mismatches -5 $r5trim -3 $r3trim --best --strata -k $max_hits -p $pthreads --norc $files{lc2t} $files{rel3}") unless file_exists($files{rel3});
@@ -312,4 +312,3 @@ sub file_exists {
 
 =cut
 
-__DONE__

@@ -49,7 +49,7 @@ if ($output) {
     select $USER_OUT;
 }
 
-$| = 1; # flush buffer immediately
+# $| = 1; # flush buffer immediately
 
 # read in bowtie verbose file
 my $counts   = undef;
@@ -64,7 +64,8 @@ while (<>) {
     $current->{snps}{$current->{snp}->[0]}++;
 
     if ($frequencies) {
-        $counts->{$current->{target}->[0]}{alternatives} += $current->{alternatives};
+        $counts->{$current->{target}->[0]}{alternatives}
+        += $current->{alternatives};
         $counts->{$current->{target}->[0]}{frequencies}++;
     }
     else {
