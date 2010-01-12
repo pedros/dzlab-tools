@@ -61,8 +61,20 @@ while ( my $gff_line = $gff_iterator->() ) {
     # &gff_read returns [] for GFF comments, invalid lines, etc.
     next LOAD unless ref $gff_line eq 'HASH';
 
-    push @{ $gff_records{ $gff_line->{seqname} } }, $gff_line
+    push @{ $gff_records{ $gff_line->{seqname} } }, $gff_line;
 
+}
+
+my $window_iterator;
+
+if ($gff) {
+    $window_iterator = make_window_iterator(
+        gff => {
+            file  => $gff, 
+            tag   => $tag, 
+            merge => $merge
+        }
+    );
 }
 
 SEQUENCE:
@@ -73,40 +85,25 @@ for my $sequence ( sort keys %gff_records ) {
             @{ $gff_records{$sequence} };
     }
 
-    my $parameters;
-
-    if ($gff) {
-        $parameters = {  
-            gff => {
-                file  => $gff,
-                tag   => $tag,
-                merge => $merge,
-            }
-        };
-    }
-    else {
-        $parameters = {
+    unless ($gff) {
+        $window_iterator = make_window_iterator(
             windows => {
                 width => $width,
-                step  => $step,
+                step  => $step, 
                 lower => 1,
-                upper => $gff_records{$sequence}[-1]->{end},
+                upper => $gff_records{$sequence}[-1]->{end}
             }
-        };
+        );
     }
 
-    my $window_iterator 
-    = make_window_iterator ($parameters);
-
   WINDOW:
-    while ( my ($start, $end) = $window_iterator->() ) {
+    while ( my ($ranges, $locus) = $window_iterator->($sequence) ) {
 
-        print STDERR "$start\t$end\n";next WINDOW;
+        # print STDERR "$start\t$end\n";next WINDOW;
 
         my $brs_iterator = binary_range_search(
-            range    => [$start, $end],
+            range    => $ranges,
             ranges   => $gff_records{$sequence},
-            iterator => 1,
         );
 
         my $scores_ref
@@ -139,31 +136,31 @@ for my $sequence ( sort keys %gff_records ) {
 }
 
 sub make_window_iterator {
-    my ($options) = @_;
+    my (%options) = @_;
 
-    if ($options->{windows}) {
-        my $width = $options->{windows}{width};
-        my $step  = $options->{windows}{step};
-        my $lower = $options->{windows}{lower};
-        my $upper = $options->{windows}{upper};
+    if ($options{windows}) {
+        my $width = $options{windows}{width};
+        my $step  = $options{windows}{step};
+        my $lower = $options{windows}{lower};
+        my $upper = $options{windows}{upper};
         
         return sub {
             my $i      = $lower;
             $lower    += $step;
 
             if ($i <= $upper - $width + 1) {
-                return $i, $i + $width - 1;
+                return [ [$i, $i + $width - 1] ], "w$step";
             }
             else {
                 return undef;
             }
         }
     }
-    elsif ($options->{gff}) {
+    elsif ($options{gff}) {
 
-        my $annotation_file = $options->{gff}{file};
-        my $locus_tag       = $options->{gff}{tag}   || 'ID';
-        my $merge_exons     = $options->{gff}{merge} || 0;
+        my $annotation_file = $options{gff}{file};
+        my $locus_tag       = $options{gff}{tag}   || 'ID';
+        my $merge_exons     = $options{gff}{merge} || 0;
         
         open my $GFFH, '<', $annotation_file 
         or croak "Can't read file: $annotation_file";
@@ -173,32 +170,48 @@ sub make_window_iterator {
 
         my %annotation = ();
 
+      LOCUS:
         while ( my $locus = $gff_iterator->() ) {
 
-            # &gff_read returns [] for GFF comments, invalid lines, etc.
-            next LOAD unless ref $locus eq 'HASH';
+            next LOCUS unless ref $locus eq 'HASH';
 
             my ($locus_id) = $locus->{attribute} =~ m/$locus_tag[=\s]?([^;]+)/;
 
             if (!defined $locus_id) {
                 ($locus_id, undef) = split /;/, $locus->{attribute};
                 $locus_id ||= q{.};
-            } else {
+            } 
+            else {
                 $locus_id =~ s/["\t\r\n]//g;
                 $locus_id =~ s/\.\d$// if $merge_exons;
             }
 
-            push @{ $annotation{$locus->{start}}},
-            [$locus->{start}, $locus->{end}, $locus_id, $locus->{strand}, $locus->{source}, $locus->{feature}, $locus->{attribute}];
+            # push @{ $annotation{$locus->{seqname}}{$locus->{start}}},
+            # [$locus->{start}, $locus->{end}, $locus_id, $locus->{strand}, $locus->{source}, $locus->{feature}, $locus->{attribute}];
+
+            push @{ $annotation{$locus->{seqname}}{$locus_id} },
+            [$locus->{start}, $locus->{end}];
+
         }
         close $GFFH;
 
-        my @annotation_keys = sort {$a <=> $b} keys %annotation;
+        my %annotation_keys;
 
-        return sub { 
-            if (my $locus = shift @{$annotation{shift @annotation_keys}}) {
+        return sub {
+            my ($sequence) = @_;
+            return unless $sequence;
 
-                return @{ $locus }[0 .. 2];
+            unless (exists $annotation_keys{$sequence}) {
+                @{ $annotation_keys{$sequence} }
+                = sort {$annotation{$sequence}{$a}->[0] <=> $annotation{$sequence}{$b}->[0]}
+                    keys %{$annotation{$sequence}};
+            }
+
+            my $locus  = shift @{ $annotation_keys{$sequence} };
+            my $ranges = shift @{ $annotation{$sequence}{$locus} };
+
+            if ($locus and @$ranges) {
+                return $ranges, $locus;
             }
             else {
                 return undef;
@@ -223,6 +236,8 @@ COORD:
                                                      .*
                                                      t=(\d+)
                                                  /xms;
+
+        next unless defined $c and defined $t;
 
         $c_count += $c;
         $t_count += $t;
@@ -284,10 +299,8 @@ sub range_assert {
 
 sub binary_range_search {
     my %options = @_;
-
-    my $range    = $options{range}    || return;
-    my $ranges   = $options{ranges}   || return;
-    my $iterator = $options{iterator} || 0;
+    my $rage     = $options{range}  || return;
+    my $ranges   = $options{ranges} || return;
 
     my ( $low, $high ) = ( 0, @{$ranges} - 1 );
 
@@ -295,30 +308,27 @@ sub binary_range_search {
 
         my $try = int( ( $low + $high ) / 2 );
 
-        $low = $try + 1, next if $ranges->[$try]{end} < $range->[0];
+        $low  = $try + 1, next if $ranges->[$try]{end}   < $range->[0];
         $high = $try - 1, next if $ranges->[$try]{start} > $range->[1];
 
         my ( $down, $up ) = ($try) x 2;
 
         my %seen = ();
 
-        my $brs_iterator = sub { };
-        $brs_iterator = sub {
+        my $brs_iterator = sub {
 
-            if (    $ranges->[ $up + 1 ]{end} >= $range->[0]
-                and $ranges->[ $up + 1 ]{start} <= $range->[1]
-                and !exists $seen{ $up + 1 } )
+            if (    $ranges->[ $up + 1 ]{end}       >= $range->[0]
+                    and $ranges->[ $up + 1 ]{start} <= $range->[1]
+                    and !exists $seen{ $up + 1 } )
             {
-
                 $seen{ $up + 1 } = undef;
                 return $ranges->[ ++$up ];
             }
-            elsif ( $ranges->[ $down - 1 ]{end} >= $range->[0]
-                and $ranges->[ $down + 1 ]{start} <= $range->[1]
-                and !exists $seen{ $down - 1 }
-                and $down > 0 )
+            elsif ( $ranges->[ $down - 1 ]{end}       >= $range->[0]
+                    and $ranges->[ $down + 1 ]{start} <= $range->[1]
+                    and !exists $seen{ $down - 1 }
+                    and $down > 0 )
             {
-
                 $seen{ $down - 1 } = undef;
                 return $ranges->[ --$down ];
             }
@@ -329,9 +339,9 @@ sub binary_range_search {
             else {
                 return;
             }
+
         };
         return $brs_iterator;
-
     }
     return sub { };
 }
