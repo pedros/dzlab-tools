@@ -6,10 +6,14 @@ use Data::Dumper;
 use Carp;
 use Getopt::Long;
 use Pod::Usage;
+use List::Util qw/reduce/;
 
 my $output;
+my $gff;
+
 # Grabs and parses command line options
-my $result = GetOptions (
+my $result = GetOptions (    
+    'gff|g=s'     => \$gff,
     'output|o=s'  => \$output,
     'verbose|v'   => sub { use diagnostics; },
     'quiet|q'     => sub { no warnings; },
@@ -30,7 +34,26 @@ print "##gff-version 3\n";
 
 while (<>) {
     chomp;
-    my @fields = split /\t/;
+    my @fields    = split /\t/;
+    my $attribute = "ID=$fields[0]; p=$fields[5]; maxwin=$fields[6]";
+
+    if ($gff) {
+        unless (ref $gff eq 'GLOB') {
+            my $file = $gff;
+            $gff     = undef;
+            open $gff, '<', $file or croak "Can't open $file: $!"
+        }
+
+        my @gff_fields = ();
+        while ( (split /\t/, <$gff>)[4] < $fields[2] ) {}
+        until ( (my @gff_line = split /\t/, <$gff>)[3] > $fields[3] ) {
+            push @gff_fields, \@gff_line;
+        }
+
+        my $max_window = reduce { $a->[5] > $b->[5] ? $a : $b } @gff_fields;
+        $attribute .= "; maxstart=$max_window->[3]; maxend=$max_window->[4]";
+    }
+
     print join ("\t",
                 $fields[1],
                 'chipotle',
@@ -40,9 +63,8 @@ while (<>) {
                 $fields[4],
                 q{.},
                 q{.},
-                "ID=$fields[0];p=$fields[5];maxwin=$fields[6]",
-                "\n"
-            );
+                $attribute,
+            ), "\n";
 }
 
 
@@ -55,18 +77,19 @@ __END__
 
 =head1 SYNOPSIS
 
- ./chi2gff.pl chipotle-out.peaks > chipotle-out.gff
+ # find maximum window coordinates in the original data, for each peak
+ ./chi2gff.pl chipotle-out.peaks -o chipotle-out.gff -g original_data.gff
+
+ -g is optional
 
 =head1 DESCRIPTION
 
- Assumes chipotle-out.STDOUT is in same directory as input file, which it uses to extract the parameters given to chipotle
- to use in the feature field.
 
 =head1 OPTIONS
 
 =head1 REVISION
 
- Version 0.0.1
+ Version 0.0.2
 
  $Rev$:
  $Author$:
