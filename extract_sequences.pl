@@ -7,21 +7,33 @@ use Carp;
 use Getopt::Long;
 use Pod::Usage;
 
-# Check required command line parameters
-pod2usage ( -verbose => 1 )
-unless @ARGV;
-
 # Grabs and parses command line options
 my $reference;
-my $filter;
+my @filter;
+my $use_max_win = 0;
+my $distance    = 0;
+my $output;
+
 my $result = GetOptions (
     'reference|r=s' => \$reference,
-    'filter|f'      => \$filter,
+    'filter|f=i{2}' => \@filter,
+    'use-max-win|w' => \$use_max_win,
+    'distance|d=i'  => \$distance,
+    'output|o=s'    => \$output,
     'verbose|v'     => sub { use diagnostics; },
     'quiet|q'       => sub { no warnings; },
     'help|h'        => sub { pod2usage ( -verbose => 1 ); },
     'manual|m'      => sub { pod2usage ( -verbose => 2 ); }
 );
+
+# Check required command line parameters
+pod2usage ( -verbose => 1 )
+unless @ARGV and $result and $reference;
+
+if ($output) {
+    open my $USER_OUT, '>', $output or croak "Can't read $output: $!";
+    select $USER_OUT;
+}
 
 my %reference = %{ index_fasta ($reference) };
 
@@ -31,16 +43,29 @@ while (<>) {
 
     my %site = %{ gff_read ($_) };
 
+    if ($use_max_win) {
+        ($site{start}, $site{end})
+        = $site{attribute} =~ m/
+                                   maxstart = (\d+)
+                                   .*
+                                   maxend   = (\d+)
+                               /xms;
+    }
+
     my $length = $site{end} - $site{start};
 
-    # next if $filter
-    # and $site{attribute} eq q{.}
-    # or $length <= 50
-    # or $length >= 300;
+    if ($distance) {
+        my $center = int ($length / 2) + $site{start};
+        $site{start} = $center - ($distance / 2);
+        $site{end}   = $center + ($distance / 2);
+        $length      = $distance;
+    }
 
-    # my ($attribute)
-    # = $site{attribute} =~ m/ID=([^;]+);/;
-    # $attribute =~ s/:/|/;
+    if (@filter) {
+        next if $site{attribute} eq q{.}
+        or $length <= $filter[0]
+        or $length >= $filter[1];
+    }
 
     my ($attribute)
     = $site{attribute} =~ m/\*([\w]+):/;
@@ -100,7 +125,7 @@ sub gff_read {
     $seqname =~ tr/A-Z/a-z/;
 
     my %rec = (
-	'seqname'   => $seqname,
+	'seqname'   => lc $seqname,
 	'source'    => $source,
 	'feature'   => $feature,
 	'start'     => $start,
@@ -132,15 +157,31 @@ __END__
 
 =head1 OPTIONS
 
- --reference, -r    Reference fasta file from which to extract sequences.
+ -f, --filter      only include sequences of length between -f n m
+ -w, --use-max-win try to find attribute fields 'maxstart=n' and 'maxend=m'
+ -d  --distance     only go distance -d n / 2 from center of locus 
+ -r, --reference   reference fasta file from which to extract sequences.
+ -o, --output      filename to write results to (defaults to STDOUT)
+ -v, --verbose     output perl's diagnostic and warning messages
+ -q, --quiet       supress perl's diagnostic and warning messages
+ -h, --help        print this information
+ -m, --manual      print the plain old documentation page 
+
+=head1 VERSION
+
+ $Rev$:
+ $Author$:
+ $Date$:
+ $HeadURL$:
+ $Id$:
 
 =head1 REVISION
 
- 0.0.1
+ 0.0.2
 
 =head1 AUTHOR
 
- Pedro Silva <psilva@nature.berkeley.edu/>
+ Pedro Silva <pedros@berkeley.edu/>
  Zilberman Lab <http://dzlab.pmb.berkeley.edu/>
  Plant and Microbial Biology Department
  College of Natural Resources
