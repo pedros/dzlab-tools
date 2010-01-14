@@ -171,12 +171,12 @@ elsif ($aligner eq 'bowtie') {
     my $r5trim = $right_splice[0] - 1;
 
     # align with bowtie
-    run_cmd ("bowtie $reference.c2t -f -B 1 -v $mismatches -5 $l5trim -3 $l3trim --best --strata -k $max_hits -p $pthreads --norc $files{lc2t} $files{lel3}" . $max_hits ? "-m $max_hits" : q{})   unless file_exists($files{lel3});
+    run_cmd ("bowtie $reference.c2t -f -B 1 -v $mismatches -5 $l5trim -3 $l3trim --best --strata -k $max_hits -p $pthreads --norc $files{lc2t} $files{lel3}" . ($max_hits ? "-m $max_hits" : q{}))   unless file_exists($files{lel3});
     unless ($single_ends) {
-        run_cmd ("bowtie $reference.g2a -f -B 1 -v $mismatches -5 $r5trim -3 $r3trim --best --strata -k $max_hits -p $pthreads --norc $files{rg2a} $files{rel3}" . $max_hits ? "-m $max_hits" : q{}) unless file_exists($files{rel3});
+        run_cmd ("bowtie $reference.g2a -f -B 1 -v $mismatches -5 $r5trim -3 $r3trim --best --strata -k $max_hits -p $pthreads --norc $files{rg2a} $files{rel3}" . ($max_hits ? "-m $max_hits" : q{})) unless file_exists($files{rel3});
     }
     else {
-        run_cmd ("bowtie $reference.c2t -f -B 1 -v $mismatches -5 $r5trim -3 $r3trim --best --strata -k $max_hits -p $pthreads --norc $files{lc2t} $files{rel3}" . $max_hits ? "-m $max_hits" : q{}) unless file_exists($files{rel3});
+        run_cmd ("bowtie $reference.c2t -f -B 1 -v $mismatches -5 $r5trim -3 $r3trim --best --strata -k $max_hits -p $pthreads --norc $files{lc2t} $files{rel3}" . ($max_hits ? "-m $max_hits" : q{})) unless file_exists($files{rel3});
     }
 
     # get back original non-converted reads and convert from bowtie to eland3
