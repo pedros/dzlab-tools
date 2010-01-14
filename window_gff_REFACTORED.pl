@@ -9,32 +9,34 @@ Getopt::Long::Configure('bundling');
 use Pod::Usage;
 
 my $output;
-my $width   = 50;
-my $step    = 50;
-my $merge   = 0;
-my $no_sort = 0;
-my $no_skip = 0;
-my $average = 0;
+my $width    = 50;
+my $step     = 50;
+my $merge    = 0;
+my $no_sort  = 0;
+my $no_skip  = 0;
+my $average  = 0;
 my $gff;
-my $tag     = 'ID';
+my $tag      = 'ID';
 my $feature;
+my $absolute = 0;
 
 # Grabs and parses command line options
 my $result = GetOptions(
-    'width|w=i'  => \$width,
-    'step|s=i'   => \$step,
-    'average|a'  => \$average,
-    'merge|m=s'  => \$merge,
-    'no-sort|n'  => \$no_sort,
-    'no-skip|k'  => \$no_skip,
-    'gff|g=s'    => \$gff,
-    'tag|t=s'    => \$tag,
-    'feature|f=s'=> \$feature,
-    'output|o=s' => \$output,
-    'verbose'    => sub { use diagnostics; },
-    'quiet'      => sub { no warnings; },
-    'help'       => sub { pod2usage( -verbose => 1 ); },
-    'manual'     => sub { pod2usage( -verbose => 2 ); }
+    'width|w=i'    => \$width,
+    'step|s=i'     => \$step,
+    'average|a'    => \$average,
+    'merge|m=s'    => \$merge,
+    'no-sort|n'    => \$no_sort,
+    'no-skip|k'    => \$no_skip,
+    'gff|g=s'      => \$gff,
+    'tag|t=s'      => \$tag,
+    'feature|f=s'  => \$feature,
+    'absolute|b=s' => \$absolute,
+    'output|o=s'   => \$output,
+    'verbose'      => sub { use diagnostics; },
+    'quiet'        => sub { no warnings; },
+    'help'         => sub { pod2usage( -verbose => 1 ); },
+    'manual'       => sub { pod2usage( -verbose => 2 ); }
 );
 
 # Check required command line parameters
@@ -51,6 +53,12 @@ if ($output) {
 if ($merge) {
     $width = 1;
     $step  = 1;
+}
+
+if ($absolute) {
+    croak '-b, --absolute option only works with arabidopsis or rice'
+    unless lc $absolute eq 'arabidopsis' or lc $absolute eq 'rice';
+    $no_skip = 1;
 }
 
 my $gff_iterator
@@ -84,11 +92,14 @@ for my $sequence ( sort keys %gff_records ) {
     }
 
     unless ($gff) {
+
         $window_iterator = make_window_iterator(
             width => $width,
             step  => $step, 
             lower => 1,
-            upper => $gff_records{$sequence}[-1]->{end}
+            upper => ($absolute and $no_skip)
+                     ? index_fasta_lengths( handle => 'DATA' )->{$absolute}{$sequence}
+                     : $gff_records{$sequence}[-1]->{end},
         );
     }
 
@@ -135,6 +146,31 @@ for my $sequence ( sort keys %gff_records ) {
     delete $gff_records{$sequence};
 }
 
+
+sub index_fasta_lengths {
+    my %options = @_;
+
+    my $handle = $options{handle};
+
+    if ($options{file}) {
+        open $handle, '<', $options{file} or croak $!;
+    }
+
+    my %fasta_lengths;
+    my  $active;
+    while (<$handle>) {
+        chomp;
+        if (m/^\s*#/) {
+            s/#//;
+            $active = lc $_;
+        }
+        else {
+            my ($sequence, $length) = split /\t/;
+            $fasta_lengths{$active}{$sequence} = $length;
+        }
+    }
+    return \%fasta_lengths;
+}
 
 
 sub make_window_iterator {
@@ -433,8 +469,6 @@ sub make_gff_iterator {
     };
 }
 
-__END__
-
 =head1 NAME
 
  window_gff.pl - Average GFFv3 data over a sliding window or against a GFFv3 annotation file
@@ -469,15 +503,16 @@ __END__
 
  window_gff.pl [OPTION]... [FILE]...
  
- -w, --width       sliding window width                                 (default: 50, integer)
- -s, --step        sliding window interval                              (default: 50, integer)
- -a, --average     average scores in GFF score field                    (default: no)
- -m, --merge       merge this feature as belonging to same locus        (default: no, string [eg: exon])
- -n, --no-sort     GFFv3 data assumed sorted by start coordinate        (default: no)
- -k, --no-skip     print windows or loci for which there is no coverage (deftaul: no)
+ -w, --width       sliding window width                                  (default: 50, integer)
+ -s, --step        sliding window interval                               (default: 50, integer)
+ -a, --average     average scores in GFF score field                     (default: no)
+ -m, --merge       merge this feature as belonging to same locus         (default: no, string [eg: exon])
+ -n, --no-sort     GFFv3 data assumed sorted by start coordinate         (default: no)
+ -k, --no-skip     print windows or loci for which there is no coverage  (deftaul: no)
  -g, --gff         GFFv3 annotation file
- -t, --tag         attribute field tag from which to extract locus ID   (default: ID, string)
- -f, --feature     overwrite GFF feature field with this label          (default: no, string)
+ -t, --tag         attribute field tag from which to extract locus ID    (default: ID, string)
+ -f, --feature     overwrite GFF feature field with this label           (default: no, string)
+ -b, --absolute    organism name to fetch chromosome lengths, implies -k (default: no, string [available: arabidopsis or rice])
  -o, --output      filename to write results to (defaults to STDOUT)
  -v, --verbose     output perl's diagnostic and warning messages
  -q, --quiet       supress perl's diagnostic and warning messages
@@ -518,3 +553,29 @@ __END__
  along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 =cut
+
+
+__DATA__
+#Arabidopsis
+chr1	30432563
+chr2	19705359
+chr3	23470805
+chr4	18585042
+chr5	26992728
+chrc	154478
+chrm	366924
+#Oryza
+chr01	43596771
+chr02	35925388
+chr03	36345490
+chr04	35244269
+chr05	29874162
+chr06	31246789
+chr07	29688601
+chr08	28309179
+chr09	23011239
+chr10	22876596
+chr11	28462103
+chr12	27497214
+chrc	134525
+chrm	490520

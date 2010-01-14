@@ -36,8 +36,8 @@ rm -r post-processing/windows
 mkdir -p post-processing/windows
 for i in $groups; do
     for j in $contexts; do
-        window_gff.pl --gff-file post-processing/single-c/${NAME}_BS-Seq_${i}_${j}_w1_methylation.gff --width ${width} --step ${step} --no-skip --output post-processing/windows/${NAME}_BS-Seq_${i}_${j}_w${width}_methylation.gff
-#        cat post-processing/windows/${NAME}_BS-Seq_${i}_${j}_w${width}_methylation.gff >> post-processing/windows/${NAME}_BS-Seq_all_${j}_w${width}_methylation.gff
+        window_gff_REFACTORED.pl post-processing/single-c/${NAME}_BS-Seq_${i}_${j}_w1_methylation.gff --width ${width} --step ${step} --absolute rice --no-skip --output post-processing/windows/${NAME}_BS-Seq_${i}_${j}_w${width}_methylation.gff
+        cat post-processing/windows/${NAME}_BS-Seq_${i}_${j}_w${width}_methylation.gff >> post-processing/windows/${NAME}_BS-Seq_all_${j}_w${width}_methylation.gff
     done
 done
 echo "Done with code: $?"
