@@ -81,7 +81,7 @@ for my $chr (sort {$a cmp $b} keys %data) {
 
     for my $window (sort {(split /\t/, $a)[3] <=> (split /\t/, $b)[3]} @{$data{$chr}}) {
 
-        my ($feature, $start, $end, $mean, $pvalue)
+        my ($feature, $start, $end, $mean, $attribute)
         = (split /\t/, $window)[2, 3, 4, 5, 8];
 
         my $center = int (($end - $start) / 2 + $start);
@@ -172,6 +172,8 @@ for my $chr (sort {$a cmp $b} keys %data) {
             # reconstruct the gene list gff attribute with '*' for best matches
             $gene_list =~ s/${min_id}:${min_dist}:${min_dir}/\*${min_id}:${min_dist}:${min_dir}/;
         }
+
+        $gene_list = $gene_list eq q{.} ? $attribute : "$gene_list; $attribute";
 
         # print gff line
         print join ("\t",
