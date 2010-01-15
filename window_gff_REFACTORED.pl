@@ -65,16 +65,19 @@ my $gff_iterator
     = make_gff_iterator( parser => \&gff_read, handle => 'ARGV' );
 
 my %gff_records = ();
-
 LOAD:
 while ( my $gff_line = $gff_iterator->() ) {
-
     next LOAD unless ref $gff_line eq 'HASH';
     push @{ $gff_records{ $gff_line->{seqname} } }, $gff_line;
 }
 
-my $window_iterator;
+my $fasta_lengths = {};
+if ($absolute and $no_skip) {
+    $fasta_lengths
+    = index_fasta_lengths( handle => 'DATA' );
+}
 
+my $window_iterator = sub {};
 if ($gff) {
     $window_iterator = make_annotation_iterator(
         file  => $gff, 
@@ -92,14 +95,14 @@ for my $sequence ( sort keys %gff_records ) {
     }
 
     unless ($gff) {
-
         $window_iterator = make_window_iterator(
             width => $width,
             step  => $step, 
             lower => 1,
-            upper => ($absolute and $no_skip)
-                     ? index_fasta_lengths( handle => 'DATA' )->{$absolute}{$sequence}
-                     : $gff_records{$sequence}[-1]->{end},
+            upper => ($absolute and $no_skip and %$fasta_lengths
+                      and exists $fasta_lengths->{$absolute}{$sequence})
+                      ? $fasta_lengths->{$absolute}{$sequence}
+                      : $gff_records{$sequence}[-1]->{end},
         );
     }
 
@@ -169,6 +172,11 @@ sub index_fasta_lengths {
             $fasta_lengths{$active}{$sequence} = $length;
         }
     }
+
+    if ($options{file}) {
+        close $handle or croak $!;
+    }
+
     return \%fasta_lengths;
 }
 
@@ -188,6 +196,9 @@ sub make_window_iterator {
         if ($i <= $upper - $width + 1) {
             return [ [$i, $i + $width - 1] ];
         } 
+        elsif ($i < $upper) {
+            return [ [$i, $upper] ];
+        }
         else {
             return;
         }
@@ -213,7 +224,6 @@ sub make_annotation_iterator {
     close $GFFH or croak "Can't close $annotation_file: $!";
 
     my %annotation_keys = ();
-
     return sub {
         my ($sequence) = @_;
         return unless $sequence;
@@ -556,7 +566,7 @@ sub make_gff_iterator {
 
 
 __DATA__
-#Arabidopsis
+#arabidopsis
 chr1	30432563
 chr2	19705359
 chr3	23470805
@@ -564,7 +574,7 @@ chr4	18585042
 chr5	26992728
 chrc	154478
 chrm	366924
-#Oryza
+#rice
 chr01	43596771
 chr02	35925388
 chr03	36345490
