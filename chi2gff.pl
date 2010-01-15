@@ -30,28 +30,38 @@ if ($output) {
     select $USER_OUT;
 }
 
-print "##gff-version 3\n";
+my %gff_records = ();
+if ($gff) {
+    
+    my $gff_iterator
+    = make_gff_iterator( parser => \&gff_read, file => $gff );
 
+  LOAD:
+    while ( my $gff_line = $gff_iterator->() ) {
+        next LOAD unless ref $gff_line eq 'HASH';
+        push @{ $gff_records{ $gff_line->{seqname} } }, $gff_line;
+    }
+}
+
+print "##gff-version 3\n";
 while (<>) {
-    chomp;
+    s/[\r\n]//g;;
     my @fields    = split /\t/;
     my $attribute = "ID=$fields[0]; p=$fields[5]; maxwin=$fields[6]";
 
     if ($gff) {
-        unless (ref $gff eq 'GLOB') {
-            my $file = $gff;
-            $gff     = undef;
-            open $gff, '<', $file or croak "Can't open $file: $!"
+        my $brs_iterator = binary_range_search(
+            range    => [ [$fields[2], $fields[3]] ],
+            ranges   => $gff_records{lc $fields[1]},
+        );
+
+        my @ranges;
+        while (my $range = $brs_iterator->()) {
+            push @ranges, $range;
         }
 
-        my @gff_fields = ();
-        while ( (split /\t/, <$gff>)[4] < $fields[2] ) {}
-        until ( (my @gff_line = split /\t/, <$gff>)[3] > $fields[3] ) {
-            push @gff_fields, \@gff_line;
-        }
-
-        my $max_window = reduce { $a->[5] > $b->[5] ? $a : $b } @gff_fields;
-        $attribute .= "; maxstart=$max_window->[3]; maxend=$max_window->[4]";
+        my $max_window = reduce { $a->{score} > $b->{score} ? $a : $b } @ranges;
+        $attribute .= "; maxstart=$max_window->{start}; maxend=$max_window->{end}";
     }
 
     print join ("\t",
@@ -65,6 +75,126 @@ while (<>) {
                 q{.},
                 $attribute,
             ), "\n";
+}
+
+
+sub binary_range_search {
+    my %options = @_;
+
+    my $targets = $options{range}  || croak 'Need a range parameter';
+    my $ranges  = $options{ranges} || croak 'Need a ranges parameter';
+
+    my ( $low, $high ) = ( 0, $#{$ranges} );
+    my @iterators      = ();
+
+  TARGET:
+    for my $range ( @$targets ) {
+
+      RANGE_CHECK:
+        while ( $low <= $high ) {
+
+            my $try = int( ( $low + $high ) / 2 );
+
+            $low  = $try + 1, next RANGE_CHECK if $ranges->[$try]{end}   < $range->[0];
+            $high = $try - 1, next RANGE_CHECK if $ranges->[$try]{start} > $range->[1];
+
+            my ( $down, $up ) = ($try) x 2;
+            my %seen      = ();
+        
+            my $brs_iterator = sub {
+
+                if (    $ranges->[ $up + 1 ]{end}       >= $range->[0]
+                        and $ranges->[ $up + 1 ]{start} <= $range->[1]
+                        and !exists $seen{ $up + 1 } ) {
+                    $seen{ $up + 1 } = undef;
+                    return $ranges->[ ++$up ];
+                } 
+                elsif ( $ranges->[ $down - 1 ]{end}       >= $range->[0]
+                          and $ranges->[ $down + 1 ]{start} <= $range->[1]
+                          and !exists $seen{ $down - 1 }
+                          and $down > 0 ) {
+                    $seen{ $down - 1 } = undef;
+                    return $ranges->[ --$down ];
+                } 
+                elsif ( !exists $seen{$try} ) {
+                    $seen{$try} = undef;
+                    return $ranges->[$try];
+                }
+                else {
+                    return;
+                }
+            };
+            push @iterators, $brs_iterator;
+            next TARGET;
+        }
+    }
+
+    # In scalar context return master iterator that iterates over the list of range iterators.
+    # In list context returns a list of range iterators.
+    return wantarray 
+    ? @iterators 
+    : sub { 
+        while( @iterators ) {
+            if( my $range = $iterators[0]->() ) {
+                return $range;
+            }
+            shift @iterators;
+        }
+        return;
+    }; 
+}
+
+
+sub gff_read {
+    return [] if $_[0] =~ m/^
+                            \s*
+                            \#+
+                           /mx;
+
+    my ($seqname, $source, $feature, $start, $end,
+        $score,   $strand, $frame,   $attribute
+    ) = split m/\t/xm, shift || return;
+
+    $attribute =~ s/[\r\n]//mxg;
+
+    return {
+        'seqname'   => lc $seqname,
+        'source'    => $source,
+        'feature'   => $feature,
+        'start'     => $start,
+        'end'       => $end,
+        'score'     => $score,
+        'strand'    => $strand,
+        'frame'     => $frame,
+        'attribute' => $attribute
+    };
+}
+
+sub make_gff_iterator {
+    my %options = @_;
+
+    my $parser     = $options{parser};
+    my $file       = $options{file};
+    my $GFF_HANDLE = $options{handle};
+
+    croak
+        "Need parser function reference and file name or handle to build iterator"
+        unless $parser and ref $parser eq 'CODE'
+        and ( 
+                (defined $file and -e $file)
+                xor 
+                (defined $GFF_HANDLE 
+                     and (ref $GFF_HANDLE eq 'GLOB' or $GFF_HANDLE eq 'ARGV'))
+            );
+
+    if ($file) {
+        open $GFF_HANDLE, '<', $file
+            or croak "Can't read $file: $!";
+    }
+
+    return sub {
+        $parser->( scalar <$GFF_HANDLE> );
+    };
 }
 
 
