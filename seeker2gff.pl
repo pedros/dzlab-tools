@@ -81,12 +81,20 @@ sub parse_seeker {
         index         => $seeker_fields[7],
     );
 
+    # the reverse strand needs to be corrected for the flip.
+    # due to oddity in the way bs_seeker reports.
+    if ($seeker{read_strand} eq '-'){
+        $seeker{coordinate} += length($seeker{ref_sequence}) - 1;
+    }
+
     return \%seeker;
 }
 
 
 sub update_counts {
     my ($seeker, $c_map, $contexts, $buffer_size) = @_;
+    my $plus = $seeker->{read_strand} eq '+';
+
 
     for my $idx (0 .. (length $seeker->{summary}) - 1) {
         my $base = chr vec ($seeker->{summary}, $idx, 8);
@@ -94,7 +102,8 @@ sub update_counts {
 
         my $chr = $seeker->{chromosome};           # chromosome
         my $con = $contexts->{$base};              # context
-        my $crd = $seeker->{coordinate} + $idx;    # coordinate
+        # coordinate, accounting for flip of - reads.
+        my $crd = $seeker->{coordinate} + ($plus ? $idx : -$idx);    
         my $met = $base =~ m/[xyz]/ ? q{t} : q{c}; # c or t
 
         $c_map->{$chr}{$con}{$crd}{$met}++;        # increase c or t count
