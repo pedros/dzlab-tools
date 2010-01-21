@@ -396,7 +396,7 @@ while (my $leftend = <$LEFT>) {
                 $lreadsize + 4
             );
         }
-        $r_feature = $right{'line'} . q{:} . $rsequence;
+        $r_feature = $right{'line'} . q{:} . $rsequence if $rightendfile;
     }
     ##### No match on one end, 1 match on other #####
 
