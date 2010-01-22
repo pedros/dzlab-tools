@@ -24,7 +24,7 @@ my $absolute = 0;
 my $result = GetOptions(
     'width|w=i'    => \$width,
     'step|s=i'     => \$step,
-    'scoring|c'    => \$scoring,
+    'scoring|c=s'  => \$scoring,
     'merge|m=s'    => \$merge,
     'no-sort|n'    => \$no_sort,
     'no-skip|k'    => \$no_skip,
