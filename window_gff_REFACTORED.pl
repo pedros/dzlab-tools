@@ -57,7 +57,7 @@ if ($merge) {
 
 if ($absolute) {
     croak '-b, --absolute option only works with arabidopsis or rice'
-    unless lc $absolute eq 'arabidopsis' or lc $absolute eq 'rice';
+    unless lc $absolute eq 'arabidopsis' or lc $absolute eq 'rice' or lc $absolute eq 'puffer';
     $no_skip = 1;
 }
 
@@ -522,7 +522,7 @@ sub make_gff_iterator {
  -g, --gff         GFFv3 annotation file
  -t, --tag         attribute field tag from which to extract locus ID    (default: ID, string)
  -f, --feature     overwrite GFF feature field with this label           (default: no, string)
- -b, --absolute    organism name to fetch chromosome lengths, implies -k (default: no, string [available: arabidopsis or rice])
+ -b, --absolute    organism name to fetch chromosome lengths, implies -k (default: no, string [available: arabidopsis, rice, puffer])
  -o, --output      filename to write results to (defaults to STDOUT)
  -v, --verbose     output perl's diagnostic and warning messages
  -q, --quiet       supress perl's diagnostic and warning messages
@@ -589,3 +589,30 @@ chr11	28462103
 chr12	27497214
 chrc	134525
 chrm	490520
+#puffer
+1	22981688
+10	13272281
+11	11954808
+12	12622881
+13	13302670
+14	10246949
+15	7320470
+15_random	3234215
+16	9031048
+17	12136232
+18	11077504
+19	7272499
+1_random	1180980
+2	21591555
+20	3798727
+21	5834722
+21_random	3311323
+2_random	2082209
+3	15489435
+4	9874776
+5	13390619
+6	7024381
+7	11693588
+8	10512681
+9	10554956
+mt	16462
