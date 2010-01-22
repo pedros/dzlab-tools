@@ -14,7 +14,7 @@ my $step     = 50;
 my $merge    = 0;
 my $no_sort  = 0;
 my $no_skip  = 0;
-my $average  = 0;
+my $scoring  = 'meth'; # meth, average, or sum
 my $gff;
 my $tag      = 'ID';
 my $feature;
@@ -24,7 +24,7 @@ my $absolute = 0;
 my $result = GetOptions(
     'width|w=i'    => \$width,
     'step|s=i'     => \$step,
-    'average|a'    => \$average,
+    'scoring|c'    => \$scoring,
     'merge|m=s'    => \$merge,
     'no-sort|n'    => \$no_sort,
     'no-skip|k'    => \$no_skip,
@@ -39,10 +39,17 @@ my $result = GetOptions(
     'manual'       => sub { pod2usage( -verbose => 2 ); }
 );
 
+my %scoring_dispatch = (
+    meth    => \&fractional_methylation,
+    average => \&average_scores,
+    sum     => \&sum_scores,
+);
+
 # Check required command line parameters
 pod2usage( -verbose => 1 )
 unless @ARGV and $result
-and (($width and $step) or $gff);
+and (($width and $step) or $gff)
+and exists $scoring_dispatch{$scoring};
 
 if ($output) {
     open my $USER_OUT, '>', $output
@@ -115,9 +122,7 @@ for my $sequence ( sort keys %gff_records ) {
         );
 
         my $scores_ref
-            = $average
-            ? average_scores($brs_iterator)
-            : fractional_methylation($brs_iterator);
+        = $scoring_dispatch{$scoring}->($brs_iterator);
 
         my ( $score, $attribute );
 
@@ -331,6 +336,27 @@ COORD:
     }
 }
 
+sub sum_scores {
+    my ($brs_iterator) = @_;
+
+    my ($score_sum, $score_count) = (0, 0);
+
+  COORD:
+    while ( my $gff_line = $brs_iterator->() ) {
+        next COORD unless ref $gff_line eq 'HASH';
+
+        $score_sum  += $gff_line->{score} eq q{.} ? 1 : $gff_line->{score};
+        $score_count++;
+    }
+
+    if ($score_count) {
+        return {
+            score => $score_sum,
+            n     => $score_count,
+        };
+    }
+}
+
 sub average_scores {
     my ($brs_iterator) = @_;
 
@@ -486,13 +512,13 @@ sub make_gff_iterator {
 =head1 SYNOPSIS
 
  # Run a sliding window of 50bp every 25bp interval on methylation data (attribute field assumed to be 'c=n; t=m')
- window_gff.pl --width 50 --step 25 --output out.gff in.gff
+ window_gff.pl --width 50 --step 25 --scoring meth --output out.gff in.gff
 
  # Average data per each locus (on score field)
- window_gff.pl --gff genes.gff --average --output out.gff in.gff
+ window_gff.pl --gff genes.gff --scoring average --output out.gff in.gff
 
  # Merge 'exon' features in GFF annotation file per parent ID (eg. per gene)
- window_gff.pl --gff exons.gff --average --output out.gff --tag Parent --merge exon
+ window_gff.pl --gff exons.gff --scoring average --output out.gff --tag Parent --merge exon
 
 =head1 DESCRIPTION
 
@@ -515,7 +541,7 @@ sub make_gff_iterator {
  
  -w, --width       sliding window width                                  (default: 50, integer)
  -s, --step        sliding window interval                               (default: 50, integer)
- -a, --average     average scores in GFF score field                     (default: no)
+ -c, --scoring     score computation scheme                              (default: meth, string [available: meth, average, sum])
  -m, --merge       merge this feature as belonging to same locus         (default: no, string [eg: exon])
  -n, --no-sort     GFFv3 data assumed sorted by start coordinate         (default: no)
  -k, --no-skip     print windows or loci for which there is no coverage  (deftaul: no)
