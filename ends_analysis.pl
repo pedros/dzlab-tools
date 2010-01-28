@@ -150,7 +150,7 @@ sub weight_score {
 
     my $bin_low  = max( $locus->[0], $gff_line->{start} );
     my $bin_high = min( $locus->[1], $gff_line->{end} );
-    my $overlap  = $bin_low - $bin_high + 1;
+    my $overlap  = $bin_hight - $bin_low + 1;
     my $weight   = $overlap / ( $gff_line->{end} - $gff_line->{start} + 1 );
 
     return $gff_line->{score} * $weight;
