@@ -86,6 +86,8 @@ while ( my $gff_line = $gff_iterator->() ) {
     # &gff_read returns [] for GFF comments, invalid lines, etc.
     next COORD unless ref $gff_line eq 'HASH';
 
+    next COORD if $gff_line->{score} eq q{.};
+
     # Step 2: Memoization
     # has this been done before? use it : otherwise cache it
     unless ( exists $sorted_annotations{ $gff_line->{seqname} } ) {
@@ -121,14 +123,14 @@ while ( my $gff_line = $gff_iterator->() ) {
     # divided by the negative bin width.
     # note: $reverse + 4 accesses original start or end coordinate for this locus
     my $index = int(
-        (         $locus->[ $reverse + 4 ] 
-                      - $bin_width * ( $num_bins / 2 )
-                          - $gff_line->{start}
-                      ) / -$bin_width
-                  );
+        ($locus->[ $reverse + 4 ] 
+         - $bin_width * ( $num_bins / 2 )
+         - $gff_line->{start}
+        ) / -$bin_width
+    );
 
     # Step 6: Weight score by amount of overlap
-    my $score = weight_score( $locus, $gff_line, $gff_line->{score} );
+    my $score = weight_score( $locus, $gff_line );
 
     # Step 7: Save score into its appropriate bin, record its strand
     push @{ $genes{ $locus->[3] }->{scores}[$index] }, $score;
@@ -146,11 +148,11 @@ while ( my ( $locus, $scores_ref ) = $scores_iterator->($num_bins) ) {
 
 
 sub weight_score {
-    my ( $locus, $gff_line, $score ) = @_;
+    my ( $locus, $gff_line ) = @_;
 
     my $bin_low  = max( $locus->[0], $gff_line->{start} );
     my $bin_high = min( $locus->[1], $gff_line->{end} );
-    my $overlap  = $bin_hight - $bin_low + 1;
+    my $overlap  = abs($bin_high - $bin_low) + 1;
     my $weight   = $overlap / ( $gff_line->{end} - $gff_line->{start} + 1 );
 
     return $gff_line->{score} * $weight;
@@ -343,11 +345,11 @@ sub stop_flag_2 {
         or $parameters->{-three_prime} and $current->[2] eq q{+} )
     {
         return ( max( $current->[0], $previous->[1], $minimum ),
-            min( $next->[0], $maximum ) );
+                 min( $next->[0], $maximum ) );
     }
     else {
         return ( max( $previous->[1], $minimum ),
-            min( $current->[1], $next->[0], $maximum ) );
+                 min( $current->[1], $next->[0], $maximum ) );
     }
 }
 
@@ -375,18 +377,16 @@ sub stop_flag_6 {
         or $parameters->{-three_prime} and $current->[2] eq q{+} )
     {
         return (
-            max($current->[0], $previous->[1] + $parameters->{-stop_distance},
+            max($current->[0] + $parameters->{-stop_distance}, $previous->[1],
                 $minimum
             ),
-            min( $next->[0] - $parameters->{-stop_distance}, $maximum )
+            min( $next->[0], $maximum )
         );
     }
     else {
         return (
-            max( $previous->[1] + $parameters->{-stop_distance}, $minimum ),
-            min($current->[1], $next->[0] - $parameters->{-stop_distance},
-                $maximum
-            )
+            max($previous->[1], $minimum ),
+            min($current->[1] - $parameters->{-stop_distance}, $next->[0], $maximum)
         );
     }
 }
@@ -433,7 +433,7 @@ __END__
 
  -g, --gff-annotation GFF 3 annotation file
  -b, --bin-width      histogram bin width                                [100]
- -d, --distance       bp distance from end terminal to search, both ways [500]
+ -d, --distance       bp distance from end terminal to search, both ways [5000]
  -s, --stop-flag      when to stop searching (FIXME: explain options)    [2]
  -k, --stop-distance  distance from genes to stop from (flag 6 only)     [1500]
  -3, --three-prime    center analysis on 3' end                          [0]
@@ -479,17 +479,3 @@ __END__
  along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 =cut
-472:	final indentation level: 1
-
-Final nesting depth of '{'s is 1
-The most recent un-matched '{' is on line 83
-83: while ( my $gff_line = $gff_iterator->() ) {
-                                               ^
-472:	To save a full .LOG file rerun with -g
-485:	final indentation level: 1
-
-Final nesting depth of '{'s is 1
-The most recent un-matched '{' is on line 83
-83: while ( my $gff_line = $gff_iterator->() ) {
-                                               ^
-485:	To save a full .LOG file rerun with -g
