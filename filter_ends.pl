@@ -14,11 +14,13 @@ unless @ARGV;
 my $list;
 my $min_score = 0;
 my $max_score = 0;
-my $ends_tag = 'ID=';
+my $ends_tag  = 'ID=';
+my $sort      = 0;
 my $output;
 
 # Grabs and parses command line options
 my $result = GetOptions (
+    'sort|r'           => \$sort,
     'list|l=s'         => \$list,
     'min-score|s=f'    => \$min_score,
     'max-score|S=f'    => \$max_score,
@@ -36,6 +38,7 @@ if ($output) {
 }
 
 $list = index_list ($list) if $list;
+my @sorted_list;
 
 ID:
 while (<>) {
@@ -49,13 +52,21 @@ while (<>) {
     and ($min_score == 0 or $list->{$id}->[0] >= $min_score)
     and ($max_score == 0 or $list->{$id}->[0] <= $max_score);
 
-    print $_;
+    if ($sort) {
+        $sorted_list[$list->{$id}->[2]] = $_;
+    }
+    else {
+        print $_;
+    }
 }
+
+print grep {defined $_} @sorted_list if $sort;
 
 
 sub index_list {
     my ($list) = @_;
 
+    my $counter = 0;
     my %list = ();
     open my $LIST, '<', $list or croak "Can't open $list for reading";
     while (<$LIST>) {
@@ -67,14 +78,17 @@ sub index_list {
         if (@fields < 9) {
             ($id, $freq, $alt) = @fields;
         }
-        else {
+        elsif (@fields == 9) {
             ($id, $freq, $alt) = @fields[8, 5, 0];
             $id =~ s/^.*$ends_tag([^;]+).*$/$1/;
+        }
+        else {
+            ($id) = $fields[0];
         }
 
         $id =~ s/[\r\n]//g;
         
-        $list{$id} = [$freq, $alt];
+        $list{$id} = [$freq, $alt, $counter++];
     }
     close $LIST or carp "Can't close $list after reading";
 
@@ -100,6 +114,7 @@ __END__
  -l, --list        filename with one or two fields: ID (required) and score (optional)
  -s, --min-score   minimum score to filter by (0 by default)
  -S, --max-score   maximum score to filter by (0 by default)
+ -r, --sort        sort input file by order in list
  -o, --output      filename to write results to (defaults to STDOUT)
  -v, --verbose     output perl's diagnostic and warning messages
  -q, --quiet       supress perl's diagnostic and warning messages
