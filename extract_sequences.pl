@@ -12,6 +12,7 @@ my $reference;
 my @filter;
 my $use_max_win = 0;
 my $distance    = 0;
+my $tss         = 0;
 my $output;
 
 my $result = GetOptions (
@@ -19,6 +20,7 @@ my $result = GetOptions (
     'filter|f=i{2}' => \@filter,
     'use-max-win|w' => \$use_max_win,
     'distance|d=i'  => \$distance,
+    'tss|t'         => \$tss,
     'output|o=s'    => \$output,
     'verbose|v'     => sub { use diagnostics; },
     'quiet|q'       => sub { no warnings; },
@@ -55,8 +57,10 @@ while (<>) {
     my $length = $site{end} - $site{start};
 
     if ($distance) {
-        my $center = int ($length / 2) + $site{start};
+        my $center = $tss ? ( $site{strand} eq q{-} ? $site{end} : $site{start} )
+                          : int ($length / 2) + $site{start};
         $site{start} = $center - ($distance / 2);
+        $site{start} = 0 if $site{start} < 0;
         $site{end}   = $center + ($distance / 2);
         $length      = $distance;
     }
@@ -150,6 +154,9 @@ __END__
 
  ./extract_sequences.pl --reference path/to/genome.fasta annotation-file.gff
 
+ # extract 100bp of sequence around transcription start site in each loci in annotation file
+ ./extract_sequences.pl --reference path/to/genome.fasta annotation-file.gff --distance 100 --tss
+
 =head1 DESCRIPTION
 
  Prints to STDOUT a fasta file with one sequence per line in the input gff file.
@@ -157,15 +164,16 @@ __END__
 
 =head1 OPTIONS
 
- -f, --filter      only include sequences of length between -f n m
- -w, --use-max-win try to find attribute fields 'maxstart=n' and 'maxend=m'
- -d  --distance     only go distance -d n / 2 from center of locus 
- -r, --reference   reference fasta file from which to extract sequences.
- -o, --output      filename to write results to (defaults to STDOUT)
- -v, --verbose     output perl's diagnostic and warning messages
- -q, --quiet       supress perl's diagnostic and warning messages
- -h, --help        print this information
- -m, --manual      print the plain old documentation page 
+ -f, --filter       only include sequences of length between -f n m
+ -w, --use-max-win  try to find attribute fields 'maxstart=n' and 'maxend=m'
+ -d  --distance     only go distance -d n/2 from center of locus 
+ -t, --tss          extract $distance around transcription start site
+ -r, --reference    reference fasta file from which to extract sequences.
+ -o, --output       filename to write results to (defaults to STDOUT)
+ -v, --verbose      output perl's diagnostic and warning messages
+ -q, --quiet        supress perl's diagnostic and warning messages
+ -h, --help         print this information
+ -m, --manual       print the plain old documentation page 
 
 =head1 VERSION
 
