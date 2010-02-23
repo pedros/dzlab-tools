@@ -16,7 +16,8 @@ my $overlap  = 0;
 my $distance_overlap = 0;
 my $output   = q{-};
 my $verbose  = 0;
-my $quiet    = 0;
+my @filter;
+my $exclude_non_genes = 0;
 
 # Grabs and parses command line options
 my $result = GetOptions (
@@ -25,6 +26,8 @@ my $result = GetOptions (
     'distance|d=i'          => \$distance,
     'overlap|p'             => \$overlap,
     'distance-overlap|dp|i' => \$distance_overlap,
+    'filter|w=i{1,2}'       => \@filter,
+    'exclude-non-genes|e'   => \$exclude_non_genes,
     'output|o:s'            => \$output,
     'verbose|v'             => sub {enable diagnostics;use warnings;},
     'quiet|q'               => sub {disable diagnostics;no warnings;},
@@ -84,6 +87,15 @@ for my $chr (sort {$a cmp $b} keys %data) {
         my ($feature, $start, $end, $mean, $attribute)
         = (split /\t/, $window)[2, 3, 4, 5, 8];
 
+        if (@filter) {
+            my $length = $end - $start + 1;
+
+            next unless
+            $length >= $filter[0]
+            and ( ($filter[1] and $length <= $filter[1])
+                  or not $filter[1]);
+        }
+
         my $center = int (($end - $start) / 2 + $start);
         my $lower_bound;
         my $upper_bound;
@@ -111,6 +123,9 @@ for my $chr (sort {$a cmp $b} keys %data) {
             $lower_bound, $upper_bound,
             $annotation{$chr}, $overlap
         ) };
+
+        next if
+        $exclude_non_genes and not @range;
 
         # for current window/probe, go through each locus and
         # arrange its parameters (id, distance to center of probe, direction)
@@ -283,6 +298,7 @@ __END__
  -d,  --distance         distance from center of each probe/window on each side to search
  -p,  --overlap          search whole probe for overlapping genes
  -dp, --distance-overlap search whole probe for overlapping genes and go extra distance beyond bounds
+ -w,  --filter           filter loci with length less than the first parameter or more than the second (optional) parameter
  -o,  --output           filename to write results to (default is STDOUT, unless in batch mode)
  -v,  --verbose          output perl's diagnostic and warning messages
  -q,  --quiet            supress perl's diagnostic and warning messages
