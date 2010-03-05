@@ -15,6 +15,8 @@ unless @ARGV;
 my $width = 50;
 my $reference;
 my $feature;
+my $center;
+my $no_skip;
 my $output;
 
 # Grabs and parses command line options
@@ -22,6 +24,8 @@ my $result = GetOptions (
     'width|w=i'     => \$width,
     'feature|f=s'   => \$feature,
     'reference|r=s' => \$reference,
+    'center|c'      => \$center,
+    'no-skip|n'     => \$no_skip,
     'output|o=s'  => \$output,
     'verbose|v'   => sub { use diagnostics; },
     'quiet|q'     => sub { no warnings; },
@@ -36,7 +40,10 @@ if ($output) {
 
 my %col_windows = ();
 while (<>) {
-    my ($chr, $start) = (split /\t/)[0,3];
+    my ($chr, $start, $end) = (split /\t/)[0,3,4];
+
+    $start = $start + int (($end - $start + 1) / 2)
+    if $center;
 
     if ($start % $width > 0) {
         $col_windows{$chr}{int ($start / $width) * $width + 1}++;
@@ -61,11 +68,12 @@ for my $chr (keys %col_windows) {
     }
     else {$last_coord = max keys %{$col_windows{$chr}};}
  
-    for (my $i = 1; $i <= $last_coord - $width + 1; $i += $width) {
-        $col_windows{$chr}{$i} = 0 unless exists $col_windows{$chr}{$i};
+    if ($no_skip) {
+        for (my $i = 1; $i <= $last_coord - $width + 1; $i += $width) {
+            $col_windows{$chr}{$i} = 0 unless exists $col_windows{$chr}{$i};
+        }
     }
 }
-
 
 for my $chr (sort {$a cmp $b} keys %col_windows) {
 
@@ -74,7 +82,7 @@ for my $chr (sort {$a cmp $b} keys %col_windows) {
         print join ("\t",
                     $chr,
                     q{.},
-                    "${feature}_w$width",
+                    ${feature} // "w$width",
                     $window,
                     $window + $width - 1,
                     $col_windows{$chr}{$window},
@@ -152,6 +160,8 @@ __END__
  -w, --width       sliding window width
  -f, --feature     third GFF feature
  -r, --reference   fasta file for computing chromosome lengths
+ -c, --center      use center of regions to compute overlaps
+ -n, --no-skip     output all windows, even those with no coverage
  -o, --output      filename to write results to (defaults to STDOUT)
  -v, --verbose     output perl's diagnostic and warning messages
  -q, --quiet       supress perl's diagnostic and warning messages
@@ -160,7 +170,7 @@ __END__
 
 =head1 REVISION
 
- Version 0.0.1
+ Version 0.0.2
 
  $Rev$:
  $Author$:
