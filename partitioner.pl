@@ -6,18 +6,23 @@ use Data::Dumper;
 use Carp;
 use Getopt::Long;
 use Pod::Usage;
+use List::Util 'sum';
 
 my $DATA_HANDLE = 'ARGV';
 my $output;
 my $size    = 10;
 my $column  = 6;
 my $numeric = 1;
+my $remove_mean = 0;
+my $no_split    = 0;
 
 # Grabs and parses command line options
 my $result = GetOptions (
     'size|s=i'        => \$size,
     'sort-column|c=i' => \$column,
     'numeric|n'       => \$numeric,
+    'remove-mean|r'   => \$remove_mean,
+    'no-split|ns'     => \$no_split,
     'output|o=s'  => \$output,
     'verbose|v'   => sub { use diagnostics; },
     'quiet|q'     => sub { no warnings; },
@@ -29,19 +34,52 @@ my $result = GetOptions (
 pod2usage ( -verbose => 1 )
 unless @ARGV and $result;
 
-my @data  = <>;
+if ($output and $no_split) {
+    open my $USER_OUT, '>>', $output or carp "Can't open $output for writing: $!";
+    select $USER_OUT;
+}
+
+my @data  = grep {m/^\s*[^#]/} <>;
 my $lines = sort_and_count (\@data, --$column, $numeric);
 
 croak "size parameter is greater than number of lines in file: $size > $lines\n"
 if $size > $lines;
 
 my $index = 1;
-mkdir "$output.$size";
-for (my $i = 0; $i < @data - $size; $i += int ($lines / $size)) {
-    open my $PARTITION, '>', "$output.$size/$output." . $index++ or croak "Can't write file: $!";
-    print $PARTITION join (q{}, @data[$i .. $i + ($lines / $size)]);
-    close $PARTITION;
+
+mkdir "$output.$size" unless $no_split;
+
+my $partition = $lines / $size;
+
+for (my $i = 0; $i < @data - $size; $i += int $partition) {
+    if ($remove_mean) {
+        my $mean
+        = (sum map {
+            (split /\t/, $_)[$column]
+        } @data[$i .. $i + $partition - 1])
+        / $partition;
+
+        print "##mean=$mean\n";
+
+        for ($i .. $i + $partition - 1) {
+            my @fields  = split /\t/, $data[$_];
+            $fields[5] -= sprintf ("%g", $mean);
+            $fields[5]  = sprintf ("%g", $fields[5]);
+            $data[$_]   = join "\t", @fields;
+        }
+    }
+
+    if ($no_split) {
+        print join (q{}, @data[$i .. $i + $partition - 1]);
+    }
+    else {
+        open my $PARTITION, '>', "$output.$size/$output." . $index++ or croak "Can't write file: $!";
+        print $PARTITION join (q{}, @data[$i .. $i + $partition - 1]);
+        close $PARTITION;
+    }
 }
+
+
 
 sub sort_and_count {
     my ($data_in, $column, $numeric) = @_;
@@ -77,14 +115,16 @@ __END__
 
  name.pl [OPTION]... [FILE]...
 
- -s, --size        percentage of total lines in file per partition (10)
- -c, --sort-column column index (base 1) on which to sort and split (6)
- -n, --numeric     do numeric sort instead of alphanumeric (default)  
- -o, --output      basename to write results to (basename.0, basename.1 etc)
- -v, --verbose     output perl's diagnostic and warning messages
- -q, --quiet       supress perl's diagnostic and warning messages
- -h, --help        print this information
- -m, --manual      print the plain old documentation page
+ -s,  --size        percentage of total lines in file per partition (10)
+ -c,  --sort-column column index (base 1) on which to sort and split (6)
+ -n,  --numeric     do numeric sort instead of alphanumeric (default)  
+ -o,  --output      basename to write results to (basename.0, basename.1 etc)
+ -r,  --remove-mean subtract partition mean from each score per partition
+ -ns, --no-split    don't print partitions to multiple files
+ -v,  --verbose     output perl's diagnostic and warning messages
+ -q,  --quiet       supress perl's diagnostic and warning messages
+ -h,  --help        print this information
+ -m,  --manual      print the plain old documentation page
 
 =head1 REVISION
 
