@@ -14,6 +14,7 @@ unless @ARGV;
 
 my $type = 'verbose';
 my $frequencies;
+my $paired;
 my $eland;
 my $id_regex;
 my $reference;
@@ -28,6 +29,7 @@ my $result = GetOptions (
     'splice|s=i{2}'  => \@splice,
     'type|t=s'       => \$type,
     'frequencies|f'  => \$frequencies,
+    'paired|p'       => \$paired,
     'eland|e'        => \$eland,
     'id-regex|i=s'   => \$id_regex,
     'reference|r=s'  => \$reference,
@@ -49,8 +51,6 @@ if ($output) {
     select $USER_OUT;
 }
 
-# $| = 1; # flush buffer immediately
-
 # read in bowtie verbose file
 my $counts   = undef;
 my $previous = undef;
@@ -67,6 +67,15 @@ while (<>) {
         $counts->{$current->{target}->[0]}{alternatives}
         += $current->{alternatives};
         $counts->{$current->{target}->[0]}{frequencies}++;
+    }
+    elsif ($paired) {
+
+        my $next = <>; chomp $next; $next =~ s/[\r\n]//;
+           $next = read_bowtie ($next);
+
+        $next->{snps}{$next->{snp}->[0]}++;
+
+        print_gff ($current, $next);
     }
     else {
         unless (defined $previous) {
@@ -98,11 +107,6 @@ print_eland ($previous) if defined $previous;
 
 # for when last read in bowtie file is *not* last read in fasta file
 catch_up ($previous, $unmatched, @splice) if defined $previous and $unmatched;
-
-# close $unmatched or carp "Can't close $unmatched: $!"
-# if $unmatched;
-
-### done
 
 
 
@@ -155,6 +159,22 @@ catch_up ($previous, $unmatched, @splice) if defined $previous and $unmatched;
             }
         }
     }
+}
+
+sub print_gff {
+    my ($current, $next) = @_;
+
+    print join ("\t",
+                $current->{target}->[0],
+                'bowtie',
+                'frag',
+                $current->{coordinate}->[0],
+                $next->{coordinate}->[0] + length ($next->{sequence}) - 1,
+                q{.},
+                q{+},
+                q{.},
+                "alt=$current->{alternatives}"
+            ), "\n";
 }
 
 
