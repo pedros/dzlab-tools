@@ -324,6 +324,7 @@ __END__
  -i, --id-regex    perl-type regular expression to identify feature id (ie. gene) in fasta alignment header (must include capturing parenthesis)
  -r, --reference   genome/cDNA models file in fasta format (for calculating relative frequency scores, etc.)
  -u, --recover     given original alignment fasta file, recovers unmatched reads (which bowtie does not output)
+ -p, --paired      convert bowtie's paired ends output to gff with concatenated library ends per region
  -o, --output      filename to write results to (defaults to STDOUT)
  -v, --verbose     output perl's diagnostic and warning messages
  -q, --quiet       supress perl's diagnostic and warning messages
@@ -332,7 +333,7 @@ __END__
 
 =head1 REVISION
 
- Version 0.0.1
+ Version 0.0.2
 
  $Rev$:
  $Author$:
@@ -342,7 +343,7 @@ __END__
 
 =head1 AUTHOR
 
- Pedro Silva <psilva@nature.berkeley.edu/>
+ Pedro Silva <pedros@berkeley.edu/>
  Zilberman Lab <http://dzlab.pmb.berkeley.edu/>
  Plant and Microbial Biology Department
  College of Natural Resources
