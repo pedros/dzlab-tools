@@ -11,7 +11,7 @@ use List::Util 'sum';
 my $DATA_HANDLE = 'ARGV';
 my $output;
 my $size    = 10;
-my $column  = 6;
+my $column  = 0;
 my $numeric = 1;
 my $remove_mean = 0;
 my $no_split    = 0;
@@ -35,15 +35,12 @@ pod2usage ( -verbose => 1 )
 unless @ARGV and $result;
 
 if ($output and $no_split) {
-    open my $USER_OUT, '>>', $output or carp "Can't open $output for writing: $!";
+    open my $USER_OUT, '>', $output or carp "Can't open $output for writing: $!";
     select $USER_OUT;
 }
 
 my @data  = grep {m/^\s*[^#]/} <>;
 my $lines = sort_and_count (\@data, --$column, $numeric);
-
-croak "size parameter is greater than number of lines in file: $size > $lines\n"
-if $size > $lines;
 
 my $index = 1;
 
@@ -52,10 +49,12 @@ mkdir "$output.$size" unless $no_split;
 my $partition = $lines / $size;
 
 for (my $i = 0; $i < @data - $size; $i += int $partition) {
+
     if ($remove_mean) {
+
         my $mean
         = (sum map {
-            (split /\t/, $_)[$column]
+            (split /\t/, $_)[5]
         } @data[$i .. $i + $partition - 1])
         / $partition;
 
@@ -83,6 +82,8 @@ for (my $i = 0; $i < @data - $size; $i += int $partition) {
 
 sub sort_and_count {
     my ($data_in, $column, $numeric) = @_;
+
+    return @$data_in if $column < 0;
 
     if ($numeric) {
         no warnings;
@@ -116,7 +117,7 @@ __END__
  name.pl [OPTION]... [FILE]...
 
  -s,  --size        percentage of total lines in file per partition (10)
- -c,  --sort-column column index (base 1) on which to sort and split (6)
+ -c,  --sort-column column index (base 1) on which to sort and split (0)
  -n,  --numeric     do numeric sort instead of alphanumeric (default)  
  -o,  --output      basename to write results to (basename.0, basename.1 etc)
  -r,  --remove-mean subtract partition mean from each score per partition
