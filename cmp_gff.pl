@@ -1,66 +1,30 @@
 #!/usr/bin/perl
 
-=head1 Revision
-
-    Last edited 2008-12-24
-
-=cut
-
-=head1 Author
-
-    Copyright 2008 Pedro Silva <psilva@dzlab.pmb.berkeley.edu/>
-
-=cut
-
-=head1 Copyright
-
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-=cut
-
-=head1 Synopsis
-
-=cut
-
-use strict;
 use warnings;
-use diagnostics;
-use Getopt::Long;
+use strict;
 use Data::Dumper;
 use Carp;
+use Getopt::Long;
+use Pod::Usage;
 
 # Globals, passed as command line options
-my $gff_file_1  = '';
-my $gff_file_2  = '';
+my $gff_file_1  = q{};
+my $gff_file_2  = q{};
 my $operation   = 'sub';
 my $statistic   = 'Fisher::twotailed';
 my $inverse_log = -1;
 my $reverse     = 0;
+my $min_meth    = 0.5;
+my $min_diff    = 0.1;
 my $threshold   = 0;
 my $concatenate = 0;
 my $valid_gff   = 0;
+my $ignore_feat = 1;
 my $debug       = 0;
-my $output      = '-';
+my $output      = q{-};
 my $verbose     = 0;
 my $quiet       = 0;
 my $usage       = 0;
-
-# Initial check of command line parameters
-if (@ARGV < 2) {
-    usage();
-}
-my @argv = @ARGV;
 
 # Grabs and parses command line options
 my $result = GetOptions (
@@ -70,30 +34,57 @@ my $result = GetOptions (
     'statistic|stat|s=s'   => \$statistic,
     'inverse-log|ilog|i:i' => \$inverse_log,
     'reverse-score|rev|r'  => \$reverse,
-    'output|o:s'           => \$output,
+    'min-methylation|mm=i' => \$min_meth,
+    'min-difference|md=i'  => \$min_diff,
     'threshold|t'          => \$threshold,
     'concatenate|c'        => \$concatenate,
     'valid-gff|g'          => \$valid_gff,
+    'ignore-features|if'   => \$ignore_feat,
     'debug|d'              => \$debug,
-    'verbose|v'            => sub {enable diagnostics;use warnings;},
-    'quiet|q'              => sub {disable diagnostics;no warnings;}, 
-   'usage|help|h'         => \&usage
+    'output|o=s'           => \$output,
+    'verbose|v'            => sub { use diagnostics; },
+    'quiet|q'              => sub { no warnings; },
+    'help|h'               => sub { pod2usage ( -verbose => 1 ); },
+    'manual|m'             => sub { pod2usage ( -verbose => 2 ); }
 );
 
-# use the appropriate statistic measure based on user input
-eval "use Text::NSP::Measures::2D::$statistic";
+my %statistics = (
+    'CHI::phi'          => 1,
+    'CHI::tscore'       => 1,
+    'CHI::x2'           => 1,
+    'Dice::dice'        => 1,
+    'Dice::jaccard'     => 1,
+    'Fisher::left'      => 1,
+    'Fisher::right'     => 1,
+    'Fisher::twotailed' => 1,
+    'MI::ll'            => 1,
+    'MI::pmi'           => 1,
+    'MI::ps'            => 1,
+    'MI::tmi'           => 1,
+);
 
-# redirects STDOUT to file if specified by user
-if (!($output eq '-')) {
-    open(STDOUT, '>', "$output") or croak ("Can't redirect STDOUT to file: $output");
+# Check required command line parameters
+pod2usage ( -verbose => 1 )
+unless $result and $gff_file_1 and $gff_file_2 and exists $statistics{$statistic};
+
+if ($output) {
+    open my $USER_OUT, '>', $output or croak "Can't open $output for writing: $!";
+    select $USER_OUT;
 }
 
-# prints out header fields that contain gff v3 header, generating program, time, and field names
-gff_print_header ($0, @argv);
+# use the appropriate statistic measure based on user input
+if (exists $statistics{$statistic}) {
+    eval "use Text::NSP::Measures::2D::$statistic";
+}
+
+if ($output) {
+    open my $USER_OUT, '>', $output or croak "Can't open $output for writing: $!";
+    select $USER_OUT;
+}
 
 # opens gff files
-open (my $GFFA, '<', $gff_file_1) or croak ("Can't read file: $gff_file_1");
-open (my $GFFB, '<', $gff_file_2) or croak ("Can't read file: $gff_file_2");
+open my $GFFA, '<', $gff_file_1 or croak "Can't read file: $gff_file_1";
+open my $GFFB, '<', $gff_file_2 or croak "Can't read file: $gff_file_2";
 
 # @window_buffers hold contiguous gff records, in the hash form produced by gff_read
 #
@@ -110,48 +101,60 @@ my (@window_buffer_a, @window_buffer_b) = ();
 # processing stops when either we run out of 'a' file lines
 # OR we run out of 'b' file lines (see below)
 PROCESSING:
-while (my $line_a = <$GFFA>) {
+while (defined (my $line_a = <$GFFA>) and defined (my $line_b = <$GFFB>)) {
 
-    # get a line from each file to be compared
-    # ignore comments or blank lines and clean it up
-    next if ($line_a =~ m/^#.*$|^\s*$/);
-    my $line_b = <$GFFB>;
-    last unless defined $line_b; # stop if we run out of 'b' lines
+    # skip past comments on both files
+    while ($line_a =~ m/^#.*$|^\s*$/) {
+        $line_a = <$GFFA>;
+    }
     while ($line_b =~ m/^#.*$|^\s*$/) {
         $line_b = <$GFFB>;
     }
+
     chomp $line_a;
     chomp $line_b;
-    $line_a =~ s/\r//g;
-    $line_b =~ s/\r//g;
 
     # read each line into a hash
     # see gff_read() sub definition for hash keys
     my %rec_a = %{&gff_read ($line_a)};
     my %rec_b = %{&gff_read ($line_b)};
 
-    while ($rec_a{'feature'} ne $rec_b{'feature'}) {
-        if ($rec_a{'start'} > $rec_b{'start'}) {
-            $line_a = <$GFFA>;
-            chomp $line_a;
-            $line_a =~ s/\r//g;
-            %rec_a = %{&gff_read ($line_a)};
+    unless ($ignore_feat) {
+        while ($rec_a{'feature'} ne $rec_b{'feature'}) { 
+            if ($rec_a{'start'} > $rec_b{'start'}) {
+                $line_a = <$GFFA>;
+                chomp $line_a;
+                %rec_a = %{&gff_read ($line_a)};
+            } elsif ($rec_a{'start'} < $rec_b{'start'}) {
+                $line_b = <$GFFB>;
+                chomp $line_b;
+                %rec_b = %{&gff_read ($line_b)};
+            }
         }
-        elsif ($rec_a{'start'} < $rec_b{'start'}) {
-            $line_b = <$GFFB>;
-            chomp $line_b;
-            $line_b =~ s/\r//g;
-            %rec_b = %{&gff_read ($line_b)};
-        }
+    }
+
+    next PROCESSING
+    if $rec_a{score} eq q{.}
+    or $rec_b{score} eq q{.};
+
+    if ($min_meth) {
+        next PROCESSING 
+        unless $rec_a{score} >= $min_meth
+        or     $rec_b{score} >= $min_meth;
+    }
+
+    if ($min_diff) {
+        next PROCESSING
+        unless abs($rec_a{score} - $rec_b{score}) >= $min_diff;
     }
 
     # gff_calculate_statistic will call the Text::NSP module
     # return value is -1 if a record doesn't have coverage (ie. attribute field eq '.')
-    my $ngram = gff_calculate_statistic (\%rec_a, \%rec_b);
-    my $score = 0;
+    my $ngram = 0;
 
     if ($concatenate) {
-    # filter out windows with no Cs
+
+        # filter out windows with no Cs
         next PROCESSING if
         ($rec_a{'attribute'} eq q{.} and $rec_b{'attribute'} eq q{.}) or
         ($rec_a{'attribute'} =~ m/c=0/ and $rec_b{'attribute'} =~ m/c=0/);
@@ -164,18 +167,20 @@ while (my $line_a = <$GFFA>) {
             push @window_buffer_a, $line_a;
             push @window_buffer_b, $line_b;
             next PROCESSING;
-        } elsif ($rec_a{'start'} > (split "\t", $window_buffer_a[-1])[3] and
-                 $rec_a{'start'} <= (split "\t", $window_buffer_a[-1])[4] + 1) {
+        }
+        elsif ($rec_a{'start'} >  (split "\t", $window_buffer_a[-1])[3] and
+               $rec_a{'start'} <= (split "\t", $window_buffer_a[-1])[4] + 1) {
             push @window_buffer_a, $line_a;
             push @window_buffer_b, $line_b;
             next PROCESSING;
-        } else {
+        }
+        else {
             # if the current window is NOT contiguous with the last buffer entry
             # we flush the buffer, start filling it up again, and overwrite the current
             # window with the concatenated window
             my $tmp_window_a_ref = gff_concatenate (\@window_buffer_a);
             my $tmp_window_b_ref = gff_concatenate (\@window_buffer_b);
-            my $tmp_ngram = gff_calculate_statistic ($tmp_window_a_ref, $tmp_window_b_ref);
+            $ngram = gff_calculate_statistic ($tmp_window_a_ref, $tmp_window_b_ref);
 
             # deletes buffer contents, saves current windows to the buffer
             # and overwrites current windows and ngram score for printing
@@ -184,22 +189,23 @@ while (my $line_a = <$GFFA>) {
             push @window_buffer_b, $line_b;
 
             # filter out records with statistic measures above threshold
-            next PROCESSING if ($threshold and $tmp_ngram > $threshold);
+            next PROCESSING if ($threshold and $ngram > $threshold);
 
             %rec_a = %{$tmp_window_a_ref};
             %rec_b = %{$tmp_window_b_ref};
-            $ngram = $tmp_ngram;
         }
 
         # filter out windows with no Cs
         next PROCESSING if
-        ($rec_a{'attribute'} eq q{.} and $rec_b{'attribute'} eq q{.}) or
+        ($rec_a{'attribute'} eq q{.}   and $rec_b{'attribute'} eq q{.}) or
         ($rec_a{'attribute'} =~ m/c=0/ and $rec_b{'attribute'} =~ m/c=0/);
     }
+    else {
+        $ngram = gff_calculate_statistic (\%rec_a, \%rec_b);
+    }
 
-    # calculates the appropriate result on the scores of both windows
-    $rec_a{'score'} = 0 if $rec_a{'score'} eq q{.};
-    $rec_b{'score'} = 0 if $rec_b{'score'} eq q{.};
+    my $score = 0;
+
     if ($operation eq 'sub') {
         $score = $rec_a{'score'} - $rec_b{'score'};
     }
@@ -228,11 +234,11 @@ while (my $line_a = <$GFFA>) {
 
     ### NOTE: this is temporary: it naively parses the input file names to try to
     # put something meaningful in the 'feature' field
-    my $feature = "$rec_a{'feature'};a:$operation:b";
+    my $feature = "$rec_a{'feature'}:$operation:$rec_b{'feature'}";
 
     $statistic =~ tr/A-Z/a-z/;
 
-    my $attribute = sprintf("$statistic=%e", $ngram);
+    my $attribute = sprintf("$statistic=%g", $ngram);
 
     if ($debug) {
         $rec_a{'attribute'} =~ s/([ct]=)/a_$1/g;
@@ -253,7 +259,7 @@ while (my $line_a = <$GFFA>) {
                $feature,
                $rec_a{'start'},
                $rec_a{'end'},
-               sprintf("%e", $score),
+               sprintf("%g", $score),
                ".",
                ".",
                $attribute
@@ -261,8 +267,8 @@ while (my $line_a = <$GFFA>) {
 
 }
 
-close ($GFFA);
-close ($GFFB);
+close $GFFA;
+close $GFFB;
 
 exit 0;
 
@@ -281,15 +287,16 @@ exit 0;
 
 sub gff_calculate_statistic {
     # unpack arguments
-    my ($rec_a_ref, $rec_b_ref) = @_;
+    my ($rec_a_ref, $rec_b_ref, $ignore_feature) = @_;
     my %rec_a = %{$rec_a_ref};
     my %rec_b = %{$rec_b_ref};
+    $ignore_feature //= 1;
 
     # basic sanity test for matching coordinates, chromosome and context
     if ($rec_a{'start'} != $rec_b{'start'} or
         $rec_a{'end'} != $rec_b{'end'} or
         $rec_a{'seqname'} !~ m/$rec_b{'seqname'}/i or
-        $rec_a{'feature'} ne $rec_b{'feature'}) {
+        (not $ignore_feature && $rec_a{'feature'} ne $rec_b{'feature'})) {
         print STDERR Dumper (\%rec_a, \%rec_b);
         croak (
             "Can't match windows in input files.
@@ -316,12 +323,10 @@ sub gff_calculate_statistic {
         # t| n21  | n22  |
         #  |------|------|----
         #  | np1  |      | npp 
-        my ($n11, $n21, undef, undef) = split(/;/, $rec_a{'attribute'});
-        my ($n12, $n22, undef, undef) = split(/;/, $rec_b{'attribute'});
-        ($n11) = $n11 =~ m/(\d+)/;
-        ($n12) = $n12 =~ m/(\d+)/;
-        ($n21) = $n21 =~ m/(\d+)/;
-        ($n22) = $n22 =~ m/(\d+)/;
+        my ($n11) = $rec_a{'attribute'} =~ m/c=(\d+)/;
+        my ($n21) = $rec_a{'attribute'} =~ m/t=(\d+)/;
+        my ($n12) = $rec_b{'attribute'} =~ m/c=(\d+)/;
+        my ($n22) = $rec_b{'attribute'} =~ m/t=(\d+)/;
 
         if ($n11 + $n12 + $n21 + $n22) {
             $ngram = calculateStatistic
@@ -389,30 +394,37 @@ sub gff_concatenate {
         # extract c and t counts from 'attribute' field
         # and update the total counts
         if ($rec{'attribute'} ne '.') {
-            my ($non_over_c, $non_over_t, $over_c, $over_t) = split(/;/, $rec{'attribute'});
-            ($non_over_c) = $non_over_c =~ m/(\d+)/;
-            ($non_over_t) = $non_over_t =~ m/(\d+)/;
-            if (defined $over_c and defined $over_t) {
-                ($over_c) = $over_c =~ m/(\d+)/;
-                ($over_t) = $over_t =~ m/(\d+)/;
-            }
-            else {
-                $over_c = 0;
-                $over_t = 0;
-            }
-            $c_count += ($non_over_c - $over_c);
-            $t_count += ($non_over_t - $over_t);
+
+            my ($non_over_c) = $rec{'attribute'} =~ m/c=(\d+)/;
+            my ($non_over_t) = $rec{'attribute'} =~ m/t=(\d+)/;
+
+            # my ($non_over_c, $non_over_t, $over_c, $over_t) = split(/;/, $rec{'attribute'});
+            # ($non_over_c) = $non_over_c =~ m/(\d+)/;
+            # ($non_over_t) = $non_over_t =~ m/(\d+)/;
+
+            # if (defined $over_c and defined $over_t) {
+            #     ($over_c) = $over_c =~ m/(\d+)/;
+            #     ($over_t) = $over_t =~ m/(\d+)/;
+            # }
+            # else {
+            #     $over_c = 0;
+            #     $over_t = 0;
+            # }
+            # $c_count += ($non_over_c - $over_c);
+            # $t_count += ($non_over_t - $over_t);
+            $c_count += $non_over_c;
+            $t_count += $non_over_t;
         }
     }
 
     if ($c_count + $t_count == 0) {
         $score = 0;
     } else {
-        $score = $c_count/($c_count+$t_count);
+        $score = $c_count/($c_count + $t_count);
     }
 
     # format 'score' to only output 3 decimal places
-    $score = sprintf ("%.e", $score);
+    $score = sprintf ("%g", $score);
 
     # format 'attribute' field for consistency here
     $attribute = "c=$c_count;t=$t_count";
@@ -459,71 +471,79 @@ sub gff_read {
     return \%rec;
 }
 
-=head2 gff_print_header()
+=head1 NAME
 
-    Takes the program call (including the name of the program and its arguments) as input
+ cmp_gff.pl - Comparative enrichment analysis of two GFF files
 
-    Prints out a commented line with header fields
+=head1 SYNOPSIS
+
+ cmp_gff.pl -a tissue_1.gff -b tissue_2.gff -p sub -s Fisher::twotailed -t 0.000001 -c -g -o a_b_comparison.gff
+
+=head1 DESCRIPTION
+
+=head1 OPTIONS
+
+ cmp_gff.pl [OPTION]... -a [FILE A] -b [FILE B]
+
+ -a, --gff-a         first GFF alignment input file
+ -b, --gff-b         second GFF alignment input file
+ -p, --operation     arithmetic operation on scores from a and b ('sub' or 'div')
+ -s, --statistic     type of indendence/significance statistic to use
+                         statistics options: (run 'perldoc Text::NSP' for more information)
+                             CHI::phi             Phi coefficient measure
+                             CHI::tscore          T-score measure of association
+    		             CHI::x2              Pearson's chi squared measure of association
+    		             Dice::dice           Dice coefficient
+    		             Dice::jaccard        Jaccard coefficient
+    		             Fisher::left         Left sided Fisher's exact test
+    		             Fisher::right        Right sided Fisher's exact test
+    		             Fisher::twotailed    Two-sided Fisher's exact test
+    		             MI::ll               Loglikelihood measure of association
+    		             MI::pmi              Pointwise Mutual Information
+    		             MI::ps               Poisson-Stirling measure of association
+    		             MI::tmi              True Mutual Information
+ -i, --inverse-log   compute inverse log of score in base specified by user
+ -r, --reverse-score output scores in attributes field and statistics in scores field
+ -t, --threshold     maximum (optional) threshold for filtering out windows by p-value.
+ -c, --concatenate   concatenate adjacent windows after filtering stage
+ -g, --valid-gff     output format is valid GFF (attribute fields split by ';', not '\t'
+ -o, --output        filename to write results to (defaults to STDOUT)
+ -v, --verbose       output perl's diagnostic and warning messages
+ -q, --quiet         supress perl's diagnostic and warning messages
+ -h, --help          print this information
+ -m, --manual        print the plain old documentation page
+
+=head1 REVISION
+
+ Version 0.0.2
+
+ $Rev$:
+ $Author$:
+ $Date$:
+ $HeadURL$:
+ $Id$:
+
+=head1 AUTHOR
+
+ Pedro Silva <psilva@nature.berkeley.edu/>
+ Zilberman Lab <http://dzlab.pmb.berkeley.edu/>
+ Plant and Microbial Biology Department
+ College of Natural Resources
+ University of California, Berkeley
+
+=head1 COPYRIGHT
+
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 =cut
-sub gff_print_header {
-    my @call_and_args = @_;
-    print "##gff-version 3\n";
-    print join(' ',
-               '#',
-               @call_and_args,
-               "\n");
-    my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = localtime (time);
-    printf "# %4d-%02d-%02d %02d:%02d:%02d\n", $year+1900, $mon+1, $mday, $hour, $min, $sec;
-    print join("\t",
-               '# SEQNAME',
-               'SOURCE',
-               'FEATURE',
-               'START',
-               'END',
-               'SCORE',
-               'STRAND',
-               'FRAME',
-               'ATTRIBUTES',
-           ), "\n";
-    return;
-}
-
-
-=head2 usage()
-
-    Prints out usage information
-
-=cut
-sub usage {
-    print STDERR <<'EOF';
-countMethylation.pl <REQUIRED> [OPTIONS]
-    <--gff-a          -a>    First GFF alignment input file
-    <--gff-b          -b>    Second GFF alignment input file
-    [--operation      -p]    Arithmetic operation on scores from a and b ('sub' or 'div')
-    [--statistic      -s]    Type of indendence/significance statistic to use
-                      Statistics options: (run 'perldoc Text::NSP' for more information)
-                      CHI::phi                 Phi coefficient measure
-		      CHI::tscore              T-score measure of association
-		      CHI::x2                  Pearson's chi squared measure of association
-		      Dice::dice               Dice coefficient
-		      Dice::jaccard            Jaccard coefficient
-		      Fisher::left             Left sided Fisher's exact test
-		      Fisher::right            Right sided Fisher's exact test
-		      Fisher::twotailed        Two-sided Fisher's exact test
-		      MI::ll                   Loglikelihood measure of association
-		      MI::pmi                  Pointwise Mutual Information
-		      MI::ps                   Poisson-Stirling measure of association
-		      MI::tmi                  True Mutual Information
-    [--inverse-log    -i]    Step interval of sliding window in BS
-    [--reverse-score  -r]    Output scores in attributes field and statistics in scores field
-    [--threshold      -t]    Maximum (optional) threshold for filtering out windows by p-value.
-    [--concatenate    -c]    Concatenate adjacent windows after filtering stage
-    [--valid-gff      -g]    Output format is valid GFF (attribute fields split by ';', not '\t'
-    [--output         -o]    Filename to write results to (default is STDOUT)
-    [--verbose        -v]    Output Pall's diagnostic and warning messages
-    [--quiet          -q]    Supress Pail's diagnostic and warning messages
-    [--usage          -h]    Print this information
-EOF
-    exit 0;
-}
