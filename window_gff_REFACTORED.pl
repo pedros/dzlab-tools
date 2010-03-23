@@ -117,7 +117,7 @@ for my $sequence ( sort keys %gff_records ) {
     while ( my ($ranges, $locus) = $window_iterator->($sequence) ) {
 
         my $brs_iterator = binary_range_search(
-            range    => [@$ranges], # make an anonymous copy because binary_range_search *will* modify references
+            range    => $ranges,
             ranges   => $gff_records{$sequence},
         );
 
@@ -195,8 +195,8 @@ sub make_window_iterator {
     my $upper = $options{upper} || croak 'Need upper bound parameter';
         
     return sub {
-        my $i      = $lower;
-        $lower    += $step;
+        my $i  = $lower;
+        $lower += $step;
 
         if ($i <= $upper - $width + 1) {
             return [ [$i, $i + $width - 1] ];
@@ -396,60 +396,71 @@ COORD:
 sub binary_range_search {
     my %options = @_;
 
-    my $range  = shift @{$options{range}} || croak 'Need a range parameter';
-    my $ranges = $options{ranges}         || croak 'Need a ranges parameter';
+    my $targets = $options{range}  || croak 'Need a range parameter';
+    my $ranges  = $options{ranges} || croak 'Need a ranges parameter';
 
-    my ( $low, $high ) = ( 0, @{$ranges} - 1 );
+    my ( $low, $high ) = ( 0, $#{$ranges} );
+    my @iterators      = ();
 
-    while ( $low <= $high ) {
+  TARGET:
+    for my $range ( @$targets ) {
 
-        my $try = int( ( $low + $high ) / 2 );
+      RANGE_CHECK:
+        while ( $low <= $high ) {
 
-        $low  = $try + 1, next if $ranges->[$try]{end}   < $range->[0];
-        $high = $try - 1, next if $ranges->[$try]{start} > $range->[1];
+            if ($range->[0] == 401) {
+                sleep 1
+            };
 
-        my ( $down, $up ) = ($try) x 2;
+            my $try = int( ( $low + $high ) / 2 );
 
-        my %seen = ();
+            $low  = $try + 1, next RANGE_CHECK if $ranges->[$try]{end}   < $range->[0];
+            $high = $try - 1, next RANGE_CHECK if $ranges->[$try]{start} > $range->[1];
 
-        my $brs_iterator = sub { };
-        $brs_iterator = sub {
+            my ( $down, $up ) = ($try) x 2;
+            my %seen      = ();
+        
+            my $brs_iterator = sub {
 
-            if (    $ranges->[ $up + 1 ]{end}       >= $range->[0]
-                    and $ranges->[ $up + 1 ]{start} <= $range->[1]
-                    and !exists $seen{ $up + 1 } )
-            {
-                $seen{ $up + 1 } = undef;
-                return $ranges->[ ++$up ];
-            }
-            elsif ( $ranges->[ $down - 1 ]{end}       >= $range->[0]
-                    and $ranges->[ $down + 1 ]{start} <= $range->[1]
-                    and !exists $seen{ $down - 1 }
-                    and $down > 0 )
-            {
-                $seen{ $down - 1 } = undef;
-                return $ranges->[ --$down ];
-            }
-            elsif ( !exists $seen{$try} ) {
-                $seen{$try} = undef;
-                return $ranges->[$try];
-            }
-            elsif (@{$options{range}}) {
-                $brs_iterator = 
-                binary_range_search(
-                    range    => $options{range},
-                    ranges   => $options{ranges},
-                );
-                return $brs_iterator->();
-            }
-            else {
-                return;
-            }
-
-        };
-        return $brs_iterator;
+                if (    $ranges->[ $up + 1 ]{end}       >= $range->[0]
+                        and $ranges->[ $up + 1 ]{start} <= $range->[1]
+                        and !exists $seen{ $up + 1 } ) {
+                    $seen{ $up + 1 } = undef;
+                    return $ranges->[ ++$up ];
+                } 
+                elsif ( $ranges->[ $down - 1 ]{end}         >= $range->[0]
+                          and $ranges->[ $down - 1 ]{start} <= $range->[1]
+                          and !exists $seen{ $down - 1 }
+                          and $down > 0 ) {
+                    $seen{ $down - 1 } = undef;
+                    return $ranges->[ --$down ];
+                } 
+                elsif ( !exists $seen{$try} ) {
+                    $seen{$try} = undef;
+                    return $ranges->[$try];
+                }
+                else {
+                    return;
+                }
+            };
+            push @iterators, $brs_iterator;
+            next TARGET;
+        }
     }
-    return sub { };
+
+    # In scalar context return master iterator that iterates over the list of range iterators.
+    # In list context returns a list of range iterators.
+    return wantarray 
+    ? @iterators 
+    : sub { 
+        while( @iterators ) {
+            if( my $range = $iterators[0]->() ) {
+                return $range;
+            }
+            shift @iterators;
+        }
+        return;
+    }; 
 }
 
 
