@@ -8,14 +8,12 @@ use Getopt::Long;
 use Pod::Usage;
 use List::Util qw/max/;
 
-# Check required command line parameters
-pod2usage ( -verbose => 1 )
-unless @ARGV;
-
-my $width = 50;
+my $width       = 50;
 my $reference;
 my $feature;
 my $center;
+my $accumulate;
+my $sorted;
 my $no_skip;
 my $output;
 
@@ -25,74 +23,136 @@ my $result = GetOptions (
     'feature|f=s'   => \$feature,
     'reference|r=s' => \$reference,
     'center|c'      => \$center,
+    'accumulate|a'  => \$accumulate,
+    'sorted|s'      => \$sorted,
     'no-skip|n'     => \$no_skip,
-    'output|o=s'  => \$output,
-    'verbose|v'   => sub { use diagnostics; },
-    'quiet|q'     => sub { no warnings; },
-    'help|h'      => sub { pod2usage ( -verbose => 1 ); },
-    'manual|m'    => sub { pod2usage ( -verbose => 2 ); }
+    'output|o=s'    => \$output,
+    'verbose|v'     => sub { use diagnostics; },
+    'quiet|q'       => sub { no warnings; },
+    'help|h'        => sub { pod2usage ( -verbose => 1 ); },
+    'manual|m'      => sub { pod2usage ( -verbose => 2 ); }
 );
+
+# Check required command line parameters
+pod2usage ( -verbose => 1 )
+unless $result and @ARGV and ($accumulate xor $center);
 
 if ($output) {
     open my $USER_OUT, '>', $output or carp "Can't open $output for writing: $!";
     select $USER_OUT;
 }
 
+$reference = index_fasta ($reference) if $reference;
+
 my %col_windows = ();
+my %last_coords = ();
+
+GFF:
 while (<>) {
     my ($chr, $start, $end) = (split /\t/)[0,3,4];
+
+    if ($sorted 
+        and defined  $last_coords{$chr}
+        and $start > $last_coords{$chr}
+    ) {
+
+        fill_empty_windows (\%col_windows, $reference, $width)
+        if $no_skip;
+        
+        print_windows (\%col_windows, $feature);
+
+        %col_windows = ();
+    }
+
+    $last_coords{$chr} = $end;
 
     $start = $start + int (($end - $start + 1) / 2)
     if $center;
 
+    # the accumulate option repeats the assignment of all coordinates to windows
+    $end = $start 
+    unless $accumulate;
+
+    for $start ($start .. $end) {
+        assign_to_windows (\%col_windows, $chr, $start, $width);
+    }
+}
+
+
+fill_empty_windows (\%col_windows, $reference, $width)
+if $no_skip && %col_windows;
+
+print_windows (\%col_windows, $feature)
+if %col_windows;
+
+
+
+
+
+sub assign_to_windows {
+    my ($col_windows_ref, $chr, $start, $width) = @_;
+
     if ($start % $width > 0) {
-        $col_windows{$chr}{int ($start / $width) * $width + 1}++;
+        $col_windows_ref->{$chr}{int ($start / $width) * $width + 1}++;
     }
     else {
-        $col_windows{$chr}{$start + 1}++;
+        $col_windows_ref->{$chr}{$start}++;
     }
 }
 
-$reference = index_fasta ($reference);
 
-for my $chr (keys %col_windows) {
 
-    my $last_coord;
+sub print_windows {
+    my ($col_windows_ref, $feature) = @_;
 
-    if (ref $reference eq 'HASH') {
-        unless (exists $reference->{$chr}) {
-            carp "Can't find $chr in fasta file. This chromosome will only have windows up to $last_coord";
-            $last_coord = max keys %{$col_windows{$chr}};
+    for my $chr (sort {$a cmp $b} keys %{ $col_windows_ref }) {
+
+        for my $window (sort {$a <=> $b} keys %{$col_windows_ref->{$chr}}) {
+
+            print join ("\t",
+                        $chr,
+                        q{.},
+                        $feature // "w$width",
+                        $window,
+                        $window + $width - 1,
+                        $col_windows_ref->{$chr}{$window},
+                        q{.},
+                        q{.},
+                        q{.},
+                    ), "\n";
         }
-        else {$last_coord = $reference->{$chr}}
     }
-    else {$last_coord = max keys %{$col_windows{$chr}};}
+}
+
+
+{
+    my %first_coord;
  
-    if ($no_skip) {
-        for (my $i = 1; $i <= $last_coord - $width + 1; $i += $width) {
-            $col_windows{$chr}{$i} = 0 unless exists $col_windows{$chr}{$i};
+    sub fill_empty_windows {
+        my ($col_windows_ref, $reference, $width) = @_;
+
+        for my $chr (keys %{ $col_windows_ref } ) {
+
+            my $last_coord;
+
+            if (defined $reference
+                && ref $reference eq 'HASH'
+                && exists $reference->{$chr}
+            ) {
+                $last_coord = $reference->{$chr};
+            } else {
+                $last_coord = max keys %{ $col_windows_ref->{$chr} };
+            }
+
+            for (my $i = $first_coord{$chr} // 1; $i <= $last_coord - $width; $i += $width) {
+                $col_windows_ref->{$chr}{$i} = 0 unless exists $col_windows_ref->{$chr}{$i};
+            }
+
+            $first_coord{$chr} = $last_coord;
+ 
         }
     }
 }
-
-for my $chr (sort {$a cmp $b} keys %col_windows) {
-
-    for my $window (sort {$a <=> $b} keys %{$col_windows{$chr}}) {
-
-        print join ("\t",
-                    $chr,
-                    q{.},
-                    ${feature} // "w$width",
-                    $window,
-                    $window + $width - 1,
-                    $col_windows{$chr}{$window},
-                    q{.},
-                    q{.},
-                    q{.},
-                ), "\n";
-    }
-}
-
 
 sub index_fasta {
     my $reference_file = shift;
@@ -131,9 +191,7 @@ sub index_fasta {
     return \%reference;
 }
 
-
 __END__
-
 
 =head1 NAME
 
@@ -155,12 +213,14 @@ __END__
 
 =head1 OPTIONS
 
- gff_window_frequence.pl [OPTION]... [FILE]...
+ gff_window_by_frequency.pl [OPTION]... [FILE]...
 
  -w, --width       sliding window width
  -f, --feature     third GFF feature
  -r, --reference   fasta file for computing chromosome lengths
  -c, --center      use center of regions to compute overlaps
+ -a, --accumulate  compute frequency overlaps per input GFF region
+ -s, --sorted      input is sorted
  -n, --no-skip     output all windows, even those with no coverage
  -o, --output      filename to write results to (defaults to STDOUT)
  -v, --verbose     output perl's diagnostic and warning messages
