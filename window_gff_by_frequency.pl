@@ -56,11 +56,7 @@ while (<>) {
         and $start > $last_coords{$chr}
     ) {
 
-        fill_empty_windows (\%col_windows, $reference, $width)
-        if $no_skip;
-        
-        print_windows (\%col_windows, $feature);
-
+        print_windows (\%col_windows, $feature, $no_skip);
         %col_windows = ();
     }
 
@@ -78,11 +74,7 @@ while (<>) {
     }
 }
 
-
-fill_empty_windows (\%col_windows, $reference, $width)
-if $no_skip && %col_windows;
-
-print_windows (\%col_windows, $feature)
+print_windows (\%col_windows, $feature, $no_skip)
 if %col_windows;
 
 
@@ -102,57 +94,61 @@ sub assign_to_windows {
 
 
 
-sub print_windows {
-    my ($col_windows_ref, $feature) = @_;
-
-    for my $chr (sort {$a cmp $b} keys %{ $col_windows_ref }) {
-
-        for my $window (sort {$a <=> $b} keys %{$col_windows_ref->{$chr}}) {
-
-            print join ("\t",
-                        $chr,
-                        q{.},
-                        $feature // "w$width",
-                        $window,
-                        $window + $width - 1,
-                        $col_windows_ref->{$chr}{$window},
-                        q{.},
-                        q{.},
-                        q{.},
-                    ), "\n";
-        }
-    }
-}
-
-
 {
-    my %first_coord;
+    my %first_coord; ## closure
  
-    sub fill_empty_windows {
-        my ($col_windows_ref, $reference, $width) = @_;
+    sub print_windows {
+        my ($col_windows_ref, $feature, $no_skip, $reference) = @_;
 
-        for my $chr (keys %{ $col_windows_ref } ) {
+        for my $chr (sort {$a cmp $b} keys %{ $col_windows_ref }) {
 
-            my $last_coord;
+            if ($no_skip) {
 
-            if (defined $reference
-                && ref $reference eq 'HASH'
-                && exists $reference->{$chr}
-            ) {
-                $last_coord = $reference->{$chr};
+                my $last_coord;
+
+                if (defined $reference
+                    && ref $reference eq 'HASH'
+                    && exists $reference->{$chr}
+                ) {
+                    $last_coord = $reference->{$chr};
+                } else {
+                    $last_coord = max keys %{ $col_windows_ref->{$chr} };
+                }
+
+                for (my $window = $first_coord{$chr} // 1; $window <= $last_coord - $width + 1; $window += $width) {
+
+                    print join ("\t",
+                                $chr,
+                                q{.},
+                                $feature // "w$width",
+                                $window,
+                                $window + $width - 1,
+                                $col_windows_ref->{$chr}{$window} // 0,
+                                q{.},
+                                q{.},
+                                q{.},
+                            ), "\n";
+                }
+                $first_coord{$chr} = $last_coord + 1;
             } else {
-                $last_coord = max keys %{ $col_windows_ref->{$chr} };
+                for my $window (sort {$a <=> $b} keys %{$col_windows_ref->{$chr}}) {
+                    print join ("\t",
+                                $chr,
+                                q{.},
+                                $feature // "w$width",
+                                $window,
+                                $window + $width - 1,
+                                $col_windows_ref->{$chr}{$window},
+                                q{.},
+                                q{.},
+                                q{.},
+                            ), "\n";
+                }
             }
-
-            for (my $i = $first_coord{$chr} // 1; $i <= $last_coord - $width; $i += $width) {
-                $col_windows_ref->{$chr}{$i} = 0 unless exists $col_windows_ref->{$chr}{$i};
-            }
-
-            $first_coord{$chr} = $last_coord;
- 
         }
     }
 }
+
 
 sub index_fasta {
     my $reference_file = shift;
@@ -188,6 +184,7 @@ sub index_fasta {
         $line =~ s/[\n\r]//g;
         $reference{$dsc[$j]} = length $line;
     }
+
     return \%reference;
 }
 
