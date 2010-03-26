@@ -295,8 +295,8 @@ sub gff_calculate_statistic {
     # basic sanity test for matching coordinates, chromosome and context
     if ($rec_a{'start'} != $rec_b{'start'} or
         $rec_a{'end'} != $rec_b{'end'} or
-        $rec_a{'seqname'} !~ m/$rec_b{'seqname'}/i or
-        (not $ignore_feature && $rec_a{'feature'} ne $rec_b{'feature'})) {
+        $rec_a{'seqname'} !~ m/$rec_b{seqname}/i or
+        ($rec_a{'feature'} ne $rec_b{'feature'} && not $ignore_feature)) {
         print STDERR Dumper (\%rec_a, \%rec_b);
         croak (
             "Can't match windows in input files.
@@ -304,7 +304,7 @@ sub gff_calculate_statistic {
              coordinate and that each input file
              contains only one chromosome and one context.
              This will be modified in the future to allow
-             multiple chromosomes and contexts per input file."
+             multiple chromosomes and contexts per input file.",
         );
     }
 
@@ -507,6 +507,7 @@ sub gff_read {
  -t, --threshold     maximum (optional) threshold for filtering out windows by p-value.
  -c, --concatenate   concatenate adjacent windows after filtering stage
  -g, --valid-gff     output format is valid GFF (attribute fields split by ';', not '\t'
+ -d, --debug         output individual c and t site counts
  -o, --output        filename to write results to (defaults to STDOUT)
  -v, --verbose       output perl's diagnostic and warning messages
  -q, --quiet         supress perl's diagnostic and warning messages
