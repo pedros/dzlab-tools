@@ -12,11 +12,13 @@ my $new_feature;
 my $upstream   = 0;
 my $downstream = 0;
 my $skip_absent;
+my $trim;
 my $output;
 
 # Grabs and parses command line options
 my $result = GetOptions (
     'offsets|f=s'     => \$offsets,
+    'trim|t'          => \$trim,
     'new-feature|n=s' => \$new_feature,
     'upstream|u=i'    => \$upstream,
     'downstream|d=i'  => \$downstream,
@@ -73,10 +75,18 @@ while (<>) {
 	    $gff[0] =  $offsets{$gff[0]}{group};
 	}
     }
+    elsif ($trim) {
+        my ($start, $end) = @gff[3,4];
+        $gff[3] = $start + $downstream;
+        $gff[4] = $end   - $upstream;
+
+	$gff[3] = 0 if $gff[3] < 0;
+        next LOCUS unless $gff[3] <= $gff[4];
+    }
     else {
         my ($start, $end) = @gff[3,4];
 
-        if ($gff[6] =~ m/-/) {
+        if ($gff[6] eq q{-}) {
             $gff[3] = $end - $downstream;
             $gff[4] = $end + $upstream;
         }
@@ -138,6 +148,7 @@ __END__
  -n, --new-feature new feature to subsitute in field 3
  -u, --upstream    offset upstream of 5' (incompatible with --offsets)
  -d, --downstream  offset downstream of 5' (incompatible with --offsets)
+ -t, --trim        trim -u from upstream and -d from downstream
  -o, --output      filename to write results to (defaults to STDOUT)
  -v, --verbose     output perl's diagnostic and warning messages
  -q, --quiet       supress perl's diagnostic and warning messages
