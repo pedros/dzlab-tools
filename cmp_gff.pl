@@ -34,8 +34,8 @@ my $result = GetOptions (
     'statistic|stat|s=s'   => \$statistic,
     'inverse-log|ilog|i:i' => \$inverse_log,
     'reverse-score|rev|r'  => \$reverse,
-    'min-methylation|mm=i' => \$min_meth,
-    'min-difference|md=i'  => \$min_diff,
+    'min-methylation|mm=f' => \$min_meth,
+    'min-difference|md=f'  => \$min_diff,
     'threshold|t'          => \$threshold,
     'concatenate|c'        => \$concatenate,
     'valid-gff|g'          => \$valid_gff,
@@ -485,34 +485,37 @@ sub gff_read {
 
  cmp_gff.pl [OPTION]... -a [FILE A] -b [FILE B]
 
- -a, --gff-a         first GFF alignment input file
- -b, --gff-b         second GFF alignment input file
- -p, --operation     arithmetic operation on scores from a and b ('sub' or 'div')
- -s, --statistic     type of indendence/significance statistic to use
-                         statistics options: (run 'perldoc Text::NSP' for more information)
-                             CHI::phi             Phi coefficient measure
-                             CHI::tscore          T-score measure of association
-    		             CHI::x2              Pearson's chi squared measure of association
-    		             Dice::dice           Dice coefficient
-    		             Dice::jaccard        Jaccard coefficient
-    		             Fisher::left         Left sided Fisher's exact test
-    		             Fisher::right        Right sided Fisher's exact test
-    		             Fisher::twotailed    Two-sided Fisher's exact test
-    		             MI::ll               Loglikelihood measure of association
-    		             MI::pmi              Pointwise Mutual Information
-    		             MI::ps               Poisson-Stirling measure of association
-    		             MI::tmi              True Mutual Information
- -i, --inverse-log   compute inverse log of score in base specified by user
- -r, --reverse-score output scores in attributes field and statistics in scores field
- -t, --threshold     maximum (optional) threshold for filtering out windows by p-value.
- -c, --concatenate   concatenate adjacent windows after filtering stage
- -g, --valid-gff     output format is valid GFF (attribute fields split by ';', not '\t'
- -d, --debug         output individual c and t site counts
- -o, --output        filename to write results to (defaults to STDOUT)
- -v, --verbose       output perl's diagnostic and warning messages
- -q, --quiet         supress perl's diagnostic and warning messages
- -h, --help          print this information
- -m, --manual        print the plain old documentation page
+ -a,  --gff-a            first GFF alignment input file
+ -b,  --gff-b            second GFF alignment input file
+ -p,  --operation        arithmetic operation on scores from a and b ('sub' or 'div')
+ -s,  --statistic        type of indendence/significance statistic to use
+                             statistics options: (run 'perldoc Text::NSP' for more information)
+                                 CHI::phi             Phi coefficient measure
+                                 CHI::tscore          T-score measure of association
+    		                 CHI::x2              Pearson's chi squared measure of association
+    		                 Dice::dice           Dice coefficient
+    		                 Dice::jaccard        Jaccard coefficient
+    		                 Fisher::left         Left sided Fisher's exact test
+    		                 Fisher::right        Right sided Fisher's exact test
+    		                 Fisher::twotailed    Two-sided Fisher's exact test
+    		                 MI::ll               Loglikelihood measure of association
+    		                 MI::pmi              Pointwise Mutual Information
+    		                 MI::ps               Poisson-Stirling measure of association
+    		                 MI::tmi              True Mutual Information
+ -i,  --inverse-log      compute inverse log of score in base specified by user
+ -r,  --reverse-score    output scores in attributes field and statistics in scores field
+ -t,  --threshold        maximum (optional) threshold for filtering out windows by p-value.
+ -c,  --concatenate      concatenate adjacent windows after filtering stage
+ -g,  --valid-gff        output format is valid GFF (attribute fields split by ';', not '\t'
+ -d,  --debug            output individual c and t site counts
+ -mm, --min-methylation  pre-filter by minimum methylation on either tissue
+ -md, --min-difference   pre-filter by minimum difference on tissue comparison
+ -if, --ignore-features  don't match feature tracks
+ -o,  --output           filename to write results to (defaults to STDOUT)
+ -v,  --verbose          output perl's diagnostic and warning messages
+ -q,  --quiet            supress perl's diagnostic and warning messages
+ -h,  --help             print this information
+ -m,  --manual           print the plain old documentation page
 
 =head1 REVISION
 
