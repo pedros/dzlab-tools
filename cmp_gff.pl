@@ -6,6 +6,7 @@ use Data::Dumper;
 use Carp;
 use Getopt::Long;
 use Pod::Usage;
+use List::Util qw/sum/;
 
 # Globals, passed as command line options
 my $gff_file_1  = q{};
@@ -14,12 +15,14 @@ my $operation   = 'sub';
 my $statistic   = 'Fisher::twotailed';
 my $inverse_log = -1;
 my $reverse     = 0;
-my $min_meth    = 0.5;
-my $min_diff    = 0.1;
+my $min_meth    = 0;
+my $min_diff    = 0;
+my $min_sites   = 0;
+my $skip_empty  = 0;
 my $threshold   = 0;
 my $concatenate = 0;
 my $valid_gff   = 0;
-my $ignore_feat = 1;
+my $ignore_feat = 0;
 my $debug       = 0;
 my $output      = q{-};
 my $verbose     = 0;
@@ -36,6 +39,8 @@ my $result = GetOptions (
     'reverse-score|rev|r'  => \$reverse,
     'min-methylation|mm=f' => \$min_meth,
     'min-difference|md=f'  => \$min_diff,
+    'min-sites|ms=i'       => \$min_sites,
+    'skip-empty|k'         => \$skip_empty,
     'threshold|t'          => \$threshold,
     'concatenate|c'        => \$concatenate,
     'valid-gff|g'          => \$valid_gff,
@@ -133,9 +138,19 @@ while (defined (my $line_a = <$GFFA>) and defined (my $line_b = <$GFFB>)) {
         }
     }
 
-    next PROCESSING
-    if $rec_a{score} eq q{.}
-    or $rec_b{score} eq q{.};
+    if ($skip_empty) {
+        next PROCESSING
+        if $rec_a{score} eq q{.}
+        or $rec_b{score} eq q{.};
+    }
+
+    if ($min_sites) {
+        my @a_sites = $rec_a{attribute} =~ m/[ct]=(\d+)/g;
+        my @b_sites = $rec_b{attribute} =~ m/[ct]=(\d+)/g;
+        next PROCESSING
+        unless sum @a_sites >= $min_sites
+        and    sum @b_sites >= $min_sites;
+    }
 
     if ($min_meth) {
         next PROCESSING 
@@ -367,22 +382,22 @@ sub gff_concatenate {
 
         if ($x > 0) {
             # basic sanity test on whether current line is consistent with previous one
-            if ($seqname !~ m/$rec{'seqname'}/i
-                or $source ne $rec{'source'}
+            if ($seqname  !~ m/$rec{'seqname'}/i
+                or $source  ne $rec{'source'}
                 or $feature ne $rec{'feature'}
-                or $strand ne $rec{'strand'}
-                or $frame ne $rec{'frame'}
-                or $end + 1 < $rec{'start'}) {
+                or $strand  ne $rec{'strand'}
+                or $frame   ne $rec{'frame'}
+                or $end + 1 <  $rec{'start'}) {
                 croak ("Given records to be merged are inconsistent")
             }
         }
         # if ok, save current line
         else {
             $seqname = $rec{'seqname'};
-            $source = $rec{'source'};
+            $source  = $rec{'source'};
             $feature = $rec{'feature'};
-            $strand = $rec{'strand'};
-            $frame = $rec{'frame'};
+            $strand  = $rec{'strand'};
+            $frame   = $rec{'frame'};
         }
 
         # get the lowest coordinate, naively assuming input windows are sorted
@@ -397,21 +412,6 @@ sub gff_concatenate {
 
             my ($non_over_c) = $rec{'attribute'} =~ m/c=(\d+)/;
             my ($non_over_t) = $rec{'attribute'} =~ m/t=(\d+)/;
-
-            # my ($non_over_c, $non_over_t, $over_c, $over_t) = split(/;/, $rec{'attribute'});
-            # ($non_over_c) = $non_over_c =~ m/(\d+)/;
-            # ($non_over_t) = $non_over_t =~ m/(\d+)/;
-
-            # if (defined $over_c and defined $over_t) {
-            #     ($over_c) = $over_c =~ m/(\d+)/;
-            #     ($over_t) = $over_t =~ m/(\d+)/;
-            # }
-            # else {
-            #     $over_c = 0;
-            #     $over_t = 0;
-            # }
-            # $c_count += ($non_over_c - $over_c);
-            # $t_count += ($non_over_t - $over_t);
             $c_count += $non_over_c;
             $t_count += $non_over_t;
         }
@@ -419,7 +419,8 @@ sub gff_concatenate {
 
     if ($c_count + $t_count == 0) {
         $score = 0;
-    } else {
+    } 
+    else {
         $score = $c_count/($c_count + $t_count);
     }
 
@@ -429,11 +430,7 @@ sub gff_concatenate {
     # format 'attribute' field for consistency here
     $attribute = "c=$c_count;t=$t_count";
 
-    # declare and initialize a non-anonymous hash
-    # (as opposed to just returning an anonymous one)
-    # because strictures won't let me use scalar interpolation
-    # in the 'attribute' field when anonymously returning
-    my %concatenated_hash = (
+    return {
         'seqname'   => $seqname,
         'source'    => $source,
         'feature'   => $feature,
@@ -443,8 +440,7 @@ sub gff_concatenate {
         'strand'    => $strand,
         'frame'     => $frame,
         'attribute' => $attribute
-    );
-    return \%concatenated_hash;
+    };
 }
 
 
@@ -456,19 +452,20 @@ sub gff_concatenate {
 
 =cut
 sub gff_read {
-    my ($seqname, $source, $feature, $start, $end, $score, $strand, $frame, $attribute) = split(/\t/, shift);
-    my %rec = (
-        'seqname'   =>$seqname,
-        'source'    =>$source,
-        'feature'   =>$feature,
-        'start'     =>$start,
-        'end'       =>$end,
-        'score'     =>$score,
-        'strand'    =>$strand,
-        'frame'     =>$frame,
-        'attribute' =>$attribute,
-    );
-    return \%rec;
+    my ($seqname, $source, $feature, $start, $end, $score, $strand, $frame, $attribute)
+    = split /\t/, $_[0];
+
+    return {
+        'seqname'   => $seqname,
+        'source'    => $source,
+        'feature'   => $feature,
+        'start'     => $start,
+        'end'       => $end,
+        'score'     => $score,
+        'strand'    => $strand,
+        'frame'     => $frame,
+        'attribute' => $attribute,
+    };
 }
 
 =head1 NAME
@@ -510,6 +507,8 @@ sub gff_read {
  -d,  --debug            output individual c and t site counts
  -mm, --min-methylation  pre-filter by minimum methylation on either tissue
  -md, --min-difference   pre-filter by minimum difference on tissue comparison
+ -ms, --min-sites        pre-filter by minimum total sites on each tissue
+ -k,  --skip-empty       pre-filter by no coverage on either tissue
  -if, --ignore-features  don't match feature tracks
  -o,  --output           filename to write results to (defaults to STDOUT)
  -v,  --verbose          output perl's diagnostic and warning messages
