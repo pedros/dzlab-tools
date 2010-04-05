@@ -44,6 +44,8 @@ if ($output) {
 
 $reference = index_fasta ($reference) if $reference;
 
+$|++;
+
 my %col_windows = ();
 my %last_coords = ();
 
