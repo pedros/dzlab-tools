@@ -23,8 +23,9 @@ my $threshold   = 0;
 my $concatenate = 0;
 my $valid_gff   = 0;
 my $ignore_feat = 0;
+my $new_feature = 0;
 my $debug       = 0;
-my $output      = q{-};
+my $output      = 0;
 my $verbose     = 0;
 my $quiet       = 0;
 my $usage       = 0;
@@ -45,6 +46,7 @@ my $result = GetOptions (
     'concatenate|c'        => \$concatenate,
     'valid-gff|g'          => \$valid_gff,
     'ignore-features|if'   => \$ignore_feat,
+    'new-feature|nf=s'     => \$new_feature,
     'debug|d'              => \$debug,
     'output|o=s'           => \$output,
     'verbose|v'            => sub { use diagnostics; },
@@ -80,11 +82,6 @@ if ($output) {
 # use the appropriate statistic measure based on user input
 if (exists $statistics{$statistic}) {
     eval "use Text::NSP::Measures::2D::$statistic";
-}
-
-if ($output) {
-    open my $USER_OUT, '>', $output or croak "Can't open $output for writing: $!";
-    select $USER_OUT;
 }
 
 # opens gff files
@@ -130,7 +127,8 @@ while (defined (my $line_a = <$GFFA>) and defined (my $line_b = <$GFFB>)) {
                 $line_a = <$GFFA>;
                 chomp $line_a;
                 %rec_a = %{&gff_read ($line_a)};
-            } elsif ($rec_a{'start'} < $rec_b{'start'}) {
+            } 
+            elsif ($rec_a{'start'} < $rec_b{'start'}) {
                 $line_b = <$GFFB>;
                 chomp $line_b;
                 %rec_b = %{&gff_read ($line_b)};
@@ -147,9 +145,10 @@ while (defined (my $line_a = <$GFFA>) and defined (my $line_b = <$GFFB>)) {
     if ($min_sites) {
         my @a_sites = $rec_a{attribute} =~ m/[ct]=(\d+)/g;
         my @b_sites = $rec_b{attribute} =~ m/[ct]=(\d+)/g;
+
         next PROCESSING
-        unless sum @a_sites >= $min_sites
-        and    sum @b_sites >= $min_sites;
+        unless sum (@a_sites) >= $min_sites
+        and    sum (@b_sites) >= $min_sites;
     }
 
     if ($min_meth) {
@@ -163,10 +162,7 @@ while (defined (my $line_a = <$GFFA>) and defined (my $line_b = <$GFFB>)) {
         unless abs($rec_a{score} - $rec_b{score}) >= $min_diff;
     }
 
-    # gff_calculate_statistic will call the Text::NSP module
-    # return value is -1 if a record doesn't have coverage (ie. attribute field eq '.')
     my $ngram = 0;
-
     if ($concatenate) {
 
         # filter out windows with no Cs
@@ -220,7 +216,6 @@ while (defined (my $line_a = <$GFFA>) and defined (my $line_b = <$GFFB>)) {
     }
 
     my $score = 0;
-
     if ($operation eq 'sub') {
         $score = $rec_a{'score'} - $rec_b{'score'};
     }
@@ -249,7 +244,7 @@ while (defined (my $line_a = <$GFFA>) and defined (my $line_b = <$GFFB>)) {
 
     ### NOTE: this is temporary: it naively parses the input file names to try to
     # put something meaningful in the 'feature' field
-    my $feature = "$rec_a{'feature'}:$operation:$rec_b{'feature'}";
+    my $feature = $new_feature || "$rec_a{'feature'}:$operation:$rec_b{'feature'}";
 
     $statistic =~ tr/A-Z/a-z/;
 
@@ -279,7 +274,6 @@ while (defined (my $line_a = <$GFFA>) and defined (my $line_b = <$GFFB>)) {
                ".",
                $attribute
            ), "\n";
-
 }
 
 close $GFFA;
