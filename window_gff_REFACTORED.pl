@@ -9,14 +9,14 @@ Getopt::Long::Configure('bundling');
 use Pod::Usage;
 
 my $output;
-my $width    = 50;
-my $step     = 50;
-my $merge    = 0;
-my $no_sort  = 0;
-my $no_skip  = 0;
-my $scoring  = 'meth'; # meth, average, or sum
+my $width   = 50;
+my $step    = 50;
+my $merge   = 0;
+my $no_sort = 0;
+my $no_skip = 0;
+my $scoring = 'meth';    # meth, average, or sum
 my $gff;
-my $tag      = 'ID';
+my $tag = 'ID';
 my $feature;
 my $absolute = 0;
 
@@ -47,9 +47,10 @@ my %scoring_dispatch = (
 
 # Check required command line parameters
 pod2usage( -verbose => 1 )
-unless @ARGV and $result
-and (($width and $step) or $gff)
-and exists $scoring_dispatch{$scoring};
+    unless @ARGV
+        and $result
+        and ( ( $width and $step ) or $gff )
+        and exists $scoring_dispatch{$scoring};
 
 if ($output) {
     open my $USER_OUT, '>', $output
@@ -63,8 +64,11 @@ if ($merge) {
 }
 
 if ($absolute) {
-    croak '-b, --absolute option only works with arabidopsis or rice'
-    unless lc $absolute eq 'arabidopsis' or lc $absolute eq 'rice' or lc $absolute eq 'puffer';
+    croak
+        '-b, --absolute option only works with arabidopsis or rice or puffer'
+        unless lc $absolute eq 'arabidopsis'
+            or lc $absolute eq 'rice'
+            or lc $absolute eq 'puffer';
     $no_skip = 1;
 }
 
@@ -79,16 +83,15 @@ while ( my $gff_line = $gff_iterator->() ) {
 }
 
 my $fasta_lengths = {};
-if ($absolute and $no_skip) {
-    $fasta_lengths
-    = index_fasta_lengths( handle => 'DATA' );
+if ( $absolute and $no_skip ) {
+    $fasta_lengths = index_fasta_lengths( handle => 'DATA' );
 }
 
-my $window_iterator = sub {};
+my $window_iterator = sub { };
 if ($gff) {
     $window_iterator = make_annotation_iterator(
-        file  => $gff, 
-        tag   => $tag, 
+        file  => $gff,
+        tag   => $tag,
         merge => $merge
     );
 }
@@ -97,32 +100,36 @@ SEQUENCE:
 for my $sequence ( sort keys %gff_records ) {
 
     unless ($no_sort) {
-        @{ $gff_records{$sequence} } = sort { $a->{start} <=> $b->{start} }
+        @{ $gff_records{$sequence} }
+            = sort { $a->{start} <=> $b->{start} }
             @{ $gff_records{$sequence} };
     }
 
     unless ($gff) {
         $window_iterator = make_window_iterator(
             width => $width,
-            step  => $step, 
+            step  => $step,
             lower => 1,
-            upper => ($absolute and $no_skip and %$fasta_lengths
-                      and exists $fasta_lengths->{$absolute}{$sequence})
-                      ? $fasta_lengths->{$absolute}{$sequence}
-                      : $gff_records{$sequence}[-1]->{end},
+            upper => (
+                        $absolute
+                    and $no_skip
+                    and %$fasta_lengths
+                    and exists $fasta_lengths->{$absolute}{$sequence}
+                )
+            ? $fasta_lengths->{$absolute}{$sequence}
+            : $gff_records{$sequence}[-1]->{end},
         );
     }
 
-  WINDOW:
-    while ( my ($ranges, $locus) = $window_iterator->($sequence) ) {
+WINDOW:
+    while ( my ( $ranges, $locus ) = $window_iterator->($sequence) ) {
 
         my $brs_iterator = binary_range_search(
-            range    => $ranges,
-            ranges   => $gff_records{$sequence},
+            range  => $ranges,
+            ranges => $gff_records{$sequence},
         );
 
-        my $scores_ref
-        = $scoring_dispatch{$scoring}->($brs_iterator);
+        my $scores_ref = $scoring_dispatch{$scoring}->($brs_iterator);
 
         my ( $score, $attribute );
 
@@ -131,13 +138,14 @@ for my $sequence ( sort keys %gff_records ) {
             $score = sprintf( "%g", $scores_ref->{score} );
             delete $scores_ref->{score};
 
-            $attribute  = "ID=$locus; " if $locus;
-            $attribute .= join q{; }, map { "$_=" . sprintf("%g", $scores_ref->{$_}) }
+            $attribute = "ID=$locus; " if $locus;
+            $attribute .= join q{; },
+                map { "$_=" . sprintf( "%g", $scores_ref->{$_} ) }
                 sort keys %{$scores_ref};
 
         }
         elsif ($no_skip) {
-            $score     = q{.};
+            $score = q{.};
             $attribute = $locus ? "ID=$locus" : q{.};
         }
         else {
@@ -145,27 +153,27 @@ for my $sequence ( sort keys %gff_records ) {
         }
 
         print join( "\t",
-                    $sequence, 'dzlab', ($feature ? $feature : $gff ? 'locus' : 'window'),
-                    $ranges->[0][0], $ranges->[-1][1], $score,
-                    q{.}, q{.}, $attribute,
-                ), "\n";
+            $sequence, 'dzlab',
+            ( $feature ? $feature : $gff ? 'locus' : 'window' ),
+            $ranges->[0][0], $ranges->[-1][1],
+            $score, q{.}, q{.}, $attribute, ),
+            "\n";
     }
 
     delete $gff_records{$sequence};
 }
-
 
 sub index_fasta_lengths {
     my %options = @_;
 
     my $handle = $options{handle};
 
-    if ($options{file}) {
+    if ( $options{file} ) {
         open $handle, '<', $options{file} or croak $!;
     }
 
     my %fasta_lengths;
-    my  $active;
+    my $active;
     while (<$handle>) {
         chomp;
         if (m/^\s*#/) {
@@ -173,18 +181,17 @@ sub index_fasta_lengths {
             $active = lc $_;
         }
         else {
-            my ($sequence, $length) = split /\t/;
+            my ( $sequence, $length ) = split /\t/;
             $fasta_lengths{$active}{$sequence} = $length;
         }
     }
 
-    if ($options{file}) {
+    if ( $options{file} ) {
         close $handle or croak $!;
     }
 
     return \%fasta_lengths;
 }
-
 
 sub make_window_iterator {
     my (%options) = @_;
@@ -193,38 +200,37 @@ sub make_window_iterator {
     my $step  = $options{step}  || croak 'Need step parameter';
     my $lower = $options{lower} || croak 'Need lower bound parameter';
     my $upper = $options{upper} || croak 'Need upper bound parameter';
-        
+
     return sub {
-        my $i  = $lower;
+        my $i = $lower;
         $lower += $step;
 
-        if ($i <= $upper - $width + 1) {
-            return [ [$i, $i + $width - 1] ];
-        } 
-        elsif ($i < $upper) {
-            return [ [$i, $upper] ];
+        if ( $i <= $upper - $width + 1 ) {
+            return [ [ $i, $i + $width - 1 ] ];
+        }
+        elsif ( $i < $upper ) {
+            return [ [ $i, $upper ] ];
         }
         else {
             return;
         }
-    }
+        }
 }
 
 sub make_annotation_iterator {
     my (%options) = @_;
 
     my $annotation_file = $options{file};
-    my $locus_tag       = $options{tag}   || 'ID';
+    my $locus_tag       = $options{tag} || 'ID';
     my $merge_exons     = $options{merge} || 0;
-        
-    open my $GFFH, '<', $annotation_file 
-    or croak "Can't read file: $annotation_file";
+
+    open my $GFFH, '<', $annotation_file
+        or croak "Can't read file: $annotation_file";
 
     my $gff_iterator
-    = make_gff_iterator( parser => \&gff_read, handle => $GFFH );
+        = make_gff_iterator( parser => \&gff_read, handle => $GFFH );
 
-    my $annotation 
-    = index_annotation( iterator => $gff_iterator, %options );
+    my $annotation = index_annotation( iterator => $gff_iterator, %options );
 
     close $GFFH or croak "Can't close $annotation_file: $!";
 
@@ -233,61 +239,61 @@ sub make_annotation_iterator {
         my ($sequence) = @_;
         return unless $sequence;
 
-        unless (exists $annotation_keys{$sequence}) {
+        unless ( exists $annotation_keys{$sequence} ) {
             @{ $annotation_keys{$sequence} }
-            = sort keys %{$annotation->{$sequence}};
+                = sort keys %{ $annotation->{$sequence} };
         }
 
-        my $locus  = shift @{ $annotation_keys{$sequence} };
+        my $locus = shift @{ $annotation_keys{$sequence} };
         return unless $locus;
-        my $ranges = $annotation->{$sequence}{$locus}; delete $annotation->{$sequence}{$locus};
+        my $ranges = $annotation->{$sequence}{$locus};
+        delete $annotation->{$sequence}{$locus};
 
-        if ($locus and @$ranges) {
-            return [uniq_ranges ($ranges)], $locus;
-        } 
+        if ( $locus and @$ranges ) {
+            return [ uniq_ranges($ranges) ], $locus;
+        }
         else {
             return;
         }
     };
 }
 
-
 sub index_annotation {
     my (%options) = @_;
 
-    my $gff_iterator  = $options{iterator} || croak 'Need an iterator parameter';
-    my $locus_tag     = $options{tag}      || 'ID';
-    my $merge_feature = $options{merge}    || 0;
+    my $gff_iterator = $options{iterator}
+        || croak 'Need an iterator parameter';
+    my $locus_tag     = $options{tag}   || 'ID';
+    my $merge_feature = $options{merge} || 0;
 
-    my %annotation    = ();
+    my %annotation = ();
 
-  LOCUS:
+LOCUS:
     while ( my $locus = $gff_iterator->() ) {
 
         next LOCUS unless ref $locus eq 'HASH';
 
         my ($locus_id) = $locus->{attribute} =~ m/$locus_tag[=\s]?([^;,]+)/;
 
-        if (!defined $locus_id) {
-            ($locus_id, undef) = split /;/, $locus->{attribute};
+        if ( !defined $locus_id ) {
+            ( $locus_id, undef ) = split /;/, $locus->{attribute};
             $locus_id ||= q{.};
-        } 
+        }
         else {
             $locus_id =~ s/["\t\r\n]//g;
-            $locus_id =~ s/\.\d$// # this fetches the parent ID in GFF gene models (eg. exon is Parent=ATG101010.n)
-            if $merge_feature and $locus->{feature} eq $merge_feature;
+            $locus_id
+                =~ s/\.\w+$// # this fetches the parent ID in GFF gene models (eg. exon is Parent=ATG101010.n)
+                if $merge_feature and $locus->{feature} eq $merge_feature;
         }
 
-        push @{ $annotation{$locus->{seqname}}{$locus_id} },
-        [$locus->{start}, $locus->{end}] 
-        unless ($merge_feature and $locus->{feature} ne $merge_feature);
+        push @{ $annotation{ $locus->{seqname} }{$locus_id} },
+            [ $locus->{start}, $locus->{end} ]
+            unless ( $merge_feature and $locus->{feature} ne $merge_feature );
 
     }
 
     return \%annotation;
 }
-
-
 
 sub uniq_ranges {
     my ($ranges) = @_;
@@ -301,7 +307,6 @@ sub uniq_ranges {
 
     return wantarray ? @uniq : [@uniq];
 }
-
 
 sub fractional_methylation {
     my ($brs_iterator) = @_;
@@ -339,13 +344,13 @@ COORD:
 sub sum_scores {
     my ($brs_iterator) = @_;
 
-    my ($score_sum, $score_count) = (0, 0);
+    my ( $score_sum, $score_count ) = ( 0, 0 );
 
-  COORD:
+COORD:
     while ( my $gff_line = $brs_iterator->() ) {
         next COORD unless ref $gff_line eq 'HASH';
 
-        $score_sum  += $gff_line->{score} eq q{.} ? 1 : $gff_line->{score};
+        $score_sum += $gff_line->{score} eq q{.} ? 1 : $gff_line->{score};
         $score_count++;
     }
 
@@ -385,13 +390,12 @@ COORD:
     if ($score_count) {
         return {
             score => $score_avg,
-            std   => sqrt ($score_var),
+            std   => sqrt($score_var),
             var   => $score_var,
             n     => $score_count,
         };
     }
 }
-
 
 sub binary_range_search {
     my %options = @_;
@@ -400,41 +404,41 @@ sub binary_range_search {
     my $ranges  = $options{ranges} || croak 'Need a ranges parameter';
 
     my ( $low, $high ) = ( 0, $#{$ranges} );
-    my @iterators      = ();
+    my @iterators = ();
 
-  TARGET:
-    for my $range ( @$targets ) {
+TARGET:
+    for my $range (@$targets) {
 
-      RANGE_CHECK:
+    RANGE_CHECK:
         while ( $low <= $high ) {
-
-            if ($range->[0] == 401) {
-                sleep 1
-            };
 
             my $try = int( ( $low + $high ) / 2 );
 
-            $low  = $try + 1, next RANGE_CHECK if $ranges->[$try]{end}   < $range->[0];
-            $high = $try - 1, next RANGE_CHECK if $ranges->[$try]{start} > $range->[1];
+            $low = $try + 1, next RANGE_CHECK
+                if $ranges->[$try]{end} < $range->[0];
+            $high = $try - 1, next RANGE_CHECK
+                if $ranges->[$try]{start} > $range->[1];
 
             my ( $down, $up ) = ($try) x 2;
-            my %seen      = ();
-        
+            my %seen = ();
+
             my $brs_iterator = sub {
 
-                if (    $ranges->[ $up + 1 ]{end}       >= $range->[0]
-                        and $ranges->[ $up + 1 ]{start} <= $range->[1]
-                        and !exists $seen{ $up + 1 } ) {
+                if (    $ranges->[ $up + 1 ]{end} >= $range->[0]
+                    and $ranges->[ $up + 1 ]{start} <= $range->[1]
+                    and !exists $seen{ $up + 1 } )
+                {
                     $seen{ $up + 1 } = undef;
                     return $ranges->[ ++$up ];
-                } 
-                elsif ( $ranges->[ $down - 1 ]{end}         >= $range->[0]
-                          and $ranges->[ $down - 1 ]{start} <= $range->[1]
-                          and !exists $seen{ $down - 1 }
-                          and $down > 0 ) {
+                }
+                elsif ( $ranges->[ $down - 1 ]{end} >= $range->[0]
+                    and $ranges->[ $down - 1 ]{start} <= $range->[1]
+                    and !exists $seen{ $down - 1 }
+                    and $down > 0 )
+                {
                     $seen{ $down - 1 } = undef;
                     return $ranges->[ --$down ];
-                } 
+                }
                 elsif ( !exists $seen{$try} ) {
                     $seen{$try} = undef;
                     return $ranges->[$try];
@@ -448,21 +452,20 @@ sub binary_range_search {
         }
     }
 
-    # In scalar context return master iterator that iterates over the list of range iterators.
-    # In list context returns a list of range iterators.
-    return wantarray 
-    ? @iterators 
-    : sub { 
-        while( @iterators ) {
-            if( my $range = $iterators[0]->() ) {
+# In scalar context return master iterator that iterates over the list of range iterators.
+# In list context returns a list of range iterators.
+    return wantarray
+        ? @iterators
+        : sub {
+        while (@iterators) {
+            if ( my $range = $iterators[0]->() ) {
                 return $range;
             }
             shift @iterators;
         }
         return;
-    }; 
+        };
 }
-
 
 sub gff_read {
     return [] if $_[0] =~ m/^
@@ -499,12 +502,13 @@ sub make_gff_iterator {
     croak
         "Need parser function reference and file name or handle to build iterator"
         unless $parser
-        and ref $parser eq 'CODE'
-        and ( ( defined $file and -e $file )
-              xor (defined $GFF_HANDLE and ref $GFF_HANDLE eq 'GLOB'
-                   or $GFF_HANDLE eq 'ARGV'
-               )
-          );
+            and ref $parser eq 'CODE'
+            and (
+                ( defined $file and -e $file )
+                xor(defined $GFF_HANDLE and ref $GFF_HANDLE eq 'GLOB'
+                        or $GFF_HANDLE eq 'ARGV'
+                )
+            );
 
     if ($file) {
         open $GFF_HANDLE, '<', $file
@@ -600,7 +604,6 @@ sub make_gff_iterator {
  along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 =cut
-
 
 __DATA__
 #arabidopsis
