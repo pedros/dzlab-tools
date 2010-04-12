@@ -58,6 +58,52 @@ sub gimmefiles {    ##hmm...
 
 }
 
+sub build_regex_combinations {
+    my @parts   = @_;
+    my @regexes = ();
+
+    ##TODO
+    # http://stackoverflow.com/questions/127704/algorithm-to-return-all-combinations-of-k-elements-from-n
+
+    return qr/(?:join q{|}, @regexes)/;
+}
+
+
+{
+    my @matched_files = ();
+    my $regex         = undef;
+
+    sub get_files {
+        my ( $root_dir, @parts ) = @_;
+
+        return unless -d $root_dir;
+
+        open my $ROOT_DIR, '<', $root_dir
+        or croak "Can't open $root_dir: $!";
+
+        use File::Spec;
+
+        my @dir_contents
+        = map { File::Spec->rel2abs($_) } readdir <$ROOT_DIR>;
+
+        closedir $ROOT_DIR;
+
+        $regex ||= build_regex_combinations (@parts);
+
+        for (@dir_contents) {
+
+            push @matched_files, $_
+            if (File::Spec->splitpath($_))[2] =~ m/$regex/;
+
+            my @child_files = get_files ($_, @parts)
+            if -d $_;
+        }
+
+        return @matched_files;
+    }
+}
+
+
 1;
 
 package main;
