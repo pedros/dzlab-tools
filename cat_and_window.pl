@@ -10,7 +10,7 @@ use File::Spec;
 use File::Path;
 use File::Basename;
 
-sub fasta_parse {
+sub fasta_parse {        #why shouldn't this stop at underscores?
     my ($genome) = @_;
     my @groups;
     open my $GENOME, '<', $genome or croak "Can't open $genome: $!";
@@ -46,7 +46,9 @@ sub run_cmd {
     croak "** failed to run command '$cmd': $@" if $@;
 }
 
-#"${batch}/single[$sep]c/*[$sep]${group}[$sep]single[$sep]c*${context}*gff"
+
+# something like this: "...batch1/single-c/Rice_Endorsperm-chr02.single-c-CHH.gff
+#"${batch}/single[$sep]c/*[$sep]${group}[$sep]single[$sep]c*${context}*gff" 
 my $files;
 
 #make it more flexible. given a context, batch, root path, use the regex to find files. assume the same path format.
@@ -70,9 +72,7 @@ use File::Spec;
 use File::Path;
 use File::Basename;
 
-#use cat_and_window::Utils qw(run_cmd appender window_gff_run window_gff_refactored_run);
-
-print STDERR "Starting cat and window run at ", `date`;
+print STDERR "Starting cat and window run at ", `date`, "\n";
 
 my $name;
 my $genome;
@@ -99,15 +99,12 @@ my $result = GetOptions(
 my @groups = fasta_parse($genome);
 my @contexts = split( " ", $contexts );
 
-foreach my $batch (@batches) {
-    $batch = File::Spec->rel2abs($batch);
-}
+
+foreach my $batch (@batches) {$batch = "$work_dir/$batch";}
 
 croak "Bad directory"
-  unless -e "$work_dir/post-processing/single-c"
-      and -e "$work_dir/post-processing/windows";
-
-
+  unless -e "${work_dir}/post-processing/single-c"
+      and -e "${work_dir}/post-processing/windows";
 
 if ( $mode == 'overwrite' ) {
     run_cmd("rm -r ${work_dir}/post-processing/single-c");
@@ -116,13 +113,16 @@ if ( $mode == 'overwrite' ) {
     run_cmd("mkdir -p ${work_dir}/post-processing/windows");
 }
 
-print STDERR "Concatenating single c files";
+print STDERR "Concatenating single c files \n";
 
 foreach my $group (@groups) {
     foreach my $batch (@batches) {
         foreach my $context (@contexts) {
-            appender("${batch}/single[$sep]c/*[$sep]${group}[$sep]single[$sep]c*${context}*gff",    #this is where the regex stuff matters
-		     "${work_dir}/post-processing/single-c/${name}_BS-Seq_${group}_${context}_w1_methylation.gff");
+            appender(
+"${batch}/single[$sep]c/*[$sep]${group}[$sep]single[$sep]c*${context}*gff"                              
+                ,    #this is where the regex stuff matters
+"${work_dir}/post-processing/single-c/${name}_BS-Seq_${group}_${context}_w1_methylation.gff"
+            );
         }
     }
     foreach my $context (@contexts) {
@@ -131,9 +131,9 @@ foreach my $group (@groups) {
         );
     }
 }
-print STDERR "Done with code: $?";
+print STDERR "Done with code: $? \n";  # $? - what?
 
-print STDERR "Merging and windowing concatenated single c files";
+print STDERR "Merging and windowing concatenated single c files \n";
 
 foreach my $group (@groups) {
     foreach my $context (@contexts) {
@@ -146,9 +146,9 @@ foreach my $group (@groups) {
         );
     }
 }
-print STDERR "Done with code: $?";
+print STDERR "Done with code: $? \n";
 
-print STDERR "Finished cat and window run at ", `date`;
+print STDERR "Finished cat and window run at ", `date`, "\n";
 
 =head1 NAME
 
@@ -168,10 +168,10 @@ print STDERR "Finished cat and window run at ", `date`;
  -n,   --name
  -g,   --genome
  -c,   --contexts
- -b,   --batches
- -w,   --width
- -s,   --step
- -d,   --work_dir
+ -b,   --batches   just give the name of each batch directory
+ -w,   --width     (default 50)
+ -s,   --step      (default 50)
+ -d,   --work_dir  (default current directory)
 
 =head1 REVISION
 
