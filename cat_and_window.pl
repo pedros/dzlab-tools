@@ -10,12 +10,11 @@ use File::Spec;
 use File::Path;
 use File::Basename;
 
-sub fasta_parse {        #why shouldn't this stop at underscores?
+sub fasta_parse {       
     my ($genome) = @_;
     my @groups;
     open my $GENOME, '<', $genome or croak "Can't open $genome: $!";
-    while (<$GENOME>) { s/>(\S+)// and push @groups, $1; }
-    tr/[A-Z]/[a-z]/ foreach @groups;
+    while (<$GENOME>) { s/>(\S+)// and push @groups, lc $1; }
     close $GENOME or carp "Can't close $genome: $!";
     return @groups;
 }
@@ -49,25 +48,20 @@ sub run_cmd {
 
 # something like this: "...batch1/single-c/Rice_Endorsperm-chr02.single-c-CHH.gff
 #"${batch}/single[$sep]c/*[$sep]${group}[$sep]single[$sep]c*${context}*gff" 
-my $files;
-
-#make it more flexible. given a context, batch, root path, use the regex to find files. assume the same path format.
-sub gimmefiles {    ##hmm...
-    my ( $context, $batch, $regex ) = @_;
-    $files = `find $batch -iname $context`;
-
-}
 
 sub build_regex_combinations {
     my @parts   = @_;
     my @regexes = ();
-
-    ##TODO
-    # http://stackoverflow.com/questions/127704/algorithm-to-return-all-combinations-of-k-elements-from-n
-
-    return qr/(?:join q{|}, @regexes)/;
+    use Algorithm::Permute qw(permute);
+    Algorithm::Permute::permute { push @regexes, join '.*', @parts; } @parts;
+    my $regex = join q{|}, @regexes;
+    return qr/$regex/i;
 }
 
+
+
+
+# something like this: "...batch1/single-c/Rice_Endorsperm-chr02.single-c-CHH.gff
 
 {
     my @matched_files = ();
@@ -165,7 +159,8 @@ foreach my $group (@groups) {
     foreach my $batch (@batches) {
         foreach my $context (@contexts) {
             appender(
-"${batch}/single[$sep]c/*[$sep]${group}[$sep]single[$sep]c*${context}*gff"                              
+		get_files ( "$batch/single[$sep]c", $group, $context, "single[$sep]c" );
+#"${batch}/single[$sep]c/*[$sep]${group}[$sep]single[$sep]c*${context}*gff"                              
                 ,    #this is where the regex stuff matters
 "${work_dir}/post-processing/single-c/${name}_BS-Seq_${group}_${context}_w1_methylation.gff"
             );
@@ -177,7 +172,7 @@ foreach my $group (@groups) {
         );
     }
 }
-print STDERR "Done with code: $? \n";  # $? - what?
+print STDERR "Done with code: $? \n"; 
 
 print STDERR "Merging and windowing concatenated single c files \n";
 
