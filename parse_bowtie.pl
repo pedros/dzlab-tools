@@ -42,8 +42,9 @@ my $result = GetOptions (
 # Check required command line parameters
 pod2usage ( -verbose => 1 )
 unless @ARGV and $result
-and ($type eq 'concise' xor $type eq 'verbose');
-
+and ($type eq 'concise' xor $type eq 'verbose')
+and (   ($frequencies xor $paired)
+     or (!$frequencies and !$paired));
 
 # redirect standard output to file if requested
 if ($output) {
@@ -126,11 +127,19 @@ catch_up ($previous, $unmatched, @splice) if defined $previous and $unmatched;
         }
 
       FASTA_HEADER:
-        while (defined (my $header = <$file_handle>)
+        while (    defined (my $header   = <$file_handle>)
                and defined (my $sequence = <$file_handle>)) {
 
             chomp $header; chomp $sequence;
-            $header =~ s/>//;
+
+            $header =~ s/^[>@]//;
+            if ( q{@} eq $1 ) {
+                undef = <$file_handle>;
+                undef = <$file_handle>;
+            }
+            elsif ( q{>} ne $1 ) {
+                croak "Can't figure out whether this file is straight fasta or fastq"
+            }
 
             my %unmatched = (header => $header, sequence => $sequence);
 
