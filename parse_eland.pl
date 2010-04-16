@@ -31,7 +31,7 @@ my $result = GetOptions (
 
 # Check required command line parameters
 pod2usage ( -verbose => 1 )
-unless $result and @ARGV and $read_size and $library_size;
+unless $result and @ARGV;
 
 if ($output) {
     open my $USER_OUT, '>', $output or carp "Can't open $output for writing: $!";
@@ -40,25 +40,60 @@ if ($output) {
 
 while (<>) {
 
-    $eland = ($eland_3 ?
+    my $eland = ($eland_3 ?
               read_eland_3 ($_) :
               read_export ($_, $read_size, $library_size, $pair_ends)
           );
 
-    # print new GFF line
     print join ("\t",
-                $eland->{seq_id},
-                q{.},
-                ($feature ? $feature : 'parse_eland'),
-                (exists $eland->{center} ? int $eland->{center} : $eland->{coordinate}),
-                (exists $eland->{center} ? int $eland->{center} : $eland->{coordinate} + $read_size),
-                q{.},
+                $eland->{chr},
+                'el3',
+                'read',
+                $eland->{start},
+                $eland->{end},
+                $eland->{mm},
                 $eland->{strand},
                 q{.},
-                (exists $eland->{attribute} ? $eland->{attribute} : "read=$eland->{read_id};seq=$eland->{sequence};mm=$eland->{mm}"),
+                q{.},
             ), "\n";
+
+    # # print new GFF line
+    # print join ("\t",
+    #             $eland->{seq_id},
+    #             q{.},
+    #             ($feature ? $feature : 'parse_eland'),
+    #             (exists $eland->{center} ? int $eland->{center} : $eland->{coordinate}),
+    #             (exists $eland->{center} ? int $eland->{center} : $eland->{coordinate} + $read_size),
+    #             q{.},
+    #             $eland->{strand},
+    #             q{.},
+    #             (exists $eland->{attribute} ? $eland->{attribute} : "read=$eland->{read_id};seq=$eland->{sequence};mm=$eland->{mm}"),
+    #         ), "\n";
 } # done
 
+
+sub read_eland_3 {
+    my ($eland) = @_;
+    chomp $eland;
+
+    my ($id, $seq, $mm, $chr, $coord, $strand, $length) = split /\t/, $eland;
+
+    $chr    =~ s/([RF])(\d)$//i;
+    $strand = q{F} eq $1 ? q{+} : q{-};
+    $mm     = $2;
+    ($chr, $coord) = split /:/, $chr;
+
+    return {
+        id     => $id,
+        start  => $coord,
+        end    => $coord + length $seq,
+        chr    => $chr,
+        mm     => $mm,
+        strand => $strand,
+    }
+}
+# eland 3
+# HWI-EAS105_0015:2:100:10008:17355#0/1   GTATGTGAATGTAAAGGATGTGGATGGTGTAGATGAATGTGTAGGAAGTGGATGGTGTAGATGACGAATGTCTAGG    0:0:1:0 chr3:873266F2
 
 
 
@@ -79,8 +114,8 @@ sub read_export {
     my ($seq_id)   = split /\./, $eland_line[10], 1;
     my $coordinate = $eland_line[12];
     my $strand     = $eland_line[13] eq q{F} ? q{+} : q{-};
-    my $mismatch   =
-    (defined $eland_line[14] ? $eland_line[14] =~ tr/A-Za-z// : 0;
+    my $mismatch   = 0;
+    #(defined $eland_line[14] ? $eland_line[14] =~ tr/A-Za-z// : 0;
 
     my $center;    # center coordinate
     my $attribute; # Ninth GFF field
@@ -118,43 +153,6 @@ sub read_export {
         attribute  => $attribute,
     }
 }
-
-sub read_eland_3 {
-    chomp;
-    s/[\n\r]//g;
-    my @eland_line = split /\t/;
-
-    my %eland_line = ();
-
-    $eland_line{read_id}  = $eland_line[0];
-    $eland_line{sequence} = $eland_line[1];
-
-
-    if ($eland_line[2] =~ m/NM/) {
-        $eland_line{'matches'} = 0;
-    }
-    elsif ($eland_line[2] =~ m/^[0-9]+$/) {
-        $eland_line{matches} = $eland_line[2];
-    }
-    elsif ($eland_line[2] =~ m/:/) {
-        $eland_line{matches} = scalar (split /,/, $eland_line[3]);
-    }
-
-    if ($eland_line{matches}) {
-        my @all_reads = split /,/, $eland_line[3];
-
-        for my $i (0..@all_reads - 1) {
-            ($eland_line{"chr$i"}, $eland_line{"coord$i"}) =
-            split /:/, $all_reads[$i];
-
-            ($eland_line{"mm$i"}, $eland_line{"strand$i"}) =
-            $eland_line{"coord$i"} =~ s/[A-Z]([0-9])(\w\d)$//i;
-        }
-    }
-
-    return \%eland_line;
-}
-
 
 
 
