@@ -9,8 +9,8 @@ use Pod::Usage;
 use List::Util qw /sum/;
 
 # Check required command line parameters
-pod2usage ( -verbose => 1 )
-unless @ARGV;
+pod2usage( -verbose => 1 )
+    unless @ARGV;
 
 my $type = 'verbose';
 my $frequencies;
@@ -23,32 +23,34 @@ my $unmatched;
 my @splice;
 
 # Grabs and parses command line options
-my $result = GetOptions (
-    'output|o=s'     => \$output,
-    'recover|u=s'    => \$unmatched,
-    'splice|s=i{2}'  => \@splice,
-    'type|t=s'       => \$type,
-    'frequencies|f'  => \$frequencies,
-    'paired|p'       => \$paired,
-    'eland|e'        => \$eland,
-    'id-regex|i=s'   => \$id_regex,
-    'reference|r=s'  => \$reference,
-    'verbose|v'      => sub { use diagnostics; },
-    'quiet|q'        => sub { no warnings; },
-    'help|h'         => sub { pod2usage ( -verbose => 1 ); },
-    'manual|m'       => sub { pod2usage ( -verbose => 2 ); }
+my $result = GetOptions(
+    'output|o=s'    => \$output,
+    'recover|u=s'   => \$unmatched,
+    'splice|s=i{2}' => \@splice,
+    'type|t=s'      => \$type,
+    'frequencies|f' => \$frequencies,
+    'paired|p'      => \$paired,
+    'eland|e'       => \$eland,
+    'id-regex|i=s'  => \$id_regex,
+    'reference|r=s' => \$reference,
+    'verbose|v'     => sub { use diagnostics; },
+    'quiet|q'       => sub { no warnings; },
+    'help|h'        => sub { pod2usage( -verbose => 1 ); },
+    'manual|m'      => sub { pod2usage( -verbose => 2 ); }
 );
 
 # Check required command line parameters
-pod2usage ( -verbose => 1 )
-unless @ARGV and $result
-and ($type eq 'concise' xor $type eq 'verbose')
-and (   ($frequencies xor $paired)
-     or (!$frequencies and !$paired));
+pod2usage( -verbose => 1 )
+    unless @ARGV
+        and $result
+        and ( $type eq 'concise' xor $type eq 'verbose' )
+        and (  ( $frequencies xor $paired )
+            or ( !$frequencies and !$paired ) );
 
 # redirect standard output to file if requested
 if ($output) {
-    open my $USER_OUT, '>', $output or croak "Can't open $output for writing: $!";
+    open my $USER_OUT, '>', $output
+        or croak "Can't open $output for writing: $!";
     select $USER_OUT;
 }
 
@@ -60,77 +62,81 @@ while (<>) {
     chomp;
     s/[\r\n]//;
 
-    my $current = read_bowtie ($_);
+    my $current = read_bowtie($_);
 
-    $current->{snps}{$current->{snp}->[0]}++;
+    $current->{snps}{ $current->{snp}->[0] }++;
 
     if ($frequencies) {
-        $counts->{$current->{target}->[0]}{alternatives}
-        += $current->{alternatives};
-        $counts->{$current->{target}->[0]}{frequencies}++;
+        $counts->{ $current->{target}->[0] }{alternatives}
+            += $current->{alternatives};
+        $counts->{ $current->{target}->[0] }{frequencies}++;
     }
     elsif ($paired) {
 
-        my $next = <>; chomp $next; $next =~ s/[\r\n]//;
-           $next = read_bowtie ($next);
+        my $next = <>;
+        chomp $next;
+        $next =~ s/[\r\n]//;
+        $next = read_bowtie($next);
 
-        $next->{snps}{$next->{snp}->[0]}++;
+        $next->{snps}{ $next->{snp}->[0] }++;
 
-        print_gff ($current, $next);
+        print_gff( $current, $next );
     }
     else {
-        unless (defined $previous) {
+        unless ( defined $previous ) {
             $previous = $current;
         }
-        elsif ($current->{read_id} eq $previous->{read_id}) {
-            push @{$previous->{strand}}, $current->{strand}->[0];
-            push @{$previous->{target}}, $current->{target}->[0];
-            push @{$previous->{coordinate}}, $current->{coordinate}->[0];
-            push @{$previous->{snp}}, $current->{snp}->[0];
-            $previous->{snps}{$current->{snp}->[0]}++;
+        elsif ( $current->{read_id} eq $previous->{read_id} ) {
+            push @{ $previous->{strand} },     $current->{strand}->[0];
+            push @{ $previous->{target} },     $current->{target}->[0];
+            push @{ $previous->{coordinate} }, $current->{coordinate}->[0];
+            push @{ $previous->{snp} },        $current->{snp}->[0];
+            $previous->{snps}{ $current->{snp}->[0] }++;
         }
         else {
 
-            catch_up ($previous, $unmatched, @splice)
-            if $unmatched;
+            catch_up( $previous, $unmatched, @splice )
+                if $unmatched;
 
-            print_eland ($previous);
+            print_eland($previous, $type);
             $previous = $current;
         }
     }
 }
 
-count_reads ($reference, $counts, $id_regex) if $frequencies;
+count_reads( $reference, $counts, $id_regex ) if $frequencies;
 
-catch_up ($previous, $unmatched, @splice) if defined $previous and $unmatched;
+catch_up( $previous, $unmatched, @splice )
+    if defined $previous and $unmatched;
 
-print_eland ($previous) if defined $previous;
+print_eland($previous, $type) if defined $previous;
 
 # for when last read in bowtie file is *not* last read in fasta file
-catch_up ($previous, $unmatched, @splice) if defined $previous and $unmatched;
-
-
+catch_up( $previous, $unmatched, @splice )
+    if defined $previous and $unmatched;
 
 {
     my %file_handles;
     my $file_handle;
 
     sub catch_up {
-        my ($current, $unmatched, @splice) = @_;
+        my ( $current, $unmatched, @splice ) = @_;
 
         $file_handle = $file_handles{$unmatched};
 
-        unless (defined $file_handle) {
+        unless ( defined $file_handle ) {
             open $file_handle, '<', $unmatched
-            or croak "Can't open $unmatched: $!";
+                or croak "Can't open $unmatched: $!";
             $file_handles{$unmatched} = $file_handle;
         }
 
-      FASTA_HEADER:
-        while (    defined (my $header   = <$file_handle>)
-               and defined (my $sequence = <$file_handle>)) {
+    FASTA_HEADER:
+        while ( defined( my $header = <$file_handle> )
+            and defined( my $sequence = <$file_handle> ) )
+        {
 
-            chomp $header; chomp $sequence;
+            chomp $header;
+            chomp $sequence;
 
             $header =~ s/^([>@])//;
             if ( q{@} eq $1 ) {
@@ -138,31 +144,28 @@ catch_up ($previous, $unmatched, @splice) if defined $previous and $unmatched;
                 <$file_handle>;
             }
             elsif ( q{>} ne $1 ) {
-                croak "Can't figure out whether this file is straight fasta or fastq"
+                croak
+                    "Can't figure out whether this file is straight fasta or fastq";
             }
 
-            my %unmatched = (header => $header, sequence => $sequence);
+            my %unmatched = ( header => $header, sequence => $sequence );
 
             # if potentially unmatched read is not current bowtie read
-            if ($unmatched{header} !~ m/$current->{read_id}/) {
+            if ( $unmatched{header} !~ m/$current->{read_id}/ ) {
 
-                $unmatched{sequence}
-                = substr $unmatched{sequence}, ($splice[0] - 1), ($splice[1] - $splice[0] + 1)
-                if @splice;
+                $unmatched{sequence} = substr $unmatched{sequence},
+                    ( $splice[0] - 1 ), ( $splice[1] - $splice[0] + 1 )
+                    if @splice;
 
-                print join ("\t",
-                            $unmatched{header},
-                            $unmatched{sequence},
-                            'NM',
-                            "\n"
-                        );
+                print join( "\t",
+                    $unmatched{header}, $unmatched{sequence}, 'NM', "\n" );
             }
             else {
                 $current->{sequence} = $sequence;
 
-                $current->{sequence}
-                = substr $current->{sequence}, ($splice[0] - 1), ($splice[1] - $splice[0] + 1)
-                if @splice;
+                $current->{sequence} = substr $current->{sequence},
+                    ( $splice[0] - 1 ), ( $splice[1] - $splice[0] + 1 )
+                    if @splice;
 
                 last FASTA_HEADER;
             }
@@ -171,61 +174,66 @@ catch_up ($previous, $unmatched, @splice) if defined $previous and $unmatched;
 }
 
 sub print_gff {
-    my ($current, $next) = @_;
+    my ( $current, $next ) = @_;
 
-    print join ("\t",
-                $current->{target}->[0],
-                'bowtie',
-                'frag',
-                $current->{coordinate}->[0],
-                $next->{coordinate}->[0] + length ($next->{sequence}) - 1,
-                q{.},
-                q{+},
-                q{.},
-                "alt=$current->{alternatives}"
-            ), "\n";
+    print join( "\t",
+        $current->{target}->[0],
+        'bowtie',
+        'frag',
+        $current->{coordinate}->[0],
+        $next->{coordinate}->[0] + length( $next->{sequence} ) - 1,
+        q{.},
+        q{+},
+        q{.},
+        "alt=$current->{alternatives}" ),
+        "\n";
 }
 
-
 sub print_eland {
-    my ($previous) = @_;
+    my ($previous, $type) = @_;
 
-    my ($read_id, $sequence, $chromosomes_ref, $coordinates_ref, $strands_ref, $mismatches_ref, $mismatches_total)
-    = ($previous->{read_id}, $previous->{sequence}, $previous->{target}, $previous->{coordinate}, $previous->{strand}, $previous->{snp}, $previous->{snps});
+    my ( $read_id, $sequence, $chromosomes_ref, $coordinates_ref,
+        $strands_ref, $mismatches_ref, $mismatches_total )
+        = (
+        $previous->{read_id}, $previous->{sequence},
+        $previous->{target},  $previous->{coordinate},
+        $previous->{strand},  $previous->{snp},
+        $previous->{snps}
+        );
 
-    croak "Total number of chromosomes, coordinates, strands, and mismatches don't match"
-    unless scalar @{$chromosomes_ref} == scalar @{$coordinates_ref} 
-    and    scalar @{$chromosomes_ref} == scalar @{$strands_ref}
-    and    scalar @{$chromosomes_ref} == scalar @{$mismatches_ref};
+    croak
+        "Total number of chromosomes, coordinates, strands, and mismatches don't match"
+        unless scalar @{$chromosomes_ref} == scalar @{$coordinates_ref}
+            and scalar @{$chromosomes_ref} == scalar @{$strands_ref}
+            and scalar @{$chromosomes_ref} == scalar @{$mismatches_ref};
 
-    my $mismatches
-    = join q{:}, map { $mismatches_total->{$_} || 0 } (0 .. 2);
+    my $mismatches = join q{:},
+        map { $mismatches_total->{$_} || 0 } ( 0 .. 3 );
 
     my $target;
     map {
         $target
-        .= $chromosomes_ref->[$_]
-        .  q{:} . $coordinates_ref->[$_]
-        .  ($strands_ref->[$_] eq q{+} ? q{F} : q{R})
-        .  $mismatches_ref->[$_]
-        .  ($_ < @{$chromosomes_ref} - 1 ? q{,} : q{})
+            .= $chromosomes_ref->[$_] . q{:}
+            . $coordinates_ref->[$_]
+            . ( $strands_ref->[$_] eq q{+} ? q{F} : q{R} )
+            . $mismatches_ref->[$_]
+            . ( $_ < @{$chromosomes_ref} - 1 ? q{,} : q{} )
+    } ( 0 .. @{$chromosomes_ref} - 1 );
+
+    if ('concise' eq $type) {
+        print join( "\t", $read_id, grep { $_ != 0 } split /:/, $mismatches ), "\n";
     }
-    ( 0 .. @{$chromosomes_ref} - 1 );
-
-    print join ("\t",
-                $read_id,
-                $sequence,
-                $mismatches,
-                $target,
-            ), "\n";
+    else {
+        print join( "\t", $read_id, $sequence, $mismatches, $target, ), "\n";
+    }
 }
-
 
 sub read_bowtie {
     my ($bowtie_line) = @_;
 
-    my ($read_id, $strand, $target, $coordinate, $sequence, $qualities, $alternatives, $snp)
-    = split /\t/, $bowtie_line;
+    my ( $read_id, $strand, $target, $coordinate, $sequence, $qualities,
+        $alternatives, $snp )
+        = split /\t/, $bowtie_line;
 
     my @mm = split /,/, $snp;
 
@@ -237,43 +245,55 @@ sub read_bowtie {
         'sequence'     => $sequence,
         'qualities'    => $qualities,
         'alternatives' => $alternatives,
-        'snp'          => [scalar @mm],
-    }
+        'snp'          => [ scalar @mm ],
+    };
 }
 
-
-
 sub count_reads {
-    my ($reference, $counts_ref, $id_regex) = @_;
+    my ( $reference, $counts_ref, $id_regex ) = @_;
 
     return unless $reference;
 
     # read in chromosome/model lengths
-    my %reference = %{ index_fasta ($reference) };
+    my %reference = %{ index_fasta($reference) };
 
-    # sort and print target id, read frequency on mapped to target per kb, average alternative mappings
-  TARGET:
-    for my $target (sort keys %{$counts_ref}) {
+# sort and print target id, read frequency on mapped to target per kb, average alternative mappings
+TARGET:
+    for my $target ( sort keys %{$counts_ref} ) {
 
         my ($id) = $target =~ m/$id_regex/;
 
         print STDERR $id, "\n";
 
-        unless (exists $reference{$target}) {
+        unless ( exists $reference{$target} ) {
             carp "$target doesn't exist in $reference\n";
             next TARGET;
         }
 
-        print join ("\t",
-                    #$target,
-                    $id,
-                    sprintf ("%g", ($counts_ref->{$target}{frequencies} / length $reference{$target}) * 1000),
-                    sprintf ("%g", ($counts_ref->{$target}{frequencies} ? $counts_ref->{$target}{alternatives} / $counts_ref->{$target}{frequencies} : 0)),
-                ), "\n";
+        print join(
+            "\t",
+
+            #$target,
+            $id,
+            sprintf(
+                "%g",
+                (   $counts_ref->{$target}{frequencies} /
+                        length $reference{$target}
+                    ) * 1000
+            ),
+            sprintf(
+                "%g",
+                (     $counts_ref->{$target}{frequencies}
+                    ? $counts_ref->{$target}{alternatives}
+                        / $counts_ref->{$target}{frequencies}
+                    : 0
+                )
+            ),
+            ),
+            "\n";
     }
 
 }
-
 
 sub index_fasta {
     my $reference_file = shift;
@@ -283,11 +303,12 @@ sub index_fasta {
     return \%reference unless $reference_file;
 
     # reads in the reference genome file into @fastaseq
-    open my $REF, '<', "$reference_file" or croak "Can't open $reference for reading: $!";
+    open my $REF, '<', "$reference_file"
+        or croak "Can't open $reference for reading: $!";
     my @fastaseq = <$REF>;
     close $REF;
 
-    # find and store indices for each chromosome change and corresponding descriptions
+# find and store indices for each chromosome change and corresponding descriptions
     my ( @idx, @dsc ) = ();
     for my $i ( 0 .. @fastaseq - 1 ) {
         if ( $fastaseq[$i] =~ m/^>/ ) {
@@ -301,18 +322,17 @@ sub index_fasta {
     for my $j ( 0 .. @idx - 1 ) {
         my $line;
         if ( $j == scalar @idx - 1 ) {
-            $line = join( q{}, @fastaseq[ $idx[$j] + 1 .. @fastaseq - 1]);
+            $line = join( q{}, @fastaseq[ $idx[$j] + 1 .. @fastaseq - 1 ] );
         }
         else {
-            $line = join( q{}, @fastaseq[ $idx[$j] + 1 .. $idx[$j + 1] - 1]);
+            $line = join( q{},
+                @fastaseq[ $idx[$j] + 1 .. $idx[ $j + 1 ] - 1 ] );
         }
         $line =~ s/[\n\r]//g;
-        $reference{$dsc[$j]} = $line;
+        $reference{ $dsc[$j] } = $line;
     }
     return \%reference;
 }
-
-
 
 __END__
 
