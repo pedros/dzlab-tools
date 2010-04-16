@@ -132,10 +132,10 @@ catch_up ($previous, $unmatched, @splice) if defined $previous and $unmatched;
 
             chomp $header; chomp $sequence;
 
-            $header =~ s/^[>@]//;
+            $header =~ s/^([>@])//;
             if ( q{@} eq $1 ) {
-                undef = <$file_handle>;
-                undef = <$file_handle>;
+                <$file_handle>;
+                <$file_handle>;
             }
             elsif ( q{>} ne $1 ) {
                 croak "Can't figure out whether this file is straight fasta or fastq"
