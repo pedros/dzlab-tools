@@ -15,6 +15,7 @@ my $merge   = 0;
 my $no_sort = 0;
 my $no_skip = 0;
 my $scoring = 'meth';    # meth, average, or sum
+my $reverse = 0;         # reverse score and count
 my $gff;
 my $tag = 'ID';
 my $feature;
@@ -31,6 +32,7 @@ my $result = GetOptions(
     'gff|g=s'      => \$gff,
     'tag|t=s'      => \$tag,
     'feature|f=s'  => \$feature,
+    'reverse|r'    => \$reverse,
     'absolute|b=s' => \$absolute,
     'output|o=s'   => \$output,
     'verbose'      => sub { use diagnostics; },
@@ -129,7 +131,7 @@ WINDOW:
             ranges => $gff_records{$sequence},
         );
 
-        my $scores_ref = $scoring_dispatch{$scoring}->($brs_iterator);
+        my $scores_ref = $scoring_dispatch{$scoring}->($brs_iterator, $reverse);
 
         my ( $score, $attribute );
 
@@ -341,8 +343,9 @@ COORD:
     }
 }
 
+
 sub sum_scores {
-    my ($brs_iterator) = @_;
+    my ($brs_iterator, $reverse) = @_;
 
     my ( $score_sum, $score_count ) = ( 0, 0 );
 
@@ -352,6 +355,12 @@ COORD:
 
         $score_sum += $gff_line->{score} eq q{.} ? 1 : $gff_line->{score};
         $score_count++;
+    }
+
+    if ($reverse) {
+        my $tmp      = $score_sum;
+        $score_sum   = $score_count;
+        $score_count = $tmp;
     }
 
     if ($score_count) {
@@ -564,6 +573,7 @@ sub make_gff_iterator {
  -t, --tag         attribute field tag from which to extract locus ID    (default: ID, string)
  -f, --feature     overwrite GFF feature field with this label           (default: no, string)
  -b, --absolute    organism name to fetch chromosome lengths, implies -k (default: no, string [available: arabidopsis, rice, puffer])
+ -r, --reverse     reverse score and counts
  -o, --output      filename to write results to (defaults to STDOUT)
  -v, --verbose     output perl's diagnostic and warning messages
  -q, --quiet       supress perl's diagnostic and warning messages
