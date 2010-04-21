@@ -83,6 +83,12 @@ print $body;
 #$document->save('tmp');
 
 
+sub hd {
+  my ($k, $l) = @_;
+  my $diff = $k ^ $l;
+  my $num_mismatch = $diff =~ tr/\0//c;
+}
+
 
 __DATA__
 
