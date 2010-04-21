@@ -61,7 +61,7 @@ my $document = PPI::Document->new(shift @ARGV);
 # Strip out comments
 # $document->prune('PPI::Token::Comment');
 # $document->normalized;
-$document->index_locations;
+# $document->index_locations;
 
 # Find all the named subroutines
 my $sub_nodes = $document->find( 
@@ -69,7 +69,14 @@ my $sub_nodes = $document->find(
 );
 my %sub_names = map { $_->name => $_->content } @$sub_nodes;
 
-die Dumper \%sub_names;
+eval $sub_names{stop_flag_6};
+
+use B::Deparse;
+my $deparse = B::Deparse->new("-p", "-sC");
+my $body = $deparse->coderef2text(\&stop_flag_6);
+
+print $body;
+#die Dumper \%sub_names;
 
 #print join ("\n", @sub_names), "\n";
 # Save the file
