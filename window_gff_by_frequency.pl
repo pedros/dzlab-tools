@@ -51,6 +51,8 @@ my %last_coords = ();
 
 GFF:
 while (<>) {
+    next if m/\s*#/;
+
     my ($chr, $start, $end) = (split /\t/)[0,3,4];
 
     if ($sorted 
@@ -113,7 +115,8 @@ sub assign_to_windows {
                     && exists $reference->{$chr}
                 ) {
                     $last_coord = $reference->{$chr};
-                } else {
+                } 
+                else {
                     $last_coord = max keys %{ $col_windows_ref->{$chr} };
                 }
 

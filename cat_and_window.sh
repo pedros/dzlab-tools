@@ -14,7 +14,7 @@ width=50
 step=50
 
 cd $NAME
-rm -r post-processing/single-c
+# rm -r post-processing/single-c
 echo "Concatenating single c files..."
 mkdir -p post-processing/single-c
 for i in $groups; do
@@ -32,7 +32,7 @@ echo "Done with code: $?"
 
 
 echo "Merging and windowing concatenated single c files"
-rm -r post-processing/windows
+# rm -r post-processing/windows
 mkdir -p post-processing/windows
 for i in $groups; do
     for j in $contexts; do

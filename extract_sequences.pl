@@ -13,6 +13,7 @@ my @filter;
 my $use_max_win = 0;
 my $distance    = 0;
 my $tss         = 0;
+my $id          = 'ID';
 my $output;
 
 my $result = GetOptions (
@@ -21,6 +22,7 @@ my $result = GetOptions (
     'use-max-win|w' => \$use_max_win,
     'distance|d=i'  => \$distance,
     'tss|t'         => \$tss,
+    'id|i=s'        => \$id,
     'output|o=s'    => \$output,
     'verbose|v'     => sub { use diagnostics; },
     'quiet|q'       => sub { no warnings; },
@@ -72,7 +74,7 @@ while (<>) {
     }
 
     my ($attribute)
-    = $site{attribute} =~ m/\*([\w]+):/;
+    = $site{attribute} =~ m/(?:\*|$id[\s=]?)([\w]+)/;
 
     $attribute ||= 'unknown_locus';
 
