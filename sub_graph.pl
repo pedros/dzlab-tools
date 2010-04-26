@@ -6,7 +6,9 @@ use Data::Dumper;
 use Carp;
 use Getopt::Long qw(:config gnu_getopt);
 use Pod::Usage;
+use File::Basename;
 use PPI;
+use List::Util 'max';
 
 my $INH  = *ARGV;
 my $ERRH = *STDERR;
@@ -28,6 +30,7 @@ GetOptions (
     'manual'          => sub {pod2usage -verbose  => 2                        },
     )
     or pod2usage (-verbose => 1);
+
 
 
  IO:
@@ -55,32 +58,119 @@ GetOptions (
     }
 }
 
+my %files;
+foreach my $file (@ARGV) { 
+
 # Load a document from a file
-my $document = PPI::Document->new(shift @ARGV);
-  
+    my $document = PPI::Document->new($file);
+
 # Strip out comments
-# $document->prune('PPI::Token::Comment');
+$document->prune('PPI::Token::Comment');
+
 # $document->normalized;
 # $document->index_locations;
 
 # Find all the named subroutines
-my $sub_nodes = $document->find( 
-    sub { $_[1]->isa('PPI::Statement::Sub') and $_[1]->name }
-);
-my %sub_names = map { $_->name => $_->content } @$sub_nodes;
+    my $sub_nodes = $document->find( 
+	sub { $_[1]->isa('PPI::Statement::Sub') and $_[1]->name }
+);  
 
-eval $sub_names{stop_flag_6};
+    next unless $sub_nodes;
+    my %sub_names = map { $_->name => { 'code' => 
+					    $_->content 
+                                            #'code'
+			  }} @$sub_nodes;
 
-use B::Deparse;
-my $deparse = B::Deparse->new("-p", "-sC");
-my $body = $deparse->coderef2text(\&stop_flag_6);
 
-print $body;
-#die Dumper \%sub_names;
+    my $file_name = fileparse $file;    
+    $files{$file_name} = \%sub_names;
+}
 
-#print join ("\n", @sub_names), "\n";
-# Save the file
-#$document->save('tmp');
+#     foreach my $sub_name (keys %sub_names) {
+# 	eval $sub_names{$sub_name};
+# 	use B::Deparse;
+# 	my $deparse = B::Deparse->new("-p", "-sC");
+# 	my $body = $deparse->coderef2text(\&$sub_name);          #This only works like half the time. No idea why.
+
+
+
+#Set up @file_names and @sub_names for easy reference
+my @file_names = sort keys %files;
+my @sub_names;
+foreach my $sub_hash (values %files) {
+    foreach my $sub_name (keys %{$sub_hash}) {
+	push @sub_names, $sub_name;
+    }
+}
+#remove duplicates and sort
+my %hash = map {$_, 1} @sub_names;
+@sub_names = sort keys %hash;
+
+
+
+#Put a second key into each subroutine hash, pointing to an array of the files the subroutine is used in.
+#Each element in the array is a hash.
+foreach my $sub_name (@sub_names) {
+    my @file_names_by_sub;
+    foreach my $file_name (@file_names) {
+	if ($files{$file_name}->{$sub_name}) {
+	    push @file_names_by_sub, $file_name;
+	}
+    }
+    foreach my $file_name_by_sub (@file_names_by_sub) {
+	foreach my $file_name (@file_names) {
+	    %{ $files{$file_name}->{$sub_name}->{'other files'}->{$file_name_by_sub} } = %{$files{$file_name}} 
+	    unless !$files{$file_name}->{$sub_name} or $file_name eq $file_name_by_sub;       #keeps it from pointing to itself, and from creating new keys.
+	}
+    }
+}
+
+{
+    local $Data::Dumper::Maxdepth = 4;
+    print Dumper \%files;
+}
+#print Dumper keys %{ $files{'test.pl'}{'get_file'}{'files'}{'test.pl'} };
+#exit;
+
+
+
+##print out a table showing which files contain which subroutines. 
+#print norm(" ", @file_names);
+print join ("\t", q{}, @sub_names), "\n";
+
+foreach my $file_name (@file_names) {
+    print $file_name, "\t";
+    foreach my $sub_name (@sub_names) {
+	if ($files{$file_name}->{$sub_name}) {
+	    print q{*};
+	}
+	else {print q{};}
+	print "\t";
+    }
+    print "\n";
+}
+
+
+
+
+
+
+
+
+
+#table of files and subs that appear in them.
+#possibly number of times each is called.
+#then do Hamming distance for subs with the same name, using the permutations thing to match subs that have the same words in different order.
+
+
+sub norm {
+    my ($string, @strings) = @_;
+    my $longest = max(map {length} @strings);
+    until (length $string == $longest) {
+	$string = "$string ";
+    }
+    return $string;
+}
 
 
 sub hd {
