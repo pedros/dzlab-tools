@@ -4,8 +4,7 @@ use warnings;
 use strict;
 use Data::Dumper;
 use Carp;
-use Getopt::Long;
-Getopt::Long::Configure('bundling');
+use Getopt::Long qw(:config bundling);
 use Pod::Usage;
 
 my $output;
@@ -363,7 +362,7 @@ COORD:
         $score_count = $tmp;
     }
 
-    if ($score_count) {
+    if ($score_count or ($reverse and $score_sum)) {
         return {
             score => $score_sum,
             n     => $score_count,
