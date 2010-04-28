@@ -78,11 +78,15 @@ sub read_eland_3 {
 
     my ($id, $seq, $mm, $chr, $coord, $strand, $length) = split /\t/, $eland;
 
-    croak $eland unless $chr;
-    $chr    =~ s/([RF])(\d)$//i; croak $eland unless $1;
-    $strand = q{F} eq $1 ? q{+} : q{-};
-    $mm     = $2;
-    ($chr, $coord) = split /:/, $chr;
+    carp $eland and return unless $chr and $seq and $mm and $chr;
+
+    $chr =~ s/([^:]+)([RF])(\d)$//i;
+
+    carp $eland and return unless defined $1 and defined $2 and defined $3;
+
+    $coord  = $1;
+    $strand = q{F} eq $2 ? q{+} : q{-};
+    $mm     = $3;
 
     return {
         id     => $id,
@@ -91,11 +95,11 @@ sub read_eland_3 {
         chr    => $chr,
         mm     => $mm,
         strand => $strand,
-    }
+    };
 }
 # eland 3
 # HWI-EAS105_0015:2:100:10008:17355#0/1   GTATGTGAATGTAAAGGATGTGGATGGTGTAGATGAATGTGTAGGAAGTGGATGGTGTAGATGACGAATGTCTAGG    0:0:1:0 chr3:873266F2
-
+#                                                                                                                                 AT3G49470|chr3:18352908:18353474:246R1
 
 
 sub read_export {
