@@ -78,7 +78,8 @@ sub read_eland_3 {
 
     my ($id, $seq, $mm, $chr, $coord, $strand, $length) = split /\t/, $eland;
 
-    $chr    =~ s/([RF])(\d)$//i;
+    croak $eland unless $chr;
+    $chr    =~ s/([RF])(\d)$//i; croak $eland unless $1;
     $strand = q{F} eq $1 ? q{+} : q{-};
     $mm     = $2;
     ($chr, $coord) = split /:/, $chr;
