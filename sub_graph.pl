@@ -68,7 +68,7 @@ IO:
     }
 }
 
-my %files;
+my %data;
 foreach my $file (@ARGV) {
 
     # Load a document from a file
@@ -82,37 +82,45 @@ foreach my $file (@ARGV) {
 
     # Find all the named subroutines
     my $sub_nodes =
-      $document->find( sub { $_[1]->isa('PPI::Statement::Sub') and $_[1]->name }
-      );
+	$document->find( sub { $_[1]->isa('PPI::Statement::Sub') and $_[1]->name });
+    
+ #   print Dumper $sub_nodes;exit;
 
     next unless $sub_nodes;
     my %sub_names = map {
         $_->name => {
             'code' =>
-
-              #$_->content
-              'code'
+		$_->content
+		#'code'
           }
     } @$sub_nodes;
 
     my $file_name = fileparse $file;
-    $files{$file_name} = \%sub_names;
-}
+    $data{$file_name} = \%sub_names;
+
+    foreach my $sub_name (keys %sub_names) {
+	$sub_names{$sub_name}{'code'} =~ s/\s+/ /g    
+    }
 
 #     foreach my $sub_name (keys %sub_names) {
 # 	eval $sub_names{$sub_name};
 # 	use B::Deparse;
 # 	my $deparse = B::Deparse->new("-p", "-sC");
 # 	my $body = $deparse->coderef2text(\&$sub_name);          #This only works like half the time. No idea why.
+}
+
+
 
 #Set up @file_names and @sub_names for easy reference
-my @file_names = sort keys %files;
+my @file_names = sort keys %data;
 my @sub_names;
-foreach my $sub_hash ( values %files ) {
+foreach my $sub_hash ( values %data ) {
     foreach my $sub_name ( keys %{$sub_hash} ) {
         push @sub_names, $sub_name;
     }
 }
+
+
 
 #remove duplicates and sort
 my %hash = map { $_, 1 } @sub_names;
@@ -123,71 +131,48 @@ my %hash = map { $_, 1 } @sub_names;
 foreach my $sub_name (@sub_names) {
     my @file_names_by_sub;
     foreach my $file_name (@file_names) {
-        if ( $files{$file_name}->{$sub_name} ) {
+        if ( $data{$file_name}->{$sub_name} ) {
             push @file_names_by_sub, $file_name;
         }
     }
     foreach my $file_name_by_sub (@file_names_by_sub) {
         foreach my $file_name (@file_names) {
-            %{ $files{$file_name}->{$sub_name}->{'other files'}
-                  ->{$file_name_by_sub} } = %{ $files{$file_name} }
-              unless !$files{$file_name}->{$sub_name}
-                  or $file_name eq $file_name_by_sub
-            ;    #keeps it from pointing to itself, and from creating new keys.
+            %{ $data{$file_name}->{$sub_name}->{'other files'}
+                  ->{$file_name_by_sub} } = %{ $data{$file_name} }
+              unless !$data{$file_name}->{$sub_name}
+                  or $file_name eq $file_name_by_sub;   #keeps it from pointing to itself, and from creating new keys.
         }
     }
 }
 
 {
     local $Data::Dumper::Maxdepth = 4;
-  #  print Dumper \%files;
+  #  print Dumper \%data;
  #   exit;
 }
 
-#print Dumper keys %{ $files{'test.pl'}{'get_file'}{'files'}{'test.pl'} };
-#exit;
 
-##print out a table showing which files contain which subroutines.
-#print norm(" ", @file_names);
-print join( "\t", q{}, @sub_names ), "\n";
-
-foreach my $file_name (@file_names) {
-    print $file_name, "\t";
-    foreach my $sub_name (@sub_names) {
-        if ( $files{$file_name}->{$sub_name} ) {
-            print q{*};
-        }
-        else { print q{}; }
-        print "\t";
-    }
-    print "\n";
-}
 
 #hamming distance part -- I'll do this without permutations first.
-#Algorithm::Permute::permute { push @things, join "", @thing; } @thing;
+
 my %hd_by_sub_name;
 
 foreach my $sub_name (@sub_names) {
     my %code_of_sub_variations;
-    foreach my $file ( keys %files ) {
-        foreach my $my_sub_name ( keys %{ $files{$file} } ) {
-            if ( $sub_name eq $my_sub_name ) {
+    foreach my $file ( keys %data ) {
+        foreach my $my_sub_name ( keys %{ $data{$file} } ) {
+            if ( $sub_name eq $my_sub_name) {
                 $code_of_sub_variations{$file} =
-                  $files{$file}->{$my_sub_name}->{'code'};
+                  $data{$file}->{$my_sub_name}->{'code'};
             }
         }
     }
     $hd_by_sub_name{$sub_name} = hd_all_combinations(%code_of_sub_variations);
 }
-print Dumper %hd_by_sub_name;
-exit;
-
-#table of files and subs that appear in them.         check
-#possibly number of times each is called.
-#then do Hamming distance for subs with the same name, using the permutations thing to match subs that have the same words in different order.
 
 
 
+print Dumper \%hd_by_sub_name;
 
 
 # Takes a hash representing a single subroutine. keys are files, values are the code of the subroutine in that file.
@@ -209,21 +194,23 @@ sub hd_all_combinations {
     for my $combo (@combinations) {
 	my $file1 = @{$combo}[0];
 	my $file2 = @{$combo}[1];
-	$ret_hash{$file1}->{$file2} = hd($hash{$file1}, $hash{$file2});
-	$ret_hash{$file2}->{$file1} = hd($hash{$file1}, $hash{$file2});
+	$ret_hash{$file1}->{$file2} = normalized_hd($hash{$file1}, $hash{$file2});
+	$ret_hash{$file2}->{$file1} = normalized_hd($hash{$file1}, $hash{$file2});
 
     }
     return \%ret_hash;
 }
     
 
-
-sub hd {
+sub normalized_hd {
   my ($k, $l) = @_;
-  my $diff = $k ^ $l;
-  my $num_mismatch = $diff =~ tr/\0//c;
+  my $xor = $k ^ $l;
+  my $hamming_distance = $xor =~ tr/\0//c;
+  my $max_length = max length $k, length $l;
+  return sprintf ("%g", 1 - $hamming_distance / $max_length)
+      unless $max_length == 0;
+  return -1;
 }
-
 
 
 sub norm {
@@ -235,6 +222,24 @@ sub norm {
     return $string;
 }
 
+
+sub print_table {
+##print out a table showing which files contain which subroutines.
+    my (@sub_names, @file_names, %data) = @_;
+    print join( "\t", q{}, @sub_names ), "\n";
+    
+    foreach my $file_name (@file_names) {
+	print $file_name, "\t";
+	foreach my $sub_name (@sub_names) {
+	    if ( $data{$file_name}->{$sub_name} ) {
+		print q{*};
+	    }
+	    else { print q{}; }
+	    print "\t";
+	}
+	print "\n";
+    }
+}
 
 
 
