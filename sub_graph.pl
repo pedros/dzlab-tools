@@ -10,6 +10,7 @@ use File::Basename;
 use PPI;
 use List::Util 'max';
 use Algorithm::Permute qw(permute);
+use Statistics::Basic qw(:all nofill);
 
 my $INH  = *ARGV;
 my $ERRH = *STDERR;
@@ -83,31 +84,27 @@ foreach my $file (@ARGV) {
     # Find all the named subroutines
     my $sub_nodes =
 	$document->find( sub { $_[1]->isa('PPI::Statement::Sub') and $_[1]->name });
-    
- #   print Dumper $sub_nodes;exit;
 
     next unless $sub_nodes;
     my %sub_names = map {
         $_->name => {
-            'code' =>
-		$_->content
-		#'code'
-          }
+            'code'   => $_->content,
+	    'tokens' => count($_)
+	}
     } @$sub_nodes;
 
     my $file_name = fileparse $file;
     $data{$file_name} = \%sub_names;
+}
 
-    foreach my $sub_name (keys %sub_names) {
-	$sub_names{$sub_name}{'code'} =~ s/\s+/ /g    
-    }
+
 
 #     foreach my $sub_name (keys %sub_names) {
 # 	eval $sub_names{$sub_name};
 # 	use B::Deparse;
 # 	my $deparse = B::Deparse->new("-p", "-sC");
 # 	my $body = $deparse->coderef2text(\&$sub_name);          #This only works like half the time. No idea why.
-}
+
 
 
 
@@ -131,16 +128,15 @@ my %hash = map { $_, 1 } @sub_names;
 foreach my $sub_name (@sub_names) {
     my @file_names_by_sub;
     foreach my $file_name (@file_names) {
-        if ( $data{$file_name}->{$sub_name} ) {
+        if ( exists $data{$file_name}->{$sub_name} ) {
             push @file_names_by_sub, $file_name;
         }
     }
     foreach my $file_name_by_sub (@file_names_by_sub) {
         foreach my $file_name (@file_names) {
-            %{ $data{$file_name}->{$sub_name}->{'other files'}
-                  ->{$file_name_by_sub} } = %{ $data{$file_name} }
-              unless !$data{$file_name}->{$sub_name}
-                  or $file_name eq $file_name_by_sub;   #keeps it from pointing to itself, and from creating new keys.
+            $data{$file_name}->{$sub_name}->{'other files'}->{$file_name_by_sub} = $data{$file_name} 
+              if exists $data{$file_name}->{$sub_name}
+                  and $file_name ne $file_name_by_sub;   #keeps it from pointing to itself, and from creating new keys.
         }
     }
 }
@@ -153,9 +149,9 @@ foreach my $sub_name (@sub_names) {
 
 
 
-#hamming distance part -- I'll do this without permutations first.
+#cross correlation part 
 
-my %hd_by_sub_name;
+my %cc_by_sub_name;
 
 foreach my $sub_name (@sub_names) {
     my %code_of_sub_variations;
@@ -163,22 +159,23 @@ foreach my $sub_name (@sub_names) {
         foreach my $my_sub_name ( keys %{ $data{$file} } ) {
             if ( $sub_name eq $my_sub_name) {
                 $code_of_sub_variations{$file} =
-                  $data{$file}->{$my_sub_name}->{'code'};
+                  $data{$file}->{$my_sub_name}->{'tokens'};
             }
         }
     }
-    $hd_by_sub_name{$sub_name} = hd_all_combinations(%code_of_sub_variations);
+    $cc_by_sub_name{$sub_name} = cc_all_combos(%code_of_sub_variations);
 }
 
 
 
-print Dumper \%hd_by_sub_name;
+print Dumper \%cc_by_sub_name;
 
 
-# Takes a hash representing a single subroutine. keys are files, values are the code of the subroutine in that file.
-# Returns a hash with keys being a filename pointing to a hash whose keys are another filename and whose value is the hd for the sub between those two files.
-# So to find the hd between file2 and file3, do $hash{file2}{file3} or $hash{file3}{file2}.
-sub hd_all_combinations {
+
+# Takes a hash representing a single subroutine. keys are files, values are hashes of the token frequencies.
+# Returns a hash with keys being a filename pointing to a hash whose keys are another filename and whose value is the token comparison for the sub between those two files.
+# So to retieve the difference between file2 and file3, do $hash{file2}{file3} or $hash{file3}{file2}.
+sub cc_all_combos {
     my (%hash) = @_;
     my @files = keys %hash;
     my %ret_hash;
@@ -194,13 +191,13 @@ sub hd_all_combinations {
     for my $combo (@combinations) {
 	my $file1 = @{$combo}[0];
 	my $file2 = @{$combo}[1];
-	$ret_hash{$file1}->{$file2} = normalized_hd($hash{$file1}, $hash{$file2});
-	$ret_hash{$file2}->{$file1} = normalized_hd($hash{$file1}, $hash{$file2});
-
+	$ret_hash{$file1}->{$file2} = cross_correlation($hash{$file1}, $hash{$file2});
+	$ret_hash{$file2}->{$file1} = cross_correlation($hash{$file1}, $hash{$file2});
     }
     return \%ret_hash;
 }
-    
+
+
 
 sub normalized_hd {
   my ($k, $l) = @_;
@@ -211,6 +208,46 @@ sub normalized_hd {
       unless $max_length == 0;
   return -1;
 }
+
+
+#P value? (list squares fit)
+sub cross_correlation {
+    my ($tokens1, $tokens2) = @_; 
+    
+    my %all_tokens = map { $_ => 0 } (keys %$tokens1, keys %$tokens2);
+    my (@vec1, @vec2);
+
+    for my $token (keys %all_tokens) { 
+
+	$tokens1->{$token} = 0 unless $tokens1->{$token};
+	$tokens2->{$token} = 0 unless $tokens2->{$token};
+
+	push @vec1, $tokens1->{$token};
+	push @vec2, $tokens2->{$token};
+    }	
+
+    my $cc = correlation(vector(@vec1), vector(@vec2));
+    return "$cc";
+}
+
+
+
+
+
+#takes a sub_node object, returns a ref to a hash of token frequencies
+sub count {
+    my ($sub_node) = @_;
+    
+    my @tokens = $sub_node->find( 
+	sub {
+	    $_[1]->isa('PPI::Token')
+		and not $_[1]->isa('PPI::Token::Whitespace')
+	} );
+    my %counts;
+    $counts{ join "\t", ref ($_), $_->content }++ for @{$tokens[0]}; 
+    return \%counts;    
+}
+
 
 
 sub norm {
