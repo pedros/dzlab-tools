@@ -89,21 +89,13 @@ foreach my $file (@ARGV) {
     my %sub_names = map {
         $_->name => {
             'code'   => $_->content,
-	    'tokens' => count($_)
+	    'tokens' => token_frequency($_)
 	}
     } @$sub_nodes;
 
     my $file_name = fileparse $file;
     $data{$file_name} = \%sub_names;
 }
-
-
-
-#     foreach my $sub_name (keys %sub_names) {
-# 	eval $sub_names{$sub_name};
-# 	use B::Deparse;
-# 	my $deparse = B::Deparse->new("-p", "-sC");
-# 	my $body = $deparse->coderef2text(\&$sub_name);          #This only works like half the time. No idea why.
 
 
 
@@ -116,14 +108,13 @@ foreach my $sub_hash ( values %data ) {
         push @sub_names, $sub_name;
     }
 }
-
-
-
 #remove duplicates and sort
 my %hash = map { $_, 1 } @sub_names;
 @sub_names = sort keys %hash;
 
-#Put a second key into each subroutine hash, pointing to an array of the files the subroutine is used in.
+
+
+#Put a third key into each subroutine hash, pointing back to the hash for each file in common.
 #Each element in the array is a hash.
 foreach my $sub_name (@sub_names) {
     my @file_names_by_sub;
@@ -135,22 +126,26 @@ foreach my $sub_name (@sub_names) {
     foreach my $file_name_by_sub (@file_names_by_sub) {
         foreach my $file_name (@file_names) {
             $data{$file_name}->{$sub_name}->{'other files'}->{$file_name_by_sub} = $data{$file_name} 
-              if exists $data{$file_name}->{$sub_name}
-                  and $file_name ne $file_name_by_sub;   #keeps it from pointing to itself, and from creating new keys.
-        }
+	       if exists $data{$file_name}->{$sub_name}
+	          and $file_name ne $file_name_by_sub;   #keeps it from pointing to itself, and from creating new keys.
+
+	}
     }
 }
 
 {
     local $Data::Dumper::Maxdepth = 4;
-  #  print Dumper \%data;
+#    print Dumper keys %{$data{'parse_bowtie.pl'}{'index_fasta'}{'other files'}};
  #   exit;
 }
 
 
+##should I unify %data and %cc_by_sub_name? 
+
+
 
 #cross correlation part 
-
+#do it for different names, too.
 my %cc_by_sub_name;
 
 foreach my $sub_name (@sub_names) {
@@ -163,12 +158,111 @@ foreach my $sub_name (@sub_names) {
             }
         }
     }
-    $cc_by_sub_name{$sub_name} = cc_all_combos(%code_of_sub_variations);
+    my $sub_cc = cc_all_combos(%code_of_sub_variations);
+    $cc_by_sub_name{$sub_name} = $sub_cc
+	if %$sub_cc;    #gets rid of subs used in only one file.
+}
+
+#die Dumper \%cc_by_sub_name;
+
+
+auto_module(\%cc_by_sub_name, "/home/jgraff/workspace/bisulfite/trunk/module_test.pm");
+
+#my %thing = subs_of_interest(1, \%cc_by_sub_name, @sub_names);
+#my %thing = subs_of_interest(@sub_names,);
+
+
+#print Dumper \%thing; exit;
+#print Dumper \%cc_by_sub_name;
+
+
+
+##More stuff to do: add mode switches for table, subs of interest, and implement auto-generation of modules
+#subs of interest thing should take a tolerance (0 - 1) and return all files/subs that exceed that number. Output: lists of subnames/filenames.
+#auto-gen modules: find cases where correlation is perfect, and put those into a single module.
+#Turn the whole thing into a module, make methods instead of modes.
+
+
+
+#I should examine the output more closely and make sure it matches up with the numbers.
+sub auto_module {
+    my ($cc_by_sub_name, $module_file) = @_;
+    my %cc_by_sub_name = %$cc_by_sub_name;
+    my %cced_sub_code = _get_perfect_cc_subs(%cc_by_sub_name);	    	       	
+    unlink $module_file;
+    _create_module($module_file, sort keys %cced_sub_code)
+	unless -e $module_file;
+    _add_to_module($_, $module_file) foreach sort values %cced_sub_code;	          
+}
+ 
+
+sub _get_perfect_cc_subs {
+    my (%cc_by_sub_name) = @_;
+    my %cced_sub_code;
+    for my $sub_name (keys %cc_by_sub_name) {
+	my @files = keys %{ $cc_by_sub_name{$sub_name} };
+	my $file1 = $files[0];
+	for my $cc (values %{ $cc_by_sub_name{$sub_name}{$file1} }) {
+	    if ($cc == 1) {
+		my $code = $data{$file1}{$sub_name}{'code'};
+		$cced_sub_code{$sub_name} = $code;
+		last;
+	    }
+	}
+    }
+    return %cced_sub_code;
 }
 
 
 
-print Dumper \%cc_by_sub_name;
+sub _add_to_module {
+    my ($code, $module) = @_;
+    open my $MODULE, '>>', $module or croak "Can't open $module: $!";
+    print $MODULE "\n$code\n";
+    close $MODULE or  croak "Can't close $module: $!";
+}
+
+sub _create_module {
+    my ($file, @sub_names) = @_;
+    open my $FILE, '>', $file or croak "Can't open $file: $!";
+    print $FILE 
+	"package Utils; \n",
+	"use Export;\n",
+	"our \@EXPORT_OK = qw(@sub_names);\n"; #basic module stuff 
+    
+    close $FILE or croak "Can't close $file: $!";
+}
+
+
+#####This needs improvement! The groups are repeated w/ diff permutations. Possibly rethink approach.
+
+#returns a hash, keys are sub names, values is an array of files.
+#I can easily change this back to an array.
+sub subs_of_interest {
+    my ($tolerance, $cc_by_sub_name, @sub_names) = @_;
+    my %cc_by_sub_name = %$cc_by_sub_name;
+    my %subs_of_interest;
+    for my $sub_name (keys %cc_by_sub_name) {		
+	my @groups;
+	my @done;
+	for my $file1 (keys %{$cc_by_sub_name{$sub_name}}) {	    	
+	    my @files = ($file1);	    
+	    for my $file2 (keys %{$cc_by_sub_name{$sub_name}{$file1}}) {        
+		my $cc = $cc_by_sub_name{$sub_name}{$file1}{$file2};
+		push @files, $file2
+		    unless $cc < $tolerance or grep /$file2/, @done;   		    
+		push @done, $file1;
+	    }
+	    push @groups, \@files
+		if scalar @files > 1; #if there's only one element, there are no matches for the given tolerance.
+	}
+	$subs_of_interest{$sub_name} = \@groups;
+	
+    }
+    return %subs_of_interest;
+}
+
+
 
 
 
@@ -210,7 +304,7 @@ sub normalized_hd {
 }
 
 
-#P value? (list squares fit)
+
 sub cross_correlation {
     my ($tokens1, $tokens2) = @_; 
     
@@ -232,10 +326,8 @@ sub cross_correlation {
 
 
 
-
-
 #takes a sub_node object, returns a ref to a hash of token frequencies
-sub count {
+sub token_frequency {
     my ($sub_node) = @_;
     
     my @tokens = $sub_node->find( 
@@ -243,9 +335,9 @@ sub count {
 	    $_[1]->isa('PPI::Token')
 		and not $_[1]->isa('PPI::Token::Whitespace')
 	} );
-    my %counts;
-    $counts{ join "\t", ref ($_), $_->content }++ for @{$tokens[0]}; 
-    return \%counts;    
+    my %freqs;
+    $freqs{ join "\t", ref ($_), $_->content }++ for @{$tokens[0]}; 
+    return \%freqs;    
 }
 
 
