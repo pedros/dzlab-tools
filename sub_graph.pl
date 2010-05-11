@@ -25,56 +25,89 @@ my $data = load_files(\@ARGV);
 my @file_names = extract_file_names ($data);
 my @sub_names  = extract_sub_names  ($data);
 
-
 #Put a third key into each subroutine hash, pointing back to the hash for each file in common.
 #Each element in the array is a hash.
 foreach my $sub_name (@sub_names) {
-    my @file_names_by_sub;
-    foreach my $file_name (@file_names) {
-        if ( exists $data->{$file_name}->{$sub_name} ) {
-            push @file_names_by_sub, $file_name;
-        }
-    }
+    my @file_names_by_sub = _extract_files_by_sub ($sub_name, $data);
+    _insert_pair_values($sub_name, @file_names_by_sub);
+    #remove_token_keys($sub_name);   #write this!
+}
+sub _insert_pair_values {
+    my ($sub_name, @file_names_by_sub) = @_;
     foreach my $file_name_by_sub (@file_names_by_sub) {
-        foreach my $file_name (@file_names) {
-            $data->{$file_name}->{$sub_name}->{'files'}->{$file_name_by_sub}
-                = $data->{$file_name}
-                    if exists $data->{$file_name}->{$sub_name}
-                        and $file_name ne $file_name_by_sub;
-            #keeps it from pointing to itself, and from creating new keys.
-
-        }
+	foreach my $file_name (extract_file_names ($data)) {
+	    if (exists $data->{$file_name}->{$sub_name} and 
+		$file_name ne $file_name_by_sub) {       
+		my $cc = cross_correlation($data->{$file_name}->{$sub_name}->{'tokens'}, $data->{$file_name_by_sub}->{$sub_name}->{'tokens'});   #changed for cc
+		$data->{$file_name}->{$sub_name}->{'pair value'}->{$file_name_by_sub}
+		= $cc
+	    }	    ##take out tokens now that they have served their purpose...
+	}
     }
 }
 
 
+#don't need anymore
+#Returns a hash representing a single subroutine. keys are files, values are hashes of the token frequencies.
+sub get_sub_code_by_file {
+    my ($sub_name, $data) = @_;
+    my %code_of_sub_variations;
+    foreach my $file ( keys %$data ) {
+	foreach my $my_sub_name ( keys %{ $data->{$file} } ) {
+	    if ( $sub_name eq $my_sub_name ) {
+		$code_of_sub_variations{$file}
+		= $data->{$file}->{$my_sub_name}->{'tokens'};
+	    }
+	}
+    }
+    return %code_of_sub_variations;
+}
+
+
+#cc part
+# my %cc_by_sub_name;
+# foreach my $sub_name (@sub_names) {
+
+#don't need anymore
+#     %code_of_sub_variations = get_sub_code_by_file($sub_name, $data);
+#     my $sub_cc = cc_all_combos(%code_of_sub_variations);
+#     insert_cc(%code_by_sub_variations, f
+#     $data{$file1}{$sub_name}{'other files'}{$file2}{$cc}
+#     #$cc_by_sub_name{$sub_name} = $sub_cc
+#         if %$sub_cc;    #gets rid of subs used in only one file.
+# }
+
+
+# Takes a hash representing a single subroutine. keys are files, values are hashes of the token frequencies.
+# Returns a hash with keys being a filename pointing to a hash whose keys are another filename and whose value is the token comparison for the sub between those two files.
+# So to retieve the difference between file2 and file3, do $hash{file2}{file3} or $hash{file3}{file2}.
+ 
+
+
+
+
 {
-    local $Data::Dumper::Maxdepth = 6;
+    local $Data::Dumper::Maxdepth = 4;
     print {$OUTH} Dumper $data;
     exit;
 }
 
 
-##should I unify %$data and %cc_by_sub_name?
+sub _extract_files_by_sub {
+    my ($sub_name, $data) = @_;
 
-#cross correlation part
-#do it for different names, too.
-my %cc_by_sub_name;
-
-foreach my $sub_name (@sub_names) {
-    my %code_of_sub_variations;
-    foreach my $file ( keys %$data ) {
-        foreach my $my_sub_name ( keys %{ $data->{$file} } ) {
-            if ( $sub_name eq $my_sub_name ) {
-                $code_of_sub_variations{$file}
-                    = $data->{$file}->{$my_sub_name}->{'tokens'};
-            }
+    # all files that define current sub
+    my @file_names_by_sub;
+    foreach my $file_name (extract_file_names ($data) ) {
+        if ( exists $data->{$file_name}->{$sub_name} ) {
+            push @file_names_by_sub, $file_name;
         }
     }
-    my $sub_cc = cc_all_combos(%code_of_sub_variations);
-    $cc_by_sub_name{$sub_name} = $sub_cc
-        if %$sub_cc;    #gets rid of subs used in only one file.
+    return @file_names_by_sub;
 }
+
+##should I unify %$data and %cc_by_sub_name? done!
+
 
 #auto_module( \%cc_by_sub_name,
 #    "/home/jgraff/workspace/bisulfite/trunk/module_test.pm" );
@@ -90,8 +123,9 @@ foreach my $sub_name (@sub_names) {
 #auto-gen modules: find cases where correlation is perfect, and put those into a single module.
 #Turn the whole thing into a module, make methods instead of modes.
 
+
 #I should examine the output more closely and make sure it matches up with the numbers.
-sub auto_module {
+sub auto_module {  # fix this now that cc_by_sub_name id gone.
     my ( $cc_by_sub_name, $module_file ) = @_;
     my %cc_by_sub_name = %$cc_by_sub_name;
     my %cced_sub_code  = _get_perfect_cc_subs(%cc_by_sub_name);
@@ -198,6 +232,15 @@ sub load_files {
 
     return \%data;
 }
+
+
+
+
+
+
+
+
+
 
 sub extract_file_names {
     my ($data) = @_;
@@ -312,17 +355,8 @@ sub cc_all_combos {
             = cross_correlation( $hash{$file1}, $hash{$file2} );
     }
     return \%ret_hash;
-}
+ }
 
-sub normalized_hd {
-    my ( $k, $l ) = @_;
-    my $xor              = $k ^ $l;
-    my $hamming_distance = $xor =~ tr/\0//c;
-    my $max_length       = max length $k, length $l;
-    return sprintf( "%g", 1 - $hamming_distance / $max_length )
-        unless $max_length == 0;
-    return -1;
-}
 
 sub cross_correlation {
     my ( $tokens1, $tokens2 ) = @_;
