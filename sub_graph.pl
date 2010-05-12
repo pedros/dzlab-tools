@@ -25,115 +25,34 @@ my $data = load_files(\@ARGV);
 my @file_names = extract_file_names ($data);
 my @sub_names  = extract_sub_names  ($data);
 
-#Put a third key into each subroutine hash, pointing back to the hash for each file in common.
-#Each element in the array is a hash.
+#put pair_value key into sub hash.
 foreach my $sub_name (@sub_names) {
     my @file_names_by_sub = _extract_files_by_sub ($sub_name, $data);
     _insert_pair_values($sub_name, @file_names_by_sub);
-    #remove_token_keys($sub_name);   #write this!
 }
-sub _insert_pair_values {
-    my ($sub_name, @file_names_by_sub) = @_;
-    foreach my $file_name_by_sub (@file_names_by_sub) {
-	foreach my $file_name (extract_file_names ($data)) {
-	    if (exists $data->{$file_name}->{$sub_name} and 
-		$file_name ne $file_name_by_sub) {       
-		my $cc = cross_correlation($data->{$file_name}->{$sub_name}->{'tokens'}, $data->{$file_name_by_sub}->{$sub_name}->{'tokens'});   #changed for cc
-		$data->{$file_name}->{$sub_name}->{'pair value'}->{$file_name_by_sub}
-		= $cc
-	    }	    ##take out tokens now that they have served their purpose...
-	}
-    }
-}
-
-
-#don't need anymore
-#Returns a hash representing a single subroutine. keys are files, values are hashes of the token frequencies.
-sub get_sub_code_by_file {
-    my ($sub_name, $data) = @_;
-    my %code_of_sub_variations;
-    foreach my $file ( keys %$data ) {
-	foreach my $my_sub_name ( keys %{ $data->{$file} } ) {
-	    if ( $sub_name eq $my_sub_name ) {
-		$code_of_sub_variations{$file}
-		= $data->{$file}->{$my_sub_name}->{'tokens'};
-	    }
-	}
-    }
-    return %code_of_sub_variations;
-}
-
-
-#cc part
-# my %cc_by_sub_name;
-# foreach my $sub_name (@sub_names) {
-
-#don't need anymore
-#     %code_of_sub_variations = get_sub_code_by_file($sub_name, $data);
-#     my $sub_cc = cc_all_combos(%code_of_sub_variations);
-#     insert_cc(%code_by_sub_variations, f
-#     $data{$file1}{$sub_name}{'other files'}{$file2}{$cc}
-#     #$cc_by_sub_name{$sub_name} = $sub_cc
-#         if %$sub_cc;    #gets rid of subs used in only one file.
-# }
-
-
-# Takes a hash representing a single subroutine. keys are files, values are hashes of the token frequencies.
-# Returns a hash with keys being a filename pointing to a hash whose keys are another filename and whose value is the token comparison for the sub between those two files.
-# So to retieve the difference between file2 and file3, do $hash{file2}{file3} or $hash{file3}{file2}.
- 
-
-
+remove_token_keys($data);
 
 
 {
     local $Data::Dumper::Maxdepth = 4;
-    print {$OUTH} Dumper $data;
-    exit;
+    #print {$OUTH} Dumper $data;
+    #exit;
 }
 
 
-sub _extract_files_by_sub {
-    my ($sub_name, $data) = @_;
-
-    # all files that define current sub
-    my @file_names_by_sub;
-    foreach my $file_name (extract_file_names ($data) ) {
-        if ( exists $data->{$file_name}->{$sub_name} ) {
-            push @file_names_by_sub, $file_name;
-        }
-    }
-    return @file_names_by_sub;
-}
-
-##should I unify %$data and %cc_by_sub_name? done!
+auto_module( "/home/jgraff/workspace/bisulfite/trunk/module_test.pm" );  
 
 
-#auto_module( \%cc_by_sub_name,
-#    "/home/jgraff/workspace/bisulfite/trunk/module_test.pm" );
 
-#my %thing = subs_of_interest(1, \%cc_by_sub_name, @sub_names);
-#my %thing = subs_of_interest(@sub_names,);
+  
 
-#print Dumper \%thing; exit;
-#print Dumper \%cc_by_sub_name;
+
 
 ##More stuff to do: add mode switches for table, subs of interest, and implement auto-generation of modules
 #subs of interest thing should take a tolerance (0 - 1) and return all files/subs that exceed that number. Output: lists of subnames/filenames.
 #auto-gen modules: find cases where correlation is perfect, and put those into a single module.
 #Turn the whole thing into a module, make methods instead of modes.
 
-
-#I should examine the output more closely and make sure it matches up with the numbers.
-sub auto_module {  # fix this now that cc_by_sub_name id gone.
-    my ( $cc_by_sub_name, $module_file ) = @_;
-    my %cc_by_sub_name = %$cc_by_sub_name;
-    my %cced_sub_code  = _get_perfect_cc_subs(%cc_by_sub_name);
-    unlink $module_file;
-    _create_module( $module_file, sort keys %cced_sub_code )
-        unless -e $module_file;
-    _add_to_module( $_, $module_file ) foreach sort values %cced_sub_code;
-}
 
 
 sub _meta_options {
@@ -233,15 +152,6 @@ sub load_files {
     return \%data;
 }
 
-
-
-
-
-
-
-
-
-
 sub extract_file_names {
     my ($data) = @_;
 
@@ -265,30 +175,82 @@ sub extract_sub_names {
     return @sub_names;
 }
 
-sub _get_perfect_cc_subs {
-    my (%cc_by_sub_name) = @_;
-    my %cced_sub_code;
-    for my $sub_name ( keys %cc_by_sub_name ) {
-        my @files = keys %{ $cc_by_sub_name{$sub_name} };
-        my $file1 = $files[0];
-        for my $cc ( values %{ $cc_by_sub_name{$sub_name}{$file1} } ) {
-            if ( $cc == 1 ) {
-                my $code = $data->{$file1}{$sub_name}{'code'};
-                $cced_sub_code{$sub_name} = $code;
-                last;
-            }
+
+sub _extract_files_by_sub {
+    my ($sub_name, $data) = @_;
+
+    # all files that define current sub
+    my @file_names_by_sub;
+    foreach my $file_name (extract_file_names ($data) ) {
+        if ( exists $data->{$file_name}->{$sub_name} ) {
+            push @file_names_by_sub, $file_name;
         }
+    }
+    return @file_names_by_sub;
+}
+
+sub _insert_pair_values {
+    my ($sub_name, @file_names_by_sub) = @_;
+    foreach my $file_name_by_sub (@file_names_by_sub) {
+	foreach my $file_name (extract_file_names ($data)) {
+	    if (exists $data->{$file_name}->{$sub_name} and 
+		$file_name ne $file_name_by_sub) {       
+		my $cc = cross_correlation($data->{$file_name}->{$sub_name}->{'tokens'}, $data->{$file_name_by_sub}->{$sub_name}->{'tokens'});   #changed for cc
+		$data->{$file_name}->{$sub_name}->{'pair value'}->{$file_name_by_sub}
+		= $cc
+	    }	    ##take out tokens now that they have served their purpose...
+	}
+    }
+}
+
+sub remove_token_keys {
+    my ($data) = @_;
+    for my $file (@file_names) {
+	for my $sub_name (keys %{$data->{$file}}) {
+	    delete $data->{$file}{$sub_name}{'tokens'};
+	}
+    }
+}
+
+
+#I should examine the output more closely and make sure it matches up with the numbers.
+sub auto_module {  
+    my ( $module_file ) = @_;    
+    my %cced_sub_code  = _get_perfect_cc_subs($data);
+    unlink $module_file;
+    _create_module( $module_file, sort keys %cced_sub_code )
+        unless -e $module_file;
+    _add_to_module( $_, $module_file ) foreach sort values %cced_sub_code;
+}
+sub _get_perfect_cc_subs {  #this returns only one version of each sub, even when there are multiple. problem?
+    my ($data) = @_;
+    my %cced_sub_code;
+    for my $file1 (@file_names) {	
+	for my $sub_name (@sub_names) {
+	    my @files = keys %{ $data->{$file1}{$sub_name}{'pair value'} };
+	    for my $cc ( values %{ $data->{$file1}{$sub_name}{'pair value'}}) {		
+		if ( $cc == 1 ) {
+		    my $code = $data->{$file1}{$sub_name}{'code'};
+		    unless (exists $cced_sub_code{$sub_name}) {
+			$cced_sub_code{$sub_name} = $code;
+		    }
+		    #else {
+		#	$cced_sub_code{join '', ($sub_name, 1)} = delete $cced_sub_code{$sub_name}; 
+		#	$cced_sub_code{join '', ($sub_name, 2)} = $code;
+		 #   } 		    		
+		last;
+		}
+	    }
+	}
     }
     return %cced_sub_code;
 }
-
 sub _add_to_module {
     my ( $code, $module ) = @_;
     open my $MODULE, '>>', $module or croak "Can't open $module: $!";
     print $MODULE "\n$code\n";
     close $MODULE or croak "Can't close $module: $!";
 }
-
 sub _create_module {
     my ( $file, @sub_names ) = @_;
     open my $FILE, '>', $file or croak "Can't open $file: $!";
@@ -299,6 +261,8 @@ sub _create_module {
 
     close $FILE or croak "Can't close $file: $!";
 }
+
+
 
 #####This needs improvement! The groups are repeated w/ diff permutations. Possibly rethink approach.
 
@@ -330,6 +294,82 @@ sub subs_of_interest {
     return %subs_of_interest;
 }
 
+
+
+
+sub cross_correlation {
+    my ( $tokens1, $tokens2 ) = @_;
+
+    my %all_tokens = map { $_ => 0 } ( keys %$tokens1, keys %$tokens2 );
+    my ( @vec1, @vec2 );
+
+    for my $token ( keys %all_tokens ) {
+
+        $tokens1->{$token} = 0 unless $tokens1->{$token};
+        $tokens2->{$token} = 0 unless $tokens2->{$token};
+
+        push @vec1, $tokens1->{$token};
+        push @vec2, $tokens2->{$token};
+    }
+
+    my $cc = correlation( vector(@vec1), vector(@vec2) );
+    return "$cc";
+}
+
+
+#takes a sub_node object, returns a ref to a hash of token frequencies
+sub token_frequency {
+    my ($sub_node) = @_;
+
+    my @tokens = $sub_node->find(
+        sub {
+            $_[1]->isa('PPI::Token')
+                and not $_[1]->isa('PPI::Token::Whitespace');
+        }
+    );
+    my %freqs;
+    $freqs{ join "\t", ref($_), $_->content }++ for @{ $tokens[0] };
+    return \%freqs;
+}
+
+sub print_table {
+##print out a table showing which files contain which subroutines.
+    my ( @sub_names, @file_names, $data ) = @_;
+    print join( "\t", q{}, @sub_names ), "\n";
+
+    foreach my $file_name (@file_names) {
+        print $file_name, "\t";
+        foreach my $sub_name (@sub_names) {
+            if ( $data->{$file_name}->{$sub_name} ) {
+                print q{*};
+            }
+            else { print q{}; }
+            print "\t";
+        }
+        print "\n";
+    }
+}
+
+
+
+
+
+
+
+
+#############################################################################
+
+#OBSOLETE
+sub norm {
+    my ( $string, @strings ) = @_;
+    my $longest = max( map {length} @strings );
+    until ( length $string == $longest ) {
+        $string = "$string ";
+    }
+    return $string;
+}
+
+#OBSOLETE
 # Takes a hash representing a single subroutine. keys are files, values are hashes of the token frequencies.
 # Returns a hash with keys being a filename pointing to a hash whose keys are another filename and whose value is the token comparison for the sub between those two files.
 # So to retieve the difference between file2 and file3, do $hash{file2}{file3} or $hash{file3}{file2}.
@@ -358,66 +398,37 @@ sub cc_all_combos {
  }
 
 
-sub cross_correlation {
-    my ( $tokens1, $tokens2 ) = @_;
-
-    my %all_tokens = map { $_ => 0 } ( keys %$tokens1, keys %$tokens2 );
-    my ( @vec1, @vec2 );
-
-    for my $token ( keys %all_tokens ) {
-
-        $tokens1->{$token} = 0 unless $tokens1->{$token};
-        $tokens2->{$token} = 0 unless $tokens2->{$token};
-
-        push @vec1, $tokens1->{$token};
-        push @vec2, $tokens2->{$token};
+#OBSOLETE
+#Returns a hash representing a single subroutine. keys are files, values are hashes of the token frequencies.
+sub get_sub_code_by_file {
+    my ($sub_name, $data) = @_;
+    my %code_of_sub_variations;
+    foreach my $file ( keys %$data ) {
+	foreach my $my_sub_name ( keys %{ $data->{$file} } ) {
+	    if ( $sub_name eq $my_sub_name ) {
+		$code_of_sub_variations{$file}
+		= $data->{$file}->{$my_sub_name}->{'tokens'};
+	    }
+	}
     }
-
-    my $cc = correlation( vector(@vec1), vector(@vec2) );
-    return "$cc";
+     return %code_of_sub_variations;
 }
 
-#takes a sub_node object, returns a ref to a hash of token frequencies
-sub token_frequency {
-    my ($sub_node) = @_;
 
-    my @tokens = $sub_node->find(
-        sub {
-            $_[1]->isa('PPI::Token')
-                and not $_[1]->isa('PPI::Token::Whitespace');
-        }
-    );
-    my %freqs;
-    $freqs{ join "\t", ref($_), $_->content }++ for @{ $tokens[0] };
-    return \%freqs;
-}
+#OBSOLETE
+#cc part
+# my %cc_by_sub_name;
+# foreach my $sub_name (@sub_names) {
+#     %code_of_sub_variations = get_sub_code_by_file($sub_name, $data);
+#     my $sub_cc = cc_all_combos(%code_of_sub_variations);
+#     insert_cc(%code_by_sub_variations, f
+#     $data{$file1}{$sub_name}{'other files'}{$file2}{$cc}
+#     #$cc_by_sub_name{$sub_name} = $sub_cc
+#         if %$sub_cc;    #gets rid of subs used in only one file.
+# }
 
-sub norm {
-    my ( $string, @strings ) = @_;
-    my $longest = max( map {length} @strings );
-    until ( length $string == $longest ) {
-        $string = "$string ";
-    }
-    return $string;
-}
 
-sub print_table {
-##print out a table showing which files contain which subroutines.
-    my ( @sub_names, @file_names, $data ) = @_;
-    print join( "\t", q{}, @sub_names ), "\n";
 
-    foreach my $file_name (@file_names) {
-        print $file_name, "\t";
-        foreach my $sub_name (@sub_names) {
-            if ( $data->{$file_name}->{$sub_name} ) {
-                print q{*};
-            }
-            else { print q{}; }
-            print "\t";
-        }
-        print "\n";
-    }
-}
 
 __DATA__
 
