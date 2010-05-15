@@ -35,6 +35,7 @@ remove_token_keys($data);
 
 {
     local $Data::Dumper::Maxdepth = 4;
+#    die Dumper $data->{'extract_sequences.pl'}{'index_fasta'}{'pair value'}; 
     #print {$OUTH} Dumper $data;
     #exit;
 }
@@ -198,7 +199,7 @@ sub _insert_pair_values {
 		my $cc = cross_correlation($data->{$file_name}->{$sub_name}->{'tokens'}, $data->{$file_name_by_sub}->{$sub_name}->{'tokens'});   #changed for cc
 		$data->{$file_name}->{$sub_name}->{'pair value'}->{$file_name_by_sub}
 		= $cc
-	    }	    ##take out tokens now that they have served their purpose...
+	    }	    
 	}
     }
 }
@@ -220,31 +221,46 @@ sub auto_module {
     unlink $module_file;
     _create_module( $module_file, sort keys %cced_sub_code )
         unless -e $module_file;
-    _add_to_module( $_, $module_file ) foreach sort values %cced_sub_code;
+    _add_to_module( $cced_sub_code{$_}, $module_file ) foreach sort keys %cced_sub_code;
 }
-sub _get_perfect_cc_subs {  #this returns only one version of each sub, even when there are multiple. problem?
+sub _get_perfect_cc_subs {     #This is returning multiple subs that are the same. problem? (I don't see how not to do that)
     my ($data) = @_;
     my %cced_sub_code;
-    for my $file1 (@file_names) {	
-	for my $sub_name (@sub_names) {
-	    my @files = keys %{ $data->{$file1}{$sub_name}{'pair value'} };
-	    for my $cc ( values %{ $data->{$file1}{$sub_name}{'pair value'}}) {		
-		if ( $cc == 1 ) {
-		    my $code = $data->{$file1}{$sub_name}{'code'};
-		    unless (exists $cced_sub_code{$sub_name}) {
+    for my $sub_name (@sub_names) {    
+	my $highest = 0;
+	my @matched_files;
+	for my $file1 (@file_names) {		
+	    for my $file2 ( keys %{ $data->{$file1}{$sub_name}{'pair value'}}) {		
+		my $cc = $data->{$file1}{$sub_name}{'pair value'}{$file2};
+		unless ( $cc != 1 or scalar grep /^($file1|$file2)$/, @matched_files) {     #checks to make sure the cc is perfect, and neither of the two files has been matched previously for that sub.
+		                                                                             #The grep thing helped a lot, but there are still a few doubles getting past.
+		    push @matched_files, $file1, $file2;
+		    my $code = $data->{$file1}{$sub_name}{'code'};		    
+		    $code =~ s/./#$file1 \ns/; #comment specifying one file that it came from. If needed, the others can be found with this info.
+		    if (exists $cced_sub_code{join '_', $sub_name, 1}) {			
+			my $new_num = 1 + $highest;
+			$code =~ s/sub ([^\s(]+)/sub $1_$new_num/;					
+			$cced_sub_code{join '_', $sub_name, $new_num} = $code;
+			$highest++;			
+		    }		
+		    elsif (exists $cced_sub_code{$sub_name}) { 		  #second time only
+			my $new_code = delete $cced_sub_code{$sub_name}; 		    
+			$new_code =~ s/sub ([^\s(]+)/sub $1_1/;		
+			$cced_sub_code{join '_', $sub_name, 1} = $new_code;			                       
+			redo;
+		    } 
+		    else {
 			$cced_sub_code{$sub_name} = $code;
+			$highest = 1;
 		    }
-		    #else {
-		#	$cced_sub_code{join '', ($sub_name, 1)} = delete $cced_sub_code{$sub_name}; 
-		#	$cced_sub_code{join '', ($sub_name, 2)} = $code;
-		 #   } 		    		
-		last;
-		}
-	    }
-	}
+		    last;
+		}        
+	    }		    		
+	}   
     }
     return %cced_sub_code;
 }
+
 sub _add_to_module {
     my ( $code, $module ) = @_;
     open my $MODULE, '>>', $module or croak "Can't open $module: $!";
@@ -264,7 +280,7 @@ sub _create_module {
 
 
 
-#####This needs improvement! The groups are repeated w/ diff permutations. Possibly rethink approach.
+#####This needs improvement! The groups are repeated w/ diff permutations. Possibly rethink approach. also broken now that subs_of_interest is gone.
 
 #returns a hash, keys are sub names, values is an array of files.
 #I can easily change this back to an array.
@@ -356,7 +372,7 @@ sub print_table {
 
 
 
-
+#TRASH
 #############################################################################
 
 #OBSOLETE
@@ -413,6 +429,32 @@ sub get_sub_code_by_file {
     }
      return %code_of_sub_variations;
 }
+
+
+			#one way - add subs in sequentially
+sub method1 {
+    my ($cced_sub_code, $sub_name, $code, $highest) = @_;
+    my $new_num = 1 + $highest;
+    $code =~ s/sub ([^\s(]+)/sub $1_$new_num/;					
+    $cced_sub_code->{join '_', $sub_name, $new_num} = $code;
+}		       
+
+
+			#another way - add a new sub as 1, and shift all the others up.
+sub method2 {
+    my ($cced_sub_code, $sub_name, $code) = @_;
+    for my $sub_name_2 (reverse sort keys %$cced_sub_code) {
+	if ($sub_name_2 =~ m/$sub_name/) {
+	    my $new_sub_name = $sub_name_2;;
+	    $new_sub_name =~ s/(\d+)$/$1+1/e;
+	    $cced_sub_code->{$new_sub_name} = delete $cced_sub_code->{$sub_name_2};
+	    $cced_sub_code->{$new_sub_name} =~ s/(\d+)([\s(])/join '', $1+1, $2/e;											     
+	}
+    }			
+    $code =~ s/sub ([^\s(]+)/sub $1_1/;		
+    $cced_sub_code->{$sub_name} = $code;	
+}
+
 
 
 #OBSOLETE
