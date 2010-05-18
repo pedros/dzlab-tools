@@ -84,6 +84,7 @@ sub read_eland_3 {
 
     carp $eland and return unless defined $1 and defined $2 and defined $3;
 
+    $chr   =~ s/://;
     $coord  = $1;
     $strand = q{F} eq $2 ? q{+} : q{-};
     $mm     = $3;
