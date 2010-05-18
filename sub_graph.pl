@@ -35,17 +35,16 @@ remove_token_keys($data);
 
 {
     local $Data::Dumper::Maxdepth = 4;
-#    die Dumper $data->{'extract_sequences.pl'}{'index_fasta'}{'pair value'}; 
+    #die Dumper $data->{'extract_sequences.pl'}{'index_fasta'}{'pair value'}; 
     #print {$OUTH} Dumper $data;
     #exit;
 }
 
 
+#show_cc_by_sub();
 auto_module( "/home/jgraff/workspace/bisulfite/trunk/module_test.pm" );  
+#print Dumper subs_of_interest(1);
 
-
-
-  
 
 
 
@@ -217,47 +216,44 @@ sub remove_token_keys {
 #I should examine the output more closely and make sure it matches up with the numbers.
 sub auto_module {  
     my ( $module_file ) = @_;    
-    my %cced_sub_code  = _get_perfect_cc_subs($data);
+    my %cced_sub_code  = _get_perfect_sub_code($data);
     unlink $module_file;
     _create_module( $module_file, sort keys %cced_sub_code )
         unless -e $module_file;
     _add_to_module( $cced_sub_code{$_}, $module_file ) foreach sort keys %cced_sub_code;
 }
-sub _get_perfect_cc_subs {     #This is returning multiple subs that are the same. problem? (I don't see how not to do that)
+
+
+sub _get_perfect_sub_code {     #This is good!
     my ($data) = @_;
     my %cced_sub_code;
-    for my $sub_name (@sub_names) {    
+    my %perfect_sub_groups = get_perfect_cc_subs($data);
+    for my $sub_name (keys %perfect_sub_groups) {    
 	my $highest = 0;
 	my @matched_files;
-	for my $file1 (@file_names) {		
-	    for my $file2 ( keys %{ $data->{$file1}{$sub_name}{'pair value'}}) {		
-		my $cc = $data->{$file1}{$sub_name}{'pair value'}{$file2};
-		unless ( $cc != 1 or scalar grep /^($file1|$file2)$/, @matched_files) {     #checks to make sure the cc is perfect, and neither of the two files has been matched previously for that sub.
-		                                                                             #The grep thing helped a lot, but there are still a few doubles getting past.
-		    push @matched_files, $file1, $file2;
-		    my $code = $data->{$file1}{$sub_name}{'code'};		    
-		    $code =~ s/./#$file1 \ns/; #comment specifying one file that it came from. If needed, the others can be found with this info.
-		    if (exists $cced_sub_code{join '_', $sub_name, 1}) {			
-			my $new_num = 1 + $highest;
-			$code =~ s/sub ([^\s(]+)/sub $1_$new_num/;					
-			$cced_sub_code{join '_', $sub_name, $new_num} = $code;
-			$highest++;			
-		    }		
-		    elsif (exists $cced_sub_code{$sub_name}) { 		  #second time only
-			my $new_code = delete $cced_sub_code{$sub_name}; 		    
-			$new_code =~ s/sub ([^\s(]+)/sub $1_1/;		
-			$cced_sub_code{join '_', $sub_name, 1} = $new_code;			                       
-			redo;
-		    } 
-		    else {
-			$cced_sub_code{$sub_name} = $code;
-			$highest = 1;
-		    }
-		    last;
-		}        
-	    }		    		
-	}   
-    }
+	for my $group (@{$perfect_sub_groups{$sub_name}}) {		
+	    my $file = @$group[0];				
+	    my $code = $data->{$file}{$sub_name}{'code'};		    
+	    $code =~ s/./#@$group\ns/;                           #comment specifying files that it came from
+	    if (exists $cced_sub_code{join '_', $sub_name, 1}) {			
+		my $new_num = 1 + $highest;
+		$code =~ s/sub ([^\s(]+)/sub $1_$new_num/;					
+		$cced_sub_code{join '_', $sub_name, $new_num} = $code;
+		$highest++;			
+	    }		
+	    elsif (exists $cced_sub_code{$sub_name}) { 	   	  #second time only
+		my $new_code = delete $cced_sub_code{$sub_name}; 		    
+		$new_code =~ s/sub ([^\s(]+)/sub $1_1/;		
+		$cced_sub_code{join '_', $sub_name, 1} = $new_code;			                       
+		redo;
+	    } 
+	    else {
+		$cced_sub_code{$sub_name} = $code;
+		$highest = 1;
+	    }
+	}        
+    }		    		
+
     return %cced_sub_code;
 }
 
@@ -280,33 +276,31 @@ sub _create_module {
 
 
 
-#####This needs improvement! The groups are repeated w/ diff permutations. Possibly rethink approach. also broken now that subs_of_interest is gone.
 
-#returns a hash, keys are sub names, values is an array of files.
-#I can easily change this back to an array.
-sub subs_of_interest {
-    my ( $tolerance, $cc_by_sub_name, @sub_names ) = @_;
-    my %cc_by_sub_name = %$cc_by_sub_name;
+sub get_perfect_cc_subs {       #Only works for a tolerance of 1.  In order to make it work for others, it would have to return many permutations, which we don't want. 
+                                #Perhaps if I didn't do it by groups, but just did it one-to-one? But then it wouldn't be compatible with get_perfect_sub_code.
+    my ($data) = @_;
+    my %cced_sub_code;
     my %subs_of_interest;
-    for my $sub_name ( keys %cc_by_sub_name ) {
-        my @groups;
-        my @done;
-        for my $file1 ( keys %{ $cc_by_sub_name{$sub_name} } ) {
-            my @files = ($file1);
-            for my $file2 ( keys %{ $cc_by_sub_name{$sub_name}{$file1} } ) {
-                my $cc = $cc_by_sub_name{$sub_name}{$file1}{$file2};
-                push @files, $file2
-                    unless $cc < $tolerance
-                        or grep /$file2/, @done;
-                push @done, $file1;
-            }
-            push @groups, \@files
-                if scalar @files > 1
-            ; #if there's only one element, there are no matches for the given tolerance.
-        }
-        $subs_of_interest{$sub_name} = \@groups;
-
-    }
+    for my $sub_name (@sub_names) {    
+	my $highest = 0;
+	my @matched_files;
+	my @groups;
+	for my $file1 (@file_names) {	
+	    my @files = ($file1);
+	    for my $file2 ( keys %{ $data->{$file1}{$sub_name}{'pair value'}}) {		
+		my $cc = $data->{$file1}{$sub_name}{'pair value'}{$file2};				
+		if ( $cc == 1 and not grep /^($file1|$file2)$/, @matched_files) {     #checks to make sure the cc is high enough, and neither of the two files has been matched previously for that sub.
+		    push @files, $file2;
+		    push @matched_files, $file2;		    
+		}		
+	    }
+	    push @groups, \@files
+		if scalar @files > 1;
+	}
+	$subs_of_interest{$sub_name} = \@groups
+	    if scalar @groups > 0;
+    }   
     return %subs_of_interest;
 }
 
@@ -366,6 +360,19 @@ sub print_table {
     }
 }
 
+
+
+sub show_cc_by_sub {
+    my %cc_by_sub;
+    for my $file1 (@file_names) {
+	for my $sub_name (keys %{$data->{$file1}}) {
+	    for my $file2 (keys %{$data->{$file1}{$sub_name}{'pair value'}}) {
+		my $cc = $data->{$file1}{$sub_name}{'pair value'}{$file2};
+		$cc_by_sub{$sub_name}{$file1}{$file2} = $cc;
+	    }}}
+    print Dumper \%cc_by_sub;
+    exit;
+}
 
 
 
