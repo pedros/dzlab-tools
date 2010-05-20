@@ -41,9 +41,10 @@ my $result = GetOptions(
 );
 
 my %scoring_dispatch = (
-    meth    => \&fractional_methylation,
-    average => \&average_scores,
-    sum     => \&sum_scores,
+    meth     => \&fractional_methylation,
+    average  => \&average_scores,
+    sum      => \&sum_scores,
+    seq_freq => \&seq_freq,
 );
 
 # Check required command line parameters
@@ -144,6 +145,11 @@ WINDOW:
                 map { "$_=" . sprintf( "%g", $scores_ref->{$_} ) }
                 sort keys %{$scores_ref};
 
+        }
+        elsif ( ref $scores_ref eq 'ARRAY' ) {
+            $score = q{.};
+            $attribute = "ID=$locus; " if $locus;
+            $attribute .= join q{; }, @$scores_ref;
         }
         elsif ($no_skip) {
             $score = q{.};
@@ -370,6 +376,44 @@ COORD:
     }
 }
 
+sub seq_freq {
+    my ($brs_iterator) = @_;
+
+    my ( $seq_freq, $seq_count ) = ( undef, 0 );
+
+  COORD:
+    while ( my $gff_line = $brs_iterator->() ) {
+        next COORD unless ref $gff_line eq 'HASH';
+
+        my ($sequence) = $gff_line->{attribute} =~ m/seq=(\w+)/;
+        my @sequence   = split //, $sequence;
+
+        for my $i (0 .. @sequence - 1) {
+
+            for (qw/a c g t/) {
+                $seq_freq->[$i]{$_} = 0 unless exists $seq_freq->[$i]{$_}
+            }
+        
+            $seq_freq->[$i]{lc $sequence[$i]}++
+        }
+
+        $seq_count++;
+    }
+
+    my @attribute;
+    my $i = 1;
+    for my $position (@$seq_freq) {
+        push @attribute,
+        $i++ . q{=} . join q{,}, map {
+            $position->{$_}
+        } sort keys %$position;
+    }
+
+    if ($seq_freq) {
+        return \@attribute;
+    }
+}
+
 sub average_scores {
     my ($brs_iterator) = @_;
 
@@ -564,7 +608,7 @@ sub make_gff_iterator {
  
  -w, --width       sliding window width                                  (default: 50, integer)
  -s, --step        sliding window interval                               (default: 50, integer)
- -c, --scoring     score computation scheme                              (default: meth, string [available: meth, average, sum])
+ -c, --scoring     score computation scheme                              (default: meth, string [available: meth, average, sum, seq_freq])
  -m, --merge       merge this feature as belonging to same locus         (default: no, string [eg: exon])
  -n, --no-sort     GFFv3 data assumed sorted by start coordinate         (default: no)
  -k, --no-skip     print windows or loci for which there is no coverage  (deftaul: no)
