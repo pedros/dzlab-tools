@@ -14,20 +14,24 @@ my $use_max_win = 0;
 my $distance    = 0;
 my $tss         = 0;
 my $id          = 'ID';
+my $use_strand;
+my $default_locus; 
 my $output;
 
 my $result = GetOptions (
-    'reference|r=s' => \$reference,
-    'filter|f=i{2}' => \@filter,
-    'use-max-win|w' => \$use_max_win,
-    'distance|d=i'  => \$distance,
-    'tss|t'         => \$tss,
-    'id|i=s'        => \$id,
-    'output|o=s'    => \$output,
-    'verbose|v'     => sub { use diagnostics; },
-    'quiet|q'       => sub { no warnings; },
-    'help|h'        => sub { pod2usage ( -verbose => 1 ); },
-    'manual|m'      => sub { pod2usage ( -verbose => 2 ); }
+    'reference|r=s'     => \$reference,
+    'filter|f=i{2}'     => \@filter,
+    'use-max-win|w'     => \$use_max_win,
+    'distance|d=i'      => \$distance,
+    'tss|t'             => \$tss,
+    'id|i=s'            => \$id,
+    'default-locus|l=s' => \$default_locus,
+    'usr-strand|s'      => \$use_strand,
+    'output|o=s'        => \$output,
+    'verbose|v'         => sub { use diagnostics; },
+    'quiet|q'           => sub { no warnings; },
+    'help|h'            => sub { pod2usage ( -verbose => 1 ); },
+    'manual|m'          => sub { pod2usage ( -verbose => 2 ); }
 );
 
 # Check required command line parameters
@@ -61,9 +65,9 @@ while (<>) {
     if ($distance) {
         my $center = $tss ? ( $site{strand} eq q{-} ? $site{end} : $site{start} )
                           : int ($length / 2) + $site{start};
-        $site{start} = $center - ($distance / 2);
+        $site{start} = $center - int ($distance / 2);
         $site{start} = 0 if $site{start} < 0;
-        $site{end}   = $center + ($distance / 2);
+        $site{end}   = $center + int ($distance / 2);
         $length      = $distance;
     }
 
@@ -76,11 +80,24 @@ while (<>) {
     my ($attribute)
     = $site{attribute} =~ m/(?:\*|$id[\s=]?)([\w]+)/;
 
-    $attribute ||= 'unknown_locus';
+    $attribute ||= $default_locus // 'unknown_locus';
 
-    print ">$attribute|$site{seqname}:$site{start}:$site{end}\n";
-    print substr $reference{$site{seqname}}, ($site{start} - 1), ($length);
-    print "\n";
+    {
+        my ($seqname, $start) = @site{qw/seqname start/};
+        my $sequence = substr $reference{$seqname}, ($start - 1), $length;
+
+        if ($use_strand and q{-} eq $site{strand}) {
+            $sequence = reverse $sequence;
+            $sequence =~ tr/ACGTacgt/TGCAtgca/; 
+            $sequence =~ s/\w$//;
+        }
+        elsif ($use_strand) {
+            $sequence =~ s/^\w//;
+        }
+
+        print '>', $attribute ? "$attribute|" : '', "$site{seqname} $site{start}:$site{end}:$site{strand}\n";
+        print "$sequence\n"
+    }
 }
 
 
