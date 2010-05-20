@@ -15,6 +15,7 @@ my $distance    = 0;
 my $tss         = 0;
 my $id          = 'ID';
 my $use_strand;
+my $gff;
 my $default_locus; 
 my $output;
 
@@ -27,6 +28,7 @@ my $result = GetOptions (
     'id|i=s'            => \$id,
     'default-locus|l=s' => \$default_locus,
     'usr-strand|s'      => \$use_strand,
+    'gff|g'             => \$gff,
     'output|o=s'        => \$output,
     'verbose|v'         => sub { use diagnostics; },
     'quiet|q'           => sub { no warnings; },
@@ -95,8 +97,20 @@ while (<>) {
             $sequence =~ s/^\w//;
         }
 
-        print '>', $attribute ? "$attribute|" : '', "$site{seqname} $site{start}:$site{end}:$site{strand}\n";
-        print "$sequence\n"
+        if ($gff) {
+            print join( "\t",
+                        $site{seqname}, 'dz',       "$site{feature}_seq",
+                        $site{start},   $site{end}, q{.},
+                        $site{strand},  q{.},       "seq=$sequence",
+                    ), "\n";
+        }
+        else {
+            print '>',$attribute
+            ? "$attribute|"
+            : '',
+            "$site{seqname} $site{start}:$site{end}:$site{strand}\n";
+            print "$sequence\n"
+        }
     }
 }
 
