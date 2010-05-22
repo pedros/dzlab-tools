@@ -19,14 +19,14 @@ my $fields = {
     subs          => [],
     pair_values   => 1,
     keep_tokens   => 0,
-    _internal_var => 1,
 };
 
 
 #### data-handling methods ####
 
 
-#I'm thinking it makes more sense to just initialize it, then load everything with the load method.
+#Only initializes the object. load everything with the load method.
+#files can be passed here, or later to load.
 sub new {
     my ($class, %args) = @_;
     my $self = bless $fields, ref $class ? ref $class : $class;
@@ -43,23 +43,23 @@ sub new {
 # uses obj->files unless it is passed files as args.
 sub load {
     my ($self, @files) = @_;    
-
-
     return 
 	unless @files or ($self->files and 'ARRAY' eq ref $self->files);
-    die Dumper $self;         ##Why is this empty??!!
+    
     $self->_set_files_instance_var(\@files);
 
     @files = $self->files;
 
     $self->_load_files(@files);
-
-    $self->_set_subs_instance_var(_extract_sub_names $self->{data});  # for easy reference
+    
+    my $data = $self->{data};
+    $self->_set_subs_instance_var(_extract_sub_names($data) );   # for easy reference
     
     $self->insert_pair_values
-	unless $self->no_pair_values('?');
+	unless $self->no_pair_values;
+    
     $self->_remove_token_keys
-	unless $self->keep_tokens('?');
+	unless $self->keep_tokens;
 
     return $self;
 }
@@ -68,21 +68,21 @@ sub load {
 #should I call this automatically?
 #put pair_value key into sub hash.
 sub insert_pair_values {
-    my ($data) = @_;
-    foreach my $sub_name ($data->subs) {
-	my @file_names_by_sub = file_names($data, $sub_name);
+    my ($self) = @_;
+    foreach my $sub_name ($self->subs) {
+	my @file_names_by_sub = $self->files($sub_name);
 	foreach my $file_name_by_sub (@file_names_by_sub) {
-	    foreach my $file_name ($data->files) {
-		if (exists $data->{$file_name}->{$sub_name} and 
+	    foreach my $file_name ($self->files) {
+		if (exists $self->{data}{$file_name}->{$sub_name} and 
 		    $file_name ne $file_name_by_sub) {       
-		    my $cc = _cross_correlation($data->{$file_name}->{$sub_name}->{'tokens'}, $data->{$file_name_by_sub}->{$sub_name}->{'tokens'});  
-		    $data->{$file_name}->{$sub_name}->{'pair value'}->{$file_name_by_sub}
+		    my $cc = _cross_correlation($self->{data}{$file_name}{$sub_name}{'tokens'}, $self->{data}{$file_name_by_sub}{$sub_name}{'tokens'});  
+		    $self->{data}{$file_name}{$sub_name}{'pair value'}{$file_name_by_sub}
 		    = $cc
 		}	    
 	    }
 	}
     }
-    return $data;
+    return $self;
 }
 
 
@@ -91,9 +91,9 @@ sub insert_pair_values {
 
 #I should examine the output more closely and make sure it matches up with the numbers.
 sub auto_module {  
-    my ( $data, $module_file ) = @_;    
-    my %cced_sub_code  = _get_perfect_sub_code($data);
-    unlink $module_file;
+    my ( $self, $module_file ) = @_;    
+    my %cced_sub_code  = _get_perfect_sub_code($self);
+    unlink $module_file;  #for convienience
     _create_module( $module_file, sort keys %cced_sub_code )
         unless -e $module_file;
     _add_to_module( $cced_sub_code{$_}, $module_file ) foreach sort keys %cced_sub_code;
@@ -102,13 +102,13 @@ sub auto_module {
 
 sub print_table {
 ##print out a table showing which files contain which subroutines.
-    my ( $data ) = @_;
-    print join( "\t", q{}, $data->subs ), "\n";
+    my ( $self ) = @_;
+    print join( "\t", q{}, $self->subs ), "\n";
 
-    foreach my $file_name ($data->files) {
+    foreach my $file_name ($self->files) {
         print $file_name, "\t";
-        foreach my $sub_name ($data->subs) {
-            if ( $data->{$file_name}->{$sub_name} ) {
+        foreach my $sub_name ($self->subs) {
+            if ( $self->{data}{$file_name}->{$sub_name} ) {
                 print q{*};
             }
             else { print q{}; }
@@ -120,12 +120,13 @@ sub print_table {
 
 
 sub show_cc_by_sub {
-    my ($data) = @_;
+    my ($self) = @_;
     my %cc_by_sub;
-    for my $file1 ($data->files) {
-	for my $sub_name (keys %{$data->{$file1}}) {
-	    for my $file2 (keys %{$data->{$file1}{$sub_name}{'pair value'}}) {
-		my $cc = $data->{$file1}{$sub_name}{'pair value'}{$file2};
+
+    for my $file1 ($self->files) {
+	for my $sub_name (keys %{$self->{data}{$file1}}) {
+	    for my $file2 (keys %{$self->{data}{$file1}{$sub_name}{'pair value'}} ) {    #should be (keys $self->pair_value($sub_name, $file1)), but that doesn't work. why?
+		my $cc = $self->pair_value($sub_name, $file1, $file2);
 		$cc_by_sub{$sub_name}{$file1}{$file2} = $cc;
 	    }}}
     print Dumper \%cc_by_sub;
@@ -134,24 +135,59 @@ sub show_cc_by_sub {
 
 
 
+sub get_perfect_cc_subs {       #Only works for a tolerance of 1. In order to make it work for others, it would have to return many permutations, which we don't want. 
+                                 #Perhaps if I didn't do it by groups, but just did it one-to-one? But then it wouldn't be compatible with get_perfect_sub_code.
+    my ($self) = @_;
+    my %cced_sub_code;
+    my %subs_of_interest;
+    for my $sub_name ($self->subs) {    
+	my $highest = 0;
+	my @matched_files;
+	my @groups;
+	for my $file1 ($self->files) {	
+	    my @files = ($file1);
+	    for my $file2 (keys %{$self->{data}{$file1}{$sub_name}{'pair value'}} ) {   #should be (keys $self->pair_value($sub_name, $file1)), but that doesn't work. why?
+		my $cc = $self->pair_value($sub_name, $file1, $file2);
+		if ( $cc == 1 and not grep /^($file1|$file2)$/, @matched_files) {     #checks to make sure the cc is high enough, and neither of the two files has been matched previously for that sub.
+		    push @files, $file2;
+		    push @matched_files, $file2;		    
+		}		
+	    }
+	    push @groups, \@files
+		if scalar @files > 1;
+	}
+	$subs_of_interest{$sub_name} = \@groups
+	    if scalar @groups > 0;
+    }   
+    return %subs_of_interest;
+}
+
+
 
 #### Selectors / Mutators ####
 
 sub code {
     my ($self, $file, $sub_) = @_;
-    return $self->{$file}{$sub_}{'code'};
+    return $self->{data}{$file}{$sub_}{'code'};
 }
 
+
+#if not given a second file, returns the whole pair value hash for the given file and sub.
 sub pair_value {
     my ( $self, $sub_, $file1, $file2) = @_;
-    return $self->{$file1}{$sub_}{'pair value'}{$file2};
+    return $self->{data}{$file1}{$sub_}{'pair value'}{$file2} if defined $file2;
+    
+    return $self->{data}{$file1}{$sub_}{'pair value'};
 }
 
 #if given files, rets all subs defined in those files. If given no files, rets all subs defined in all files.
 sub subs {
     my ($self, @files) = @_;
-    return @{$self->{subs}}
-	unless scalar @files;
+    
+    unless (@files) {
+
+	return wantarray ? @{$self->{subs}} : $self->{subs};
+    }
     my @subs;
     for my $file (@files) {
 	push @subs, sort keys %{ $self->{data}{$file}};
@@ -163,35 +199,38 @@ sub subs {
 #rets all files the given subs are defined in. If given no subs, rets all files.
 sub files {
     my ($self, @subs) = @_;
-    return @{$self->{files}}
-	unless @subs;
-    die Dumper "SHIT!";
+
+    unless (@subs) {
+	return wantarray ? @{$self->{files}} : $self->{files};
+    }
+
     my @files;
     for my $sub_ (@subs) {	
 	for my $file (keys %{$self->{data}}) {	    
 	    push @files, $file
 		if exists $self->{data}{$file}{$sub_};        
 	}
-    }    
-    return sort @files;	    
+    }
+
+    return wantarray ? sort @files : [sort @files];
 }
 
 
 sub keep_comments{
-    my ($self, $query) = @_;
-    return $self->{keep_comments} if $query eq '?'; 
+    my ($self) = @_;
+    return $self->{keep_comments} unless wantarray; 
     $self->{keep_comments} = 1;
 }
 
 sub no_pair_values {
-    my ($self, $query) = @_;
-    return not $self->{pair_values} if $query eq '?';
+    my ($self) = @_;
+    return not $self->{pair_values} unless wantarray;
     $self->{pair_values} = 0;
 }
 
 sub keep_tokens {
-    my ($self, $query) = @_;
-    return $self->{keep_tokens} if $query eq '?';
+    my ($self) = @_;
+    return $self->{keep_tokens} unless wantarray;
     $self->{keep_tokens} = 1;
 }
 
@@ -204,7 +243,7 @@ sub _set_files_instance_var {
 
 	push @{$self->{files}}, @$files;
 	
-	return $files;
+	$files;
     }
 }
 
@@ -212,7 +251,7 @@ sub _set_files_instance_var {
 sub _set_subs_instance_var {
     my ($self, $subs) = @_;
     if (defined $subs and 'ARRAY' eq ref $subs) {
-	return $self->{subs} = @$subs;  
+	$self->{subs} = $subs;  
     }
 }
 
@@ -221,15 +260,15 @@ sub _set_subs_instance_var {
 
 
 sub _get_perfect_sub_code {
-    my ($data) = @_;
+    my ($self) = @_;
     my %cced_sub_code;
-    my %perfect_sub_groups = _get_perfect_cc_subs($data);
+    my %perfect_sub_groups = get_perfect_cc_subs($self);
     for my $sub_name (keys %perfect_sub_groups) {    
 	my $highest = 0;
 	my @matched_files;
 	for my $group (@{$perfect_sub_groups{$sub_name}}) {		
 	    my $file = @$group[0];				
-	    my $code = $data->{$file}{$sub_name}{'code'};		    
+	    my $code = $self->code($file, $sub_name);		    
 	    $code =~ s/./#@$group\ns/;                           #comment specifying files that it came from
 	    if (exists $cced_sub_code{join '_', $sub_name, 1}) {  		
 		my $new_num = 1 + $highest;
@@ -271,10 +310,10 @@ sub _create_module {
 }
 
 sub _remove_token_keys {
-    my ($data) = @_;
-    for my $file ($data->files) {
-	for my $sub_name (keys %{$data->{$file}}) {
-	    delete $data->{$file}{$sub_name}{'tokens'};
+    my ($self) = @_;
+    for my $file ($self->files) {
+	for my $sub_name (keys %{$self->{data}{$file}}) {
+	    delete $self->{data}{$file}{$sub_name}{'tokens'};
 	}
     }
 }
@@ -284,7 +323,7 @@ sub _extract_sub_names {
     my ($data) = @_;    
     my @sub_names;    
     foreach my $sub_hash ( values %$data ) {
-	
+
 	foreach my $sub_name ( keys %{$sub_hash} ) {
             push @sub_names, $sub_name;
         }
@@ -298,15 +337,13 @@ sub _extract_sub_names {
 
 sub _load_files {
     my ($self, @files) = @_;
-    die Dumper $files[1];
     foreach my $file (@files) {   
         # Load a document from a file
-        my $document = PPI::Document->new($file);
-	die ref $file;
+        my $document = PPI::Document->new($file);	
         # Strip out comments and documentation
 	$document->prune('PPI::Token::Pod');
         $document->prune('PPI::Token::Comment')
-	    unless $self->keep_comments('?');
+	    unless $self->keep_comments;
 
         # Find all the named subroutines
         my $sub_nodes = $document->find(
@@ -322,40 +359,10 @@ sub _load_files {
         } @$sub_nodes;
 
         my $file_name = fileparse $file;
-	die Dumper \%sub_names;
         $self->{data}{$file_name} = \%sub_names;
     }
 
     return $self;
-}
-
-
-
-sub _get_perfect_cc_subs {       #Only works for a tolerance of 1.  In order to make it work for others, it would have to return many permutations, which we don't want. 
-                                 #Perhaps if I didn't do it by groups, but just did it one-to-one? But then it wouldn't be compatible with get_perfect_sub_code.
-    my ($data) = @_;
-    my %cced_sub_code;
-    my %subs_of_interest;
-    for my $sub_name ($data->subs) {    
-	my $highest = 0;
-	my @matched_files;
-	my @groups;
-	for my $file1 ($data->files) {	
-	    my @files = ($file1);
-	    for my $file2 ( keys %{ $data->{$file1}{$sub_name}{'pair value'}}) {		
-		my $cc = $data->{$file1}{$sub_name}{'pair value'}{$file2};				
-		if ( $cc == 1 and not grep /^($file1|$file2)$/, @matched_files) {     #checks to make sure the cc is high enough, and neither of the two files has been matched previously for that sub.
-		    push @files, $file2;
-		    push @matched_files, $file2;		    
-		}		
-	    }
-	    push @groups, \@files
-		if scalar @files > 1;
-	}
-	$subs_of_interest{$sub_name} = \@groups
-	    if scalar @groups > 0;
-    }   
-    return %subs_of_interest;
 }
 
 
