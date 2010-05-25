@@ -1,5 +1,7 @@
 #!/usr/bin/perl
 
+## TODO: keep mm calls difference for both reads as a measure of quality
+
 use warnings;
 use strict;
 use Data::Dumper;
@@ -28,6 +30,8 @@ open my $A_IN, '<', $ARGV[0]
     or croak "Can't open $ARGV[0]: $!";
 open my $B_IN, '<', $ARGV[1] 
     or croak "Can't open $ARGV[1]: $!";
+
+unlink $ARGV[0], $ARGV[1];
 
 open my $A_NAME, '>', $ARGV[0]
     or croak "Can't write to $ARGV[0]: $!";

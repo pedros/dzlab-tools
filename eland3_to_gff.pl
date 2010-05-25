@@ -12,19 +12,14 @@ unless (@ARGV > 0) {
     pod2usage ( -verbose => 1 );
 }
 
-my $reference;
-
 # Grabs and parses command line options
 my $result = GetOptions (
-    'reference|r=s' => \$reference,
     'verbose|v' => sub { use diagnostics; },
     'quiet|q'   => sub { no warnings; },
     'help|h'    => sub { pod2usage ( -verbose => 1 ); },
     'manual|m'  => sub { pod2usage ( -verbose => 2 ); }
 );
 
-
-my %reference = %{ index_fasta ($reference) };
 
 while (<>) {
     chomp; # delete line feeds
@@ -42,9 +37,7 @@ while (<>) {
                     $eland{matches},
                     $eland{"strand$i"},
                     $eland{"mm$i"},
-                    
-
-
+                ), "\n";
 
     print ">$attribute $site{seqname}:$site{start}:$site{end}\n";
     print substr $reference{$site{seqname}}, ($site{start} - 1), ($length);

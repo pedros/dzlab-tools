@@ -1,432 +1,637 @@
-#!/usr/bin/perl
-use strict;
+#!/usr/bin/env perl
+
 use warnings;
-use diagnostics;disable diagnostics;
+use strict;
 use Data::Dumper;
-use Getopt::Long;
 use Carp;
+use Getopt::Long qw(:config bundling);
 use Pod::Usage;
 
-# Globals, passed as command line options
-my $gff_file = q{-};
-my $width    = 0;
-my $step     = 0;
-my $no_sort  = 0;
-my $no_skip  = 0;
-my @batch    = ();
-my $output   = q{-};
-my $verbose  = 0;
-my $quiet    = 0;
-
-my @argv = @ARGV;
+my $output;
+my $width   = 50;
+my $step    = 50;
+my $merge   = 0;
+my $no_sort = 0;
+my $no_skip = 0;
+my $scoring = 'meth';    # meth, average, or sum
+my $reverse = 0;         # reverse score and count
+my $gff;
+my $tag = 'ID';
+my $feature;
+my $absolute = 0;
 
 # Grabs and parses command line options
-my $result = GetOptions (
-    'gff-file|f=s' => \$gff_file,
+my $result = GetOptions(
     'width|w=i'    => \$width,
     'step|s=i'     => \$step,
+    'scoring|c=s'  => \$scoring,
+    'merge|m=s'    => \$merge,
     'no-sort|n'    => \$no_sort,
     'no-skip|k'    => \$no_skip,
-    'output|o:s'   => \$output,
-    'batch|b=s{,}' => \@batch,
-    'verbose|v'    => sub {enable diagnostics;use warnings;},
-    'quiet|q'      => sub {disable diagnostics;no warnings;},
-    'help|usage|h' => sub {pod2usage(-verbose => 1);},
-    'manual|man|m' => sub {pod2usage(-verbose => 2);}
-    );
+    'gff|g=s'      => \$gff,
+    'tag|t=s'      => \$tag,
+    'feature|f=s'  => \$feature,
+    'reverse|r'    => \$reverse,
+    'absolute|b=s' => \$absolute,
+    'output|o=s'   => \$output,
+    'verbose'      => sub { use diagnostics; },
+    'quiet'        => sub { no warnings; },
+    'help'         => sub { pod2usage( -verbose => 1 ); },
+    'manual'       => sub { pod2usage( -verbose => 2 ); }
+);
+
+my %scoring_dispatch = (
+    meth     => \&fractional_methylation,
+    average  => \&average_scores,
+    sum      => \&sum_scores,
+    seq_freq => \&seq_freq,
+);
 
 # Check required command line parameters
-if ( ! $width ) { pod2usage(-verbose => 1) }
+pod2usage( -verbose => 1 )
+    unless @ARGV
+        and $result
+        and ( ( $width and $step ) or $gff )
+        and exists $scoring_dispatch{$scoring};
 
-$step = $width unless $step;
-
-BATCH:
-while (@batch or $gff_file) {
-    if (@batch) {
-        $gff_file = shift @batch;
-        $output = $gff_file . "_w${width}_s${step}.avg";
-    }
-
-    # opens gff file or STDIN
-    my $GFF;
-    if ($gff_file ne '-') {open $GFF, '<', $gff_file or croak "Can't read file: $gff_file"}
-    else {$GFF = 'STDIN'}
-
-    # reads in data
-    my @data;
-    while (<$GFF>) {
-        chomp;
-        next if ($_ =~ m/^#.*$|^\s*$/);
-        push @data, $_;
-    }
-    if ($GFF ne 'STDIN') {close $GFF}
-
-    # redirects STDOUT to file if specified by user
-    if ($output ne '-') {
-        open STDOUT, '>', "$output" or croak "Can't redirect STDOUT to file: $output";
-    }
-
-    # prints out header fields that contain gff v3 header, generating program, time, and field names
-    gff_print_header ($0, @argv);
-
-    # sort data by sequence name, feature, and starting coordinates
-    unless ($no_sort) {
-        print STDERR "sorting data...";
-        @data = gff_sort ( \@data );
-        print STDERR "done.\n";
-    }
-
-#     # gets indices for chromosome changes (tracks changes on 0th field - seqname)
-#     my @locsindex = gff_find_array ( 0, \@data );
-
-#     # for each chromosome
-#     for (my $i = 0; $i < @locsindex; $i++) {
-
-#         # get an array slice with only that chromosome
-#         my @subdata;
-#         if ($i + 1 <@locsindex) {
-#             @subdata = @data[$locsindex[$i]..$locsindex[$i+1]];
-#         } else {
-#             @subdata = @data[$locsindex[$i]..$#data]; # prevents array pointer out of bounds
-#         }
-
-#         # gets indices for context changes (tracks changes on 2th field - feature)
-#         my @featureindex = gff_find_array ( 2, \@subdata );
-
-#         # for each feature/context
-#         for (my $l = 0; $l < @featureindex; $l++) {
-
-#             # get an array slice containing just that feature/chromosome and feed it to the sliding window routine
-#             if ($l + 1 < @featureindex) {
-#                 gff_sliding_window ( $width, $step, @subdata[$featureindex[$l]..$featureindex[$l + 1] - 1]);
-#             } else {
-#                 gff_sliding_window ( $width, $step, @subdata[$featureindex[$l]..$#subdata]);
-#             }
-#         }
-#    }
-    gff_sliding_window ( $width, $step, \@data, $no_skip);
-    $gff_file = 0;
+if ($output) {
+    open my $USER_OUT, '>', $output
+        or croak "Can't open $output for writing: $!";
+    select $USER_OUT;
 }
 
-close STDOUT;
-exit 0;
+if ($merge) {
+    $width = 1;
+    $step  = 1;
+}
 
-sub gff_sliding_window {
-    my ($width, $step, $data_ref, $no_skip) = @_;
+if ($absolute) {
+    croak
+        '-b, --absolute option only works with arabidopsis or rice or puffer'
+        unless lc $absolute eq 'arabidopsis'
+            or lc $absolute eq 'rice'
+            or lc $absolute eq 'puffer';
+    $no_skip = 1;
+}
 
-    my %last_rec = %{gff_read ($data_ref->[-1])};
+my $gff_iterator
+    = make_gff_iterator( parser => \&gff_read, handle => 'ARGV' );
 
-    print STDERR
-	"windowing data on sequence $last_rec{'seqname'} and context $last_rec{'feature'} with $width bp width and $step bp step...\n";
+my %gff_records = ();
+LOAD:
+while ( my $gff_line = $gff_iterator->() ) {
+    next LOAD unless ref $gff_line eq 'HASH';
+    push @{ $gff_records{ $gff_line->{seqname} } }, $gff_line;
+}
 
-    my $lastcoord = $last_rec{'end'};
-    my $seqname = $last_rec{'seqname'};
-    my $context = $last_rec{'feature'};
-    my $strand  = $last_rec{'strand'};
-    my $lastrecord = 0;
+my $fasta_lengths = {};
+if ( $absolute and $no_skip ) {
+    $fasta_lengths = index_fasta_lengths( handle => 'DATA' );
+}
 
-    for (my $i = 1; $i < $lastcoord; $i++) {
+my $window_iterator = sub { };
+if ($gff) {
+    $window_iterator = make_annotation_iterator(
+        file  => $gff,
+        tag   => $tag,
+        merge => $merge
+    );
+}
 
-	my ($c_count, $t_count, $score) = (0, 0, 0);
-        my ($overlap_c, $overlap_t) = (0, 0);
-        my $attribute = q{.};
+SEQUENCE:
+for my $sequence ( sort keys %gff_records ) {
 
-	my @range = @{ gff_filter_by_coord ($i, $i + $width - 1, $lastrecord, $data_ref) };
+    unless ($no_sort) {
+        @{ $gff_records{$sequence} }
+            = sort { $a->{start} <=> $b->{start} }
+            @{ $gff_records{$sequence} };
+    }
 
-	$lastrecord = shift @range;
+    unless ($gff) {
+        $window_iterator = make_window_iterator(
+            width => $width,
+            step  => $step,
+            lower => 1,
+            upper => (
+                        $absolute
+                    and $no_skip
+                    and %$fasta_lengths
+                    and exists $fasta_lengths->{$absolute}{$sequence}
+                )
+            ? $fasta_lengths->{$absolute}{$sequence}
+            : $gff_records{$sequence}[-1]->{end},
+        );
+    }
 
-        next unless @range or $no_skip;
+WINDOW:
+    while ( my ( $ranges, $locus ) = $window_iterator->($sequence) ) {
 
-	foreach my $k (@range) {
-	    my %current_rec = %{gff_read ($k)};
-	    my ($c_tmp, $t_tmp) = split(/;/, $current_rec{'attribute'});
+        my $brs_iterator = binary_range_search(
+            range  => $ranges,
+            ranges => $gff_records{$sequence},
+        );
 
-            #if (defined $c_tmp and defined $t_tmp and $c_tmp =~ m/\d+/ and $t_tmp =~ m/\d+/) {
-                ($c_tmp) = $c_tmp =~ m/(\d+)/;
-                ($t_tmp) = $t_tmp =~ m/(\d+)/;
-                $c_count += $c_tmp;
-                $t_count += $t_tmp;
-                $seqname = $current_rec{'seqname'};
-                $context = $current_rec{'feature'};
-                $strand  = $current_rec{'strand'};
+        my $scores_ref = $scoring_dispatch{$scoring}->($brs_iterator, $reverse);
 
-                if ($current_rec{'start'} > $i + $step) {
-                    $overlap_c += $c_tmp;
-                    $overlap_t += $t_tmp;
-                }
-            #}
-            #elsif (defined $current_rec{'score'} and $current_rec{'score'} =~ m/\d/) {
-            #    $score += $current_rec{'score'};
-            #}
-            #else {
-            #    croak "Can't find scores or attributes that can be averaged; perhaps you want to use window_gff_by_frequency.pl";
-            #}
-	}
+        my ( $score, $attribute );
 
-        #if ($c_count and $t_count) {
-            if ($c_count + $t_count != 0) {
-                if ($c_count != 0) {$score = $c_count / ($c_count + $t_count)}
-            }
+        if ( ref $scores_ref eq 'HASH' ) {
 
-            $attribute = "c=$c_count;t=$t_count";
-            if ($step != $width) {$attribute .= ";over_c=$overlap_c;over_t=$overlap_t"}
-        #}
-        #else {
-        #    $score /= @range
-        #}
+            $score = sprintf( "%g", $scores_ref->{score} );
+            delete $scores_ref->{score};
 
-	if (scalar(@range) == 0) {
-	    $attribute = q{.};
-	    $score     = q{.};
-	}
+            $attribute = "ID=$locus; " if $locus;
+            $attribute .= join q{; },
+                map { "$_=" . sprintf( "%g", $scores_ref->{$_} ) }
+                sort keys %{$scores_ref};
+
+        }
+        elsif ( ref $scores_ref eq 'ARRAY' ) {
+            $score = q{.};
+            $attribute = "ID=$locus; " if $locus;
+            $attribute .= join q{; }, @$scores_ref;
+        }
+        elsif ($no_skip) {
+            $score = q{.};
+            $attribute = $locus ? "ID=$locus" : q{.};
+        }
         else {
-            $score = sprintf("%g", $score);
+            next WINDOW;
         }
 
-        $strand = q{.} if $width > 1;
-
-	print join("\t",
-		   $seqname,
-		   'window',
-		   $context,
-		   $i,
-		   $i + $width - 1,
-		   $score,
-		   $strand,
-		   '.',
-		   $attribute,
-	    ), "\n";
-	$i += $step - 1;
+        print join( "\t",
+            $sequence, 'dzlab',
+            ( $feature ? $feature : $gff ? 'locus' : 'window' ),
+            $ranges->[0][0], $ranges->[-1][1],
+            $score, q{.}, q{.}, $attribute, ),
+            "\n";
     }
-    return 0;
+
+    delete $gff_records{$sequence};
+}
+
+sub index_fasta_lengths {
+    my %options = @_;
+
+    my $handle = $options{handle};
+
+    if ( $options{file} ) {
+        open $handle, '<', $options{file} or croak $!;
+    }
+
+    my %fasta_lengths;
+    my $active;
+    while (<$handle>) {
+        chomp;
+        if (m/^\s*#/) {
+            s/#//;
+            $active = lc $_;
+        }
+        else {
+            my ( $sequence, $length ) = split /\t/;
+            $fasta_lengths{$active}{$sequence} = $length;
+        }
+    }
+
+    if ( $options{file} ) {
+        close $handle or croak $!;
+    }
+
+    return \%fasta_lengths;
+}
+
+sub make_window_iterator {
+    my (%options) = @_;
+
+    my $width = $options{width} || croak 'Need window parameter';
+    my $step  = $options{step}  || croak 'Need step parameter';
+    my $lower = $options{lower} || croak 'Need lower bound parameter';
+    my $upper = $options{upper} || croak 'Need upper bound parameter';
+
+    return sub {
+        my $i = $lower;
+        $lower += $step;
+
+        if ( $i <= $upper - $width + 1 ) {
+            return [ [ $i, $i + $width - 1 ] ];
+        }
+        elsif ( $i < $upper ) {
+            return [ [ $i, $upper ] ];
+        }
+        else {
+            return;
+        }
+        }
+}
+
+sub make_annotation_iterator {
+    my (%options) = @_;
+
+    my $annotation_file = $options{file};
+    my $locus_tag       = $options{tag} || 'ID';
+    my $merge_exons     = $options{merge} || 0;
+
+    open my $GFFH, '<', $annotation_file
+        or croak "Can't read file: $annotation_file";
+
+    my $gff_iterator
+        = make_gff_iterator( parser => \&gff_read, handle => $GFFH );
+
+    my $annotation = index_annotation( iterator => $gff_iterator, %options );
+
+    close $GFFH or croak "Can't close $annotation_file: $!";
+
+    my %annotation_keys = ();
+    return sub {
+        my ($sequence) = @_;
+        return unless $sequence;
+
+        unless ( exists $annotation_keys{$sequence} ) {
+            @{ $annotation_keys{$sequence} }
+                = sort keys %{ $annotation->{$sequence} };
+        }
+
+        my $locus = shift @{ $annotation_keys{$sequence} };
+        return unless $locus;
+        my $ranges = $annotation->{$sequence}{$locus};
+        delete $annotation->{$sequence}{$locus};
+
+        if ( $locus and @$ranges ) {
+            return [ uniq_ranges($ranges) ], $locus;
+        }
+        else {
+            return;
+        }
+    };
+}
+
+sub index_annotation {
+    my (%options) = @_;
+
+    my $gff_iterator = $options{iterator}
+        || croak 'Need an iterator parameter';
+    my $locus_tag     = $options{tag}   || 'ID';
+    my $merge_feature = $options{merge} || 0;
+
+    my %annotation = ();
+
+LOCUS:
+    while ( my $locus = $gff_iterator->() ) {
+
+        next LOCUS unless ref $locus eq 'HASH';
+
+        my ($locus_id) = $locus->{attribute} =~ m/$locus_tag[=\s]?([^;,]+)/;
+
+        if ( !defined $locus_id ) {
+            ( $locus_id, undef ) = split /;/, $locus->{attribute};
+            $locus_id ||= q{.};
+        }
+        else {
+            $locus_id =~ s/["\t\r\n]//g;
+            $locus_id
+                =~ s/\.\w+$// # this fetches the parent ID in GFF gene models (eg. exon is Parent=ATG101010.n)
+                if $merge_feature and $locus->{feature} eq $merge_feature;
+        }
+
+        push @{ $annotation{ $locus->{seqname} }{$locus_id} },
+            [ $locus->{start}, $locus->{end} ]
+            unless ( $merge_feature and $locus->{feature} ne $merge_feature );
+
+    }
+
+    return \%annotation;
+}
+
+sub uniq_ranges {
+    my ($ranges) = @_;
+
+    my %seen;
+    my @uniq;
+
+    for (@$ranges) {
+        push @uniq, $_ unless $seen{"$_->[0];$_->[1]"}++;
+    }
+
+    return wantarray ? @uniq : [@uniq];
+}
+
+sub fractional_methylation {
+    my ($brs_iterator) = @_;
+
+    my ( $c_count, $t_count, $score_count ) = ( 0, 0, 0 );
+
+COORD:
+    while ( my $gff_line = $brs_iterator->() ) {
+
+        next COORD unless ref $gff_line eq 'HASH';
+
+        my ( $c, $t ) = $gff_line->{attribute} =~ m/
+                                                     c=(\d+)
+                                                     .*
+                                                     t=(\d+)
+                                                 /xms;
+
+        next unless defined $c and defined $t;
+
+        $c_count += $c;
+        $t_count += $t;
+        $score_count++;
+    }
+
+    if ( $score_count and ( $c_count or $t_count ) ) {
+        return {
+            score => $c_count / ( $c_count + $t_count ),
+            c     => $c_count,
+            t     => $t_count,
+            n     => $score_count,
+        };
+    }
 }
 
 
-sub gff_filter_by_coord {
-    my ($lower_bound, $upper_bound, $last_index_seen, $data_ref) = @_;
+sub sum_scores {
+    my ($brs_iterator, $reverse) = @_;
 
-    my @filtered;
-    for (my $i = $last_index_seen; $i < @{$data_ref}; $i++) {
+    my ( $score_sum, $score_count ) = ( 0, 0 );
 
-        my $start_coord = (split /\t/, $data_ref->[$i])[3];
+COORD:
+    while ( my $gff_line = $brs_iterator->() ) {
+        next COORD unless ref $gff_line eq 'HASH';
 
-	if ($start_coord >= $lower_bound && $start_coord <= $upper_bound) {
-	    push @filtered, $data_ref->[$i];
-	    $last_index_seen = $i;
-	}
-
-	last if ( $start_coord > $upper_bound );
-
+        $score_sum += $gff_line->{score} eq q{.} ? 1 : $gff_line->{score};
+        $score_count++;
     }
-    unshift @filtered, $last_index_seen;
-    return \@filtered;
+
+    if ($reverse) {
+        my $tmp      = $score_sum;
+        $score_sum   = $score_count;
+        $score_count = $tmp;
+    }
+
+    if ($score_count or ($reverse and $score_sum)) {
+        return {
+            score => $score_sum,
+            n     => $score_count,
+        };
+    }
 }
 
+sub seq_freq {
+    my ($brs_iterator) = @_;
 
-# this is to substitute gff_filter_by_coord
-# when it is suitably modified
+    my ( $seq_freq, $seq_count ) = ( undef, 0 );
+
+  COORD:
+    while ( my $gff_line = $brs_iterator->() ) {
+        next COORD unless ref $gff_line eq 'HASH';
+
+        my ($sequence) = $gff_line->{attribute} =~ m/seq=(\w+)/;
+        my @sequence   = split //, $sequence;
+
+        for my $i (0 .. @sequence - 1) {
+
+            for (qw/a c g t/) {
+                $seq_freq->[$i]{$_} = 0 unless exists $seq_freq->[$i]{$_}
+            }
+        
+            $seq_freq->[$i]{lc $sequence[$i]}++
+        }
+
+        $seq_count++;
+    }
+
+    my @attribute;
+    my $i = 1;
+    for my $position (@$seq_freq) {
+        push @attribute,
+        $i++ . q{=} . join q{,}, map {
+            $position->{$_}
+        } sort keys %$position;
+    }
+
+    if ($seq_freq) {
+        return \@attribute;
+    }
+}
+
+sub average_scores {
+    my ($brs_iterator) = @_;
+
+    my ( $score_avg, $score_std, $score_var, $score_count ) = ( 0, 0, 0, 0 );
+
+COORD:
+    while ( my $gff_line = $brs_iterator->() ) {
+
+        next COORD unless ref $gff_line eq 'HASH';
+
+        my $previous_score_avg = $score_avg;
+
+        $score_avg = $score_avg
+            + ( $gff_line->{score} - $score_avg ) / ++$score_count;
+
+        $score_std
+            = $score_std
+            + ( $gff_line->{score} - $previous_score_avg )
+            * ( $gff_line->{score} - $score_avg );
+
+        $score_var = $score_std / ( $score_count - 1 )
+            if $score_count > 1;
+
+    }
+
+    if ($score_count) {
+        return {
+            score => $score_avg,
+            std   => sqrt($score_var),
+            var   => $score_var,
+            n     => $score_count,
+        };
+    }
+}
+
 sub binary_range_search {
-    my ($range, $ranges) = @_;
-    my ($low, $high)     = (0, @{$ranges} - 1);
-    while ($low <= $high) {
-        my $try = int (($low + $high) / 2);
-        $low  = $try + 1, next if $ranges->[$try][1] < $range->[0];
-        $high = $try - 1, next if $ranges->[$try][0] > $range->[1];
-        return $ranges->[$try];
+    my %options = @_;
+
+    my $targets = $options{range}  || croak 'Need a range parameter';
+    my $ranges  = $options{ranges} || croak 'Need a ranges parameter';
+
+    my ( $low, $high ) = ( 0, $#{$ranges} );
+    my @iterators = ();
+
+TARGET:
+    for my $range (@$targets) {
+
+    RANGE_CHECK:
+        while ( $low <= $high ) {
+
+            my $try = int( ( $low + $high ) / 2 );
+
+            $low = $try + 1, next RANGE_CHECK
+                if $ranges->[$try]{end} < $range->[0];
+            $high = $try - 1, next RANGE_CHECK
+                if $ranges->[$try]{start} > $range->[1];
+
+            my ( $down, $up ) = ($try) x 2;
+            my %seen = ();
+
+            my $brs_iterator = sub {
+
+                if (    $ranges->[ $up + 1 ]{end} >= $range->[0]
+                    and $ranges->[ $up + 1 ]{start} <= $range->[1]
+                    and !exists $seen{ $up + 1 } )
+                {
+                    $seen{ $up + 1 } = undef;
+                    return $ranges->[ ++$up ];
+                }
+                elsif ( $ranges->[ $down - 1 ]{end} >= $range->[0]
+                    and $ranges->[ $down - 1 ]{start} <= $range->[1]
+                    and !exists $seen{ $down - 1 }
+                    and $down > 0 )
+                {
+                    $seen{ $down - 1 } = undef;
+                    return $ranges->[ --$down ];
+                }
+                elsif ( !exists $seen{$try} ) {
+                    $seen{$try} = undef;
+                    return $ranges->[$try];
+                }
+                else {
+                    return;
+                }
+            };
+            push @iterators, $brs_iterator;
+            next TARGET;
+        }
     }
-    return;
-}
 
-
-sub gff_sort {
-    my $data_ref = shift;
-
-    return sort {
-#	(split /\t/, $a)[0] cmp (split /\t/, $b)[0] or
-#        (split /\t/, $a)[2] cmp (split /\t/, $b)[2] or
-        (split /\t/, $a)[3] <=> (split /\t/, $b)[3]
-    } @{$data_ref};
+# In scalar context return master iterator that iterates over the list of range iterators.
+# In list context returns a list of range iterators.
+    return wantarray
+        ? @iterators
+        : sub {
+        while (@iterators) {
+            if ( my $range = $iterators[0]->() ) {
+                return $range;
+            }
+            shift @iterators;
+        }
+        return;
+        };
 }
 
 sub gff_read {
-    my ($seqname, $source, $feature, $start, $end, $score, $strand, $frame, $attribute) = split(/\t/, shift);
-    my %rec = (
-	'seqname'=>$seqname,
-	'source'=>$source,
-	'feature'=>$feature,
-	'start'=>$start,
-	'end'=>$end,
-	'score'=>$score,
-	'strand'=>$strand,
-	'frame'=>$strand,
-	'attribute'=>$attribute
-	);
-    return \%rec;
+    return [] if $_[0] =~ m/^
+                            \s*
+                            \#+
+                           /mx;
+
+    my ($seqname, $source, $feature, $start, $end,
+        $score,   $strand, $frame,   $attribute
+    ) = split m/\t/xm, shift || return;
+
+    $attribute =~ s/[\r\n]//mxg;
+
+    return {
+        'seqname'   => lc $seqname,
+        'source'    => $source,
+        'feature'   => $feature,
+        'start'     => $start,
+        'end'       => $end,
+        'score'     => $score,
+        'strand'    => $strand,
+        'frame'     => $frame,
+        'attribute' => $attribute
+    };
 }
 
-sub gff_find_array {
-    my ($field, $array_ref) = @_;
+sub make_gff_iterator {
+    my %options = @_;
 
-    print STDERR "finding indices...\n";
+    my $parser     = $options{parser};
+    my $file       = $options{file};
+    my $GFF_HANDLE = $options{handle};
 
-    # @index contains a list of locations where array should be split
-    # $previousid and $currentid are scalars containing the previous and current IDs (chr1, 2, etc)
-    # $chrcount is just a counter for the number of different types of IDs
-    my (@index, $previous, $current);
-    my $chrcount = 0;
+    croak
+        "Need parser function reference and file name or handle to build iterator"
+        unless $parser
+            and ref $parser eq 'CODE'
+            and (
+                ( defined $file and -e $file )
+                xor(defined $GFF_HANDLE and ref $GFF_HANDLE eq 'GLOB'
+                        or $GFF_HANDLE eq 'ARGV'
+                )
+            );
 
-    for (my $i = 0; $i < $#{$array_ref} ; $i++) {
-
-	# gets current starting coordinate
-	$current = (split /\t/, $array_ref->[$i])[$field]; #chr1, chr2, etc
-
-	# if we're at beginning of file it doesn't make sense to look for changes already
-	# gets previous starting coordinate
-	if ($i != 0) {$previous = (split /\t/, $array_ref->[$i-1])[$field];}
-	else {$previous = $current;}
-
-        $current =~ tr/A-Z/a-z/;
-        $previous =~ tr/A-Z/a-z/;
-
-	# keeps track of number of different types of records
-	# also stores each record type change in @index
-	# ignores pound (#) characters if they're the first printing character in the record
-	if ( ($current ne $previous) or ($i == 0) )  {
-	    $index[$chrcount] = $i;
-	    $chrcount++;
-	}
+    if ($file) {
+        open $GFF_HANDLE, '<', $file
+            or croak "Can't read $file: $!";
     }
-    return @index;
+
+    return sub {
+        $parser->( scalar <$GFF_HANDLE> );
+    };
 }
-
-sub gff_print_header {
-    my @call_args = @_;
-    print "##gff-version 3\n";
-    print join(' ',
-	       '#',
-	       @call_args,
-	       "\n");
-    my ($sec, $min, $hour, $mday, $mon, $year, $wday, $yday, $isdst) = localtime (time);
-    printf "# %4d-%02d-%02d %02d:%02d:%02d\n", $year+1900, $mon+1, $mday, $hour, $min, $sec;
-    print join("\t",
-	       '# SEQNAME',
-	       'SOURCE',
-	       'FEATURE',
-	       'START',
-	       'END',
-	       'SCORE',
-	       'STRAND',
-	       'FRAME',
-	       'ATTRIBUTES',
-	), "\n";
-    return 0;
-}
-
-
-__END__
 
 =head1 NAME
 
- window_gff.pl - Generate windows from GFF attributes
+ window_gff.pl - Average GFFv3 data over a sliding window or against a GFFv3 annotation file
 
-=head1 VERSION
+=head1 SYNOPSIS
+
+ # Run a sliding window of 50bp every 25bp interval on methylation data (attribute field assumed to be 'c=n; t=m')
+ window_gff.pl --width 50 --step 25 --scoring meth --output out.gff in.gff
+
+ # Average data per each locus (on score field)
+ window_gff.pl --gff genes.gff --scoring average --output out.gff in.gff
+
+ # Merge 'exon' features in GFF annotation file per parent ID (eg. per gene)
+ window_gff.pl --gff exons.gff --scoring average --output out.gff --tag Parent --merge exon
+
+=head1 DESCRIPTION
+
+ This program works in two modes. It will either run a sliding window through the input GFF data,
+ or load a GFF annotation file and use that to average scores in input GFF data.
+
+ Scores calculation by default is done via fractional methylation, in which case the program
+ requires that the GFF attribute field contain both 'c' and 't' tags (eg. 'c=n; t=m').
+ Alternatively, the -a, --average switch will make the program average the scores in the score field.
+
+ An additional switch, -m, --merge, will take the name of a feature in the annotation GFF file.
+ It will then try to average out all the features that have a common parent locus.
+ This assumes that, for example if averaging exon features: the user must use '--merge exon',
+ '--tag Parent' (in the case of Arabidopsis' annotations), which will fetch a gene ID like ATG01010.1.
+ It is assumed that the Parent feature of this exon is ATG010101.
+
+=head1 OPTIONS
+
+ window_gff.pl [OPTION]... [FILE]...
+ 
+ -w, --width       sliding window width                                  (default: 50, integer)
+ -s, --step        sliding window interval                               (default: 50, integer)
+ -c, --scoring     score computation scheme                              (default: meth, string [available: meth, average, sum, seq_freq])
+ -m, --merge       merge this feature as belonging to same locus         (default: no, string [eg: exon])
+ -n, --no-sort     GFFv3 data assumed sorted by start coordinate         (default: no)
+ -k, --no-skip     print windows or loci for which there is no coverage  (deftaul: no)
+ -g, --gff         GFFv3 annotation file
+ -t, --tag         attribute field tag from which to extract locus ID    (default: ID, string)
+ -f, --feature     overwrite GFF feature field with this label           (default: no, string)
+ -b, --absolute    organism name to fetch chromosome lengths, implies -k (default: no, string [available: arabidopsis, rice, puffer])
+ -r, --reverse     reverse score and counts
+ -o, --output      filename to write results to (defaults to STDOUT)
+ -v, --verbose     output perl's diagnostic and warning messages
+ -q, --quiet       supress perl's diagnostic and warning messages
+ -h, --help        print this information
+ -m, --manual      print the plain old documentation page
+
+=head1 REVISION
+
+ Version 0.0.1
 
  $Rev$:
  $Author$:
  $Date$:
  $HeadURL$:
  $Id$:
-
-=head1 USAGE
-
- # window file using implicit standard input and unix pipes and redirection
- cat foo.gff | window_gff.pl --width 200 --step 100 > windowed_bar.gff
-
- # window file using explicit standard input and short options
- cat bar.gff | window_gff.pl --gff-file - -w 400 -s 200 -o windowed_bar.gff
-
- # window single file with no overlaps
- window_gff.pl -f foo.gff -w 100 --output windowed_foo.gff
-
- # window multiple pre-sorted files in batch mode
- window_gff.pl --batch foo.gff bar.gff --width 500 --no-sort
-
- # window multiple files in batch mode using shell expansion with extra warnings
- window_gff.pl -b *.gff -w 100 --verbose
-
-=head1 REQUIRED ARGUMENTS
-
- -w, --width    width size of the sliding window in base pairs
-
-=head1 OPTIONS
-
- countMethylation.pl [OPTION]... [FILE]...
-
- -f, --gff-file    GFF alignment input file
- -w, --width       width size of sliding window in bp
- -s, --step        step interval of sliding window in bp
- -n, --no-sort     assumes input gff file is pre-sorted by sequence, feature, and coordinate
- -k  --no-skip     don't skip coordinates/windows with no coverage
- -b, --batch       takes any number of filenames as arguments and windows them in batch mode
- -o, --output      filename to write results to (default is STDOUT, unless in batch mode)
- -v, --verbose     output perl's diagnostic and warning messages
- -q, --quiet       supress perl's diagnostic and warning messages
- -h, --help        print this information
- -m, --manual      print the plain old documentation page
-
-=head1 DESCRIPTION
-
- Takes a GFF-formatted input file with methylation information on the attribute field
- in the form c=? and t=?. Each line corresponds to a single 'c' in a sequenced genome.
- The input file may contain multiple sequence id's and features-contexts.
- Runs a sliding window of width x and step interval y and averages the score
- for each step, generating a GFF file with N/y lines (N=number of input 'c's).
- The averaging is done by extracting the attribute fields and computing score = c / (c + t)
-
-=head1 SUBROUTINES
-
-=head2 gff_sliding_window()
-
- Takes as input the window width, step interval, and a gff array
- Groups input data into @data/step windows of overlap width/step
- Prints each window as a GFF line
-
-=head2 gff_filter_by_coord()
-
- Takes min and max coords allowed, the coord to search for, a starting offset
- and an gff array reference.
- Returns reference to array with all lines having coordinates in given range
-
-=head2 gff_sort()
-
- Takes reference to array to be sorted
- Sorts gff lines by sequence, feature and start coordinate
- Returns sorted array
-
-=head2 gff_read()
-
- Takes a tab-delimited gff line string
- Returns reference to hash with keys as defined in GFF spec v3
-
-=head2 gff_find_array()
-
- Takes a field specifier and reference to array to split
- Finds each index that signifies a change in type of record (according to field)
- Returns index array
-
-=head2 gff_print_header()
-
- Prints a commented line with header fields based on the GFF v3 spec
-
-=head1 DIAGNOSTICS
-
-=head1 CONFIGURATION AND ENVIRONMENT
-
-=head1 DEPENDENCIES
-
-=head1 INCOMPATIBILITIES
-
-=head1 BUGS AND LIMITATIONS
 
 =head1 AUTHOR
 
@@ -436,7 +641,7 @@ __END__
  College of Natural Resources
  University of California, Berkeley
 
-=head1 LICENSE AND COPYRIGHT
+=head1 COPYRIGHT
 
  This program is free software: you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -452,3 +657,55 @@ __END__
  along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 =cut
+
+__DATA__
+#arabidopsis
+chr1	30432563
+chr2	19705359
+chr3	23470805
+chr4	18585042
+chr5	26992728
+chrc	154478
+chrm	366924
+#rice
+chr01	43596771
+chr02	35925388
+chr03	36345490
+chr04	35244269
+chr05	29874162
+chr06	31246789
+chr07	29688601
+chr08	28309179
+chr09	23011239
+chr10	22876596
+chr11	28462103
+chr12	27497214
+chrc	134525
+chrm	490520
+#puffer
+1	22981688
+10	13272281
+11	11954808
+12	12622881
+13	13302670
+14	10246949
+15	7320470
+15_random	3234215
+16	9031048
+17	12136232
+18	11077504
+19	7272499
+1_random	1180980
+2	21591555
+20	3798727
+21	5834722
+21_random	3311323
+2_random	2082209
+3	15489435
+4	9874776
+5	13390619
+6	7024381
+7	11693588
+8	10512681
+9	10554956
+mt	16462
