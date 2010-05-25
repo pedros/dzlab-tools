@@ -27,7 +27,7 @@ my $result = GetOptions (
     'tss|t'             => \$tss,
     'id|i=s'            => \$id,
     'default-locus|l=s' => \$default_locus,
-    'usr-strand|s'      => \$use_strand,
+    'use-strand|s'      => \$use_strand,
     'gff|g'             => \$gff,
     'output|o=s'        => \$output,
     'verbose|v'         => sub { use diagnostics; },
@@ -112,7 +112,7 @@ while (<>) {
             print "$sequence\n"
         }
     }
-}
+[}
 
 
 # index_fasta reads a standard fasta file and returns a hash with chromosome names as keys as chromosome lengths as values
@@ -197,16 +197,19 @@ __END__
 
 =head1 OPTIONS
 
- -f, --filter       only include sequences of length between -f n m
- -w, --use-max-win  try to find attribute fields 'maxstart=n' and 'maxend=m'
- -d  --distance     only go distance -d n/2 from center of locus 
- -t, --tss          extract $distance around transcription start site
- -r, --reference    reference fasta file from which to extract sequences.
- -o, --output       filename to write results to (defaults to STDOUT)
- -v, --verbose      output perl's diagnostic and warning messages
- -q, --quiet        supress perl's diagnostic and warning messages
- -h, --help         print this information
- -m, --manual       print the plain old documentation page 
+ --filter,        -f    only include sequences of length between -f n m
+ --use-max-win,   -w    try to find attribute fields 'maxstart=n' and 'maxend=m'
+ --distance,      -d    only go distance -d n/2 from center of locus 
+ --tss,           -t    extract $distance around transcription start site
+ --reference,     -r    reference fasta file from which to extract sequences.
+ --default-locus, -l    default fasta header to use when extracting locus ID is not possible
+ --use-strands,   -s    reverse complement sequences as needed
+ --gff,           -g    format output in GFF format
+ --output,        -o    filename to write results to (defaults to STDOUT)
+ --verbose,       -v    output perl's diagnostic and warning messages
+ --quiet,         -q    supress perl's diagnostic and warning messages
+ --help,          -h    print this information
+ --manual,        -m    print the plain old documentation page 
 
 =head1 VERSION
 
