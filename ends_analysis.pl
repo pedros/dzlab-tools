@@ -256,10 +256,10 @@ sub index_gff_annotation {
 
         next GFF unless ref $gff_line eq 'HASH';
 
-        $gff_line->{attribute} =~ s/.*
+	$gff_line->{attribute} =~ s/.*
                                     $attribute_id
-                                    [=\s]?
-                                    ([^;\s]+)
+                                    =
+                                    (\w+)
                                     .*
                                    /$1/mx
                                        if $attribute_id;
