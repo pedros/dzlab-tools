@@ -6,6 +6,7 @@ use Data::Dumper;
 use Carp;
 use Getopt::Long qw(:config bundling);
 use Pod::Usage;
+use List::Util qw(sum);
 
 my $output;
 my $width   = 50;
@@ -13,7 +14,7 @@ my $step    = 50;
 my $merge   = 0;
 my $no_sort = 0;
 my $no_skip = 0;
-my $scoring = 'meth';    # meth, average, or sum
+my $scoring = 'meth';    # meth, average, sum or seq_freq
 my $reverse = 0;         # reverse score and count
 my $gff;
 my $tag = 'ID';
@@ -142,7 +143,7 @@ WINDOW:
 
             $attribute = "ID=$locus; " if $locus;
             $attribute .= join q{; },
-                map { "$_=" . sprintf( "%g", $scores_ref->{$_} ) }
+                map { "$_=" . $scores_ref->{$_} }
                 sort keys %{$scores_ref};
 
         }
@@ -221,7 +222,7 @@ sub make_window_iterator {
         else {
             return;
         }
-        }
+    }
 }
 
 sub make_annotation_iterator {
@@ -379,11 +380,15 @@ COORD:
 sub seq_freq {
     my ($brs_iterator) = @_;
 
-    my ( $seq_freq, $seq_count ) = ( undef, 0 );
+    my ( $seq_freq, $seq_count, $score_avg ) = ( undef, 0, 0 );
 
   COORD:
     while ( my $gff_line = $brs_iterator->() ) {
+
         next COORD unless ref $gff_line eq 'HASH';
+
+        $score_avg = $score_avg
+            + ( $gff_line->{score} - $score_avg ) / ++$seq_count;
 
         my ($sequence) = $gff_line->{attribute} =~ m/seq=(\w+)/;
         my @sequence   = split //, $sequence;
@@ -396,21 +401,27 @@ sub seq_freq {
         
             $seq_freq->[$i]{lc $sequence[$i]}++
         }
-
         $seq_count++;
     }
 
-    my @attribute;
     my $i = 1;
+    my %attribute;
     for my $position (@$seq_freq) {
-        push @attribute,
-        $i++ . q{=} . join q{,}, map {
-            $position->{$_}
+
+        my $total = sum values %$position;
+
+        $attribute{$i++}
+        = join q{,}, map {
+            sprintf "%g", ($position->{$_} / $total)
         } sort keys %$position;
     }
 
-    if ($seq_freq) {
-        return \@attribute;
+    if ($seq_count and $seq_freq) {
+        return {
+            %attribute,
+            score => $score_avg,
+            n     => $seq_count,
+        };
     }
 }
 
