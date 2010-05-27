@@ -4,7 +4,7 @@ use warnings;
 use strict;
 use Data::Dumper;
 use Carp;
-use Getopt::Long;
+use Getopt::Long qw(:config gnu_getopt);
 use Pod::Usage;
 use version; our $VERSION = qv('0.0.1');
 
@@ -13,19 +13,33 @@ use List::Util qw(sum min);
 GetOptions(
     \%ARGV,
     'input|i=s', 'output|o=s', 'error|e=s',
+    'min-meth|m=f', 'max-meth|M=f', 'loci-list|l=s', 'loci-tag|t=s',
     _meta_options( \%ARGV ),
 ) and (@ARGV or $ARGV{input}) or pod2usage( -verbose => 1 );
 
 my ( $INH, $OUTH, $ERRH ) = _prepare_io( \%ARGV, \@ARGV );
 
 my @totals;
+
+$ARGV{'loci-list'} = index_list( @ARGV{qw/loci-list loci-tag/} )
+if exists $ARGV{'loci-list'};
+
+GFF:
 while ( <$INH> ) {
     chomp;
     my ($score, $attribute) = (split /\t/, $_)[5, 8];
 
+    exists $ARGV{'min-meth'}  and $score < $ARGV{'min-meth'} and next GFF;
+    exists $ARGV{'max-meth'}  and $score > $ARGV{'max-meth'} and next GFF;
+
     my %attributes = $attribute =~ m/(\w+)=([^;]+)/g;
-    $attributes{score} = $score;
+
+    exists $ARGV{'loci-list'} and not exists $ARGV{'loci-list'}->{$attributes{ID}}
+    and next GFF;
+
     delete $attributes{ID};
+
+    $attributes{score} = $score;
 
     push @totals, \%attributes;
 }
@@ -54,7 +68,36 @@ for my $position (sort {$a <=> $b} keys %$totals) {
     }
 }
 
+sub index_list {
+    my ($list, $tag) = @_;
 
+    $tag ||= '';
+    my $counter = 0;
+
+    my %list = ();
+    open my $LIST, '<', $list or croak "Can't open $list for reading";
+    while (<$LIST>) {
+
+        my ($id, $freq, $alt) = (0, 0, 0);
+        my @fields = split /\t/, $_;
+
+        if (@fields < 9) {
+            ($id, $freq, $alt) = @fields;
+        }
+        elsif (@fields == 9) {
+            ($id, $freq, $alt) = @fields[8, 5, 0];
+            $id =~ s/\W*$tag=?(\w+).*/$1/;
+        }
+        else {
+            ($id) = $fields[0];
+        }
+        $id =~ s/[\r\n]//g;
+        $list{$id} = [$freq, $alt, $counter++];
+    }
+    close $LIST or carp "Can't close $list after reading";
+
+    return \%list;
+}
 
 sub squash {
     my ($totals_ref) = @_;
