@@ -7,31 +7,37 @@ use overload q{""} => 'command';
 use Carp;
 use File::Spec;
 
+use Data::Dumper;
+
 our $VERSION = '0.0.1';
 
-my $fields = {
-    interpreter => undef,
-    executable  => undef,
-    arguments   => undef,
-    input       => undef,
-    output      => undef,
-    capture     => undef,
-    path        => [ grep $_, File::Spec->path, q{.} ],
-    _tmp        => undef, # internal: integer unique to current object,
-    _arguments  => undef, # internal: stringified form of arguments structure
-    _input      => undef, # internal: stringified form of input files array ref
-    _output     => undef, # internal: stringified form of output file specification hash
-};
+sub _fields {
+    {
+        interpreter => undef,
+        executable  => undef,
+        arguments   => undef,
+        input       => undef,
+        output      => undef,
+        capture     => undef,
+        description => undef,
+        progress    => undef,
+        path        => [ grep $_, File::Spec->path, q{.} ],
+        _tmp        => undef, # internal: integer unique to current object,
+        _arguments  => undef, # internal: stringified form of arguments structure
+        _input      => undef, # internal: stringified form of input files array ref
+        _output     => undef, # internal: stringified form of output file specification hash
+    };
+}
 
 sub new {
     my ( $class, %args ) = @_;
 
-    my $self = bless( $fields, $class );
+    my $self = bless( _fields(), $class );
 
     while ( my ( $key, $value ) = each %args ) {
         croak sprintf "%s::new: can't access field '%s' in class '%s'",
         ref $self, $key, $class
-        if !exists $fields->{$key} or $key =~ m/^_/;
+        if !exists $self->{$key} or $key =~ m/^_/;
 
         $self->$key($value);
     }
@@ -41,13 +47,53 @@ sub new {
     return $self;
 }
 
+sub serial {
+    my ($class, $last, @commands) = @_;
+
+    return unless @commands;
+
+    eval {
+        require POSIX; POSIX->import();
+        require threads;
+    };
+    croak sprintf
+    "%s: requires POSIX::mkfifo to be installed and threads to be compiled in:\n%s",
+    _this_sub_name(), $@ if $@;
+
+    my $tmp_dir = File::Spec->tmpdir();
+    my @threads;
+
+    for my $command (@commands) {
+
+        croak sprintf
+        "%s: type of args to serial must be '%s', not '%s'",
+        _this_sub_name(), $class, ref $command || $command
+        unless ref $command eq $class;
+
+        my $named_pipe = File::Spec->catfile( $tmp_dir, int \$command );
+
+        POSIX::mkfifo( $named_pipe, 0777 )
+          or croak sprintf
+          "%s: couldn't create named pipe %s: %s",
+          _this_sub_name(), $named_pipe, $!;
+
+        $last->output( { '>' => $named_pipe } );
+        $command->input( $named_pipe );
+
+        push @threads, threads->new( sub{ $last->run } );
+        $last = $command;
+    }
+
+    push @threads, threads->new( sub{ $last->run } );
+    $_->join for @threads;
+}
+
 sub interpreter {
     my ( $self, $interpreter ) = @_;
 
     $self->{interpreter} = $interpreter if defined $interpreter;
 
-    $self->{_interpreter} = $self->_program_in_path( $self->{interpreter} )
-        unless defined $self->{_interpreter};
+    $self->{_interpreter} = $self->_program_in_path( $self->{interpreter} );
 
     return $self->{_interpreter} || $self->{interpreter};
 }
@@ -57,8 +103,7 @@ sub executable {
 
     $self->{executable} = $executable if defined $executable;
 
-    $self->{_executable} = $self->_program_in_path( $self->{executable} )
-        unless defined $self->{_executable};
+    $self->{_executable} = $self->_program_in_path( $self->{executable} );
 
     return $self->{_executable} || $self->{executable};
 }
@@ -69,9 +114,9 @@ sub arguments {
     $self->{arguments} = $args if defined $args;
 
     $self->{_arguments} = $self->_flatten( $self->{arguments} )
-        if $self->{arguments} and not $self->{_arguments};
+    if $self->{arguments};
 
-    return wantarray ? $self->{arguments} : $self->{_arguments};
+    return wantarray ? %{$self->{arguments} ||= {}} : $self->{_arguments};
 }
 
 sub input {
@@ -79,17 +124,17 @@ sub input {
 
     if (defined $input) {
         croak sprintf
-        "%s::input: type of arg 1 to input must be string or reference to array of strings, not %s",
-        ref $self, ref $input
+        "%s: type of arg 1 to input must be string or reference to array of strings, not %s",
+        _this_sub_name(), ref $input
         unless 'ARRAY' eq ref $input or 'SCALAR' eq ref \$input;
 
         $self->{input} = ref $input ? [$input] : $input;
     }
 
     $self->{_input} = $self->_flatten( $self->{input} )
-    if $self->{input} and not $self->{_input};
+    if $self->{input};
 
-    return wantarray ? $self->{input} : $self->{_input};
+    return wantarray ? @{$self->{input} ||= []} : $self->{_input};
 }
 
 sub output {
@@ -97,17 +142,17 @@ sub output {
 
     if ( defined $output ) {
         croak sprintf
-        "%s::output: type of arg 1 to output must be reference to hash with keys 'spec' => 'file', not %s",
-        ref $self, ref $output ? ref $output : ref \$output
+        "%s: type of arg 1 to output must be reference to hash with keys 'spec' => 'file', not %s",
+        _this_sub_name(), ref $output ? ref $output : ref \$output
         unless 'HASH' eq ref $output;
 
         $self->{output} = $output;
     }
 
     $self->{_output} = $self->_flatten( $self->{output} )
-    if $self->{output} and not $self->{_output};
+    if $self->{output};
 
-    return wantarray ? $self->{output} : $self->{_output};
+    return wantarray ? %{$self->{output} ||= {}} : $self->{_output};
 }
 
 sub path {
@@ -118,14 +163,14 @@ sub path {
 
         for (@$path) {
             croak sprintf
-            "%s::path: type of arg 1 to path must be directory or reference to array of directories (not non-directory '%s')",
-            ref $self, $_
+            "%s: type of arg 1 to path must be directory or reference to array of directories (not non-directory '%s')",
+            _this_sub_name(), $_
             unless -d $_;
         }
 
         $self->{path} = $path;
     }
-    return wantarray ? @{$self->{path}} : $self->{path};
+    return wantarray ? @{$self->{path} ||= []} : $self->{path};
 }
 
 sub capture {
@@ -135,17 +180,22 @@ sub capture {
     return $self->{capture};
 }
 
+sub description {
+    my ( $self, $description ) = @_;
+
+    $self->{description} = $description if $description;
+    return $self->{description};
+}
+
 sub command {
     my ($self) = @_;
-
-    my $output = $self->output . ".part$self->{_tmp}" if $self->output;
 
     my @command = grep {$_}
     ($self->interpreter,
      $self->executable,
      scalar $self->arguments,
      scalar $self->input,
-     $output);
+     scalar $self->output);
 
     return wantarray ? @command : "@command";
 }
@@ -157,6 +207,15 @@ sub run {
 
     my @command = $self->command;
 
+    print STDERR q{# }, $self->description, "\n"
+    if $self->description;
+
+    print STDERR scalar $self->command, "\n";
+
+    if ($self->output and not -p ($self->output)[1]) {
+        $command[-1] .= ".part$self->{_tmp}";
+    }
+
     my $stdout;
     eval { 
         $stdout = $self->capture
@@ -166,16 +225,7 @@ sub run {
 
     $self->_did_run( $@, $? ) or return;
 
-    if ( $self->output ) {
-        rename $self->_canonical( $self->output . ".part$self->{_tmp}" ),
-               $self->_canonical( scalar $self->output )
-        or croak sprintf
-        "%s::run: can't rename %s to %s: %s",
-        ref $self,
-        $self->_canonical( $self->output . ".part$self->{_tmp}" ),
-        $self->_canonical( scalar $self->output ),
-        $!;
-    }
+    $self->_rename if $self->output and not -p ($self->output)[1];
 
     return $stdout;
 }
@@ -183,8 +233,20 @@ sub run {
 sub progress {
     my ($self, $progress) = @_;
 
-    $self->{progress} = $progress if $process;
+    $self->{progress} = $progress if $progress;
     return $self->{progress};
+}
+
+sub _rename {
+    my ($self) = @_;
+
+    rename $self->_canonical( $self->output . ".part$self->{_tmp}" ),
+    $self->_canonical( scalar $self->output )
+    or croak sprintf
+    "%s: can't rename %s to %s: %s",
+    _this_sub_name(),
+    $self->_canonical( $self->output . ".part$self->{_tmp}" ),
+    $self->_canonical( scalar $self->output ), $!;
 }
 
 sub _progress {
@@ -193,8 +255,8 @@ sub _progress {
     return unless $self->progress;
 
     croak sprintf
-    "%s::_progress: need input to be set to track progress",
-    ref $self
+    "%s: need input to be set to track progress",
+    _this_sub_name()
     unless $self->input;
 
     my $input_size = 0;
@@ -207,13 +269,13 @@ sub _can_run {
     my ($self) = @_;
     
     croak sprintf
-    "%s::_can_run: need interpreter or executable to be set to run",
-    ref $self
+    "%s: need interpreter or executable to be set to run",
+    _this_sub_name()
     unless $self->interpreter or $self->executable;
 
     croak sprintf
-    "%s::_can_run: need interpreter '%s' or executable '%s' to be in path to run",
-    ref $self, $self->interpreter, $self->executable
+    "%s: need interpreter '%s' or executable '%s' to be in path to run",
+    _this_sub_name(), $self->interpreter, $self->executable
     unless $self->{_interpreter} or $self->{_executable};
 
     return 1;
@@ -222,12 +284,12 @@ sub _can_run {
 sub _did_run {
     my ($self, $eval_error, $child_error)  = @_;
 
-    croak sprintf "%s::_did_run: failed to run command:\n%s\n%s",
-    ref $self, scalar $self->command, $eval_error
+    croak sprintf "%s: failed to run command:\n%s\n%s",
+    _this_sub_name(), scalar $self->command, $eval_error
     if $eval_error;
 
-    croak sprintf "%s::_did_run: failed to run command (%s):\n%s",
-    ref $self, ($child_error & 255)
+    croak sprintf "%s: failed to run command (%s):\n%s",
+    _this_sub_name(), ($child_error & 255)
                ? 'signal ' . ($child_error & 255)
                : 'exit '   . ($child_error >> 8),
     scalar $self->command
@@ -263,14 +325,23 @@ sub _flatten {
 
     return $struct unless ref $struct;
 
+    #require Storable; Storable->import( qw(dclone) );
+    #$struct = dclone( $struct );
+    
     my @expanded;
 
     while ( ref $struct ) {
         if ( 'ARRAY' eq ref $struct ) {
+
+            $struct = [@$struct];
+
             last unless @$struct;
             push @expanded, $self->_flatten( shift @$struct );
         }
         elsif ( 'HASH' eq ref $struct ) {
+
+            $struct = {%$struct};
+
             last unless %$struct;
             my ( $key, $value ) = each %$struct;
             return unless defined $key and defined $value;
@@ -278,18 +349,25 @@ sub _flatten {
             delete $struct->{$key};
         }
         elsif ( 'SCALAR' eq ref $struct ) {
+
+            $struct = ${$struct};
+
             last unless $$struct;
             push @expanded, $self->_flatten($$struct);
             $struct = undef;
         }
         else {
             croak sprintf
-            "%s::_flatten: type of arg 1 to _flatten must be a scalar, hash or array reference (not '%s')",
-            ref $self, ref $struct;
+            "%s: type of arg 1 to _flatten must be a scalar, hash or array reference (not '%s')",
+            _this_sub_name(), ref $struct;
         }
     }
     @expanded = grep $_, @expanded;
     return wantarray ? @expanded : "@expanded";
+}
+
+sub _this_sub_name {
+    return (caller(1))[3];
 }
 
 sub DESTROY {
@@ -305,12 +383,21 @@ sub DESTROY {
 
 package main;
 
-my $obj = System::Wrapper->new(
+my $obj1 = System::Wrapper->new(
     interpreter => 'perl',
-    arguments   => [-pe => q{''}],
+    arguments   => [-pe => q{'BEGIN{$|++}'}],
     input       => ['/work/genomes/AT/TAIR_reference.fas'],
+    description => 'Concatenate Arabidopsis thaliana reference genome to STDOUT',
+);
+
+my $obj2 = System::Wrapper->new(
+    interpreter => 'perl',
+    arguments   => [-pe => q{'$_ = reverse $_'}],
+    description => 'Reverse input',
     output      => { '>' => 'output' },
-)->run;
+);
+
+System::Wrapper->serial( $obj1, $obj2 );
 
 __END__
 
