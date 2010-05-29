@@ -22,7 +22,9 @@ sub _fields {
         description => undef,
         progress    => undef,
         path        => [ grep $_, File::Spec->path, q{.} ],
-        _tmp        => undef, # internal: integer unique to current object,
+        _destroy    => undef, # internal: safe for additional cleanup in destructor
+        _fifo       => undef, # internal: integer unique to current object's fifo pipe if any 
+        _tmp        => undef, # internal: integer unique to current object's address
         _arguments  => undef, # internal: stringified form of arguments structure
         _input      => undef, # internal: stringified form of input files array ref
         _output     => undef, # internal: stringified form of output file specification hash
@@ -47,8 +49,16 @@ sub new {
     return $self;
 }
 
-sub serial {
-    my ($class, $last, @commands) = @_;
+sub pipeline {
+    _parallel( shift, 'pipe', @_ );
+}
+
+sub parallel {
+    _parallel( shift, 0, @_ );
+}
+
+sub _parallel {
+    my ($class, $pipe, $previous, @commands) = @_;
 
     return unless @commands;
 
@@ -60,7 +70,7 @@ sub serial {
     "%s: requires POSIX::mkfifo to be installed and threads to be compiled in:\n%s",
     _this_sub_name(), $@ if $@;
 
-    my $tmp_dir = File::Spec->tmpdir();
+    my $tmp_dir = File::Spec->tmpdir() if $pipe;
     my @threads;
 
     for my $command (@commands) {
@@ -70,22 +80,27 @@ sub serial {
         _this_sub_name(), $class, ref $command || $command
         unless ref $command eq $class;
 
-        my $named_pipe = File::Spec->catfile( $tmp_dir, int \$command );
+        if ($pipe) {
+            my $named_pipe = File::Spec->catfile( $tmp_dir, "$class:" . int \$command );
 
-        POSIX::mkfifo( $named_pipe, 0777 )
-          or croak sprintf
-          "%s: couldn't create named pipe %s: %s",
-          _this_sub_name(), $named_pipe, $!;
+            POSIX::mkfifo( $named_pipe, 0777 )
+              or croak sprintf
+              "%s: couldn't create named pipe %s: %s",
+              _this_sub_name(), $named_pipe, $!;
 
-        $last->output( { '>' => $named_pipe } );
-        $command->input( $named_pipe );
+            $previous->output( { '>' => $named_pipe } );
+            $command->input( $named_pipe );
 
-        push @threads, threads->new( sub{ $last->run } );
-        $last = $command;
+            $command->{_fifo} = int \$command;
+        }
+        push @threads, threads->new( sub{ $previous->run } );
+        $previous = $command;
     }
 
-    push @threads, threads->new( sub{ $last->run } );
-    $_->join for @threads;
+    push @threads, threads->new( sub{ $previous->run } );
+    $previous->{_fifo} = int \$previous if $pipe;
+
+    return map { $_->join } @threads;
 }
 
 sub interpreter {
@@ -227,6 +242,8 @@ sub run {
 
     $self->_rename if $self->output and not -p ($self->output)[1];
 
+    $self->{_destroy} = 1;
+
     return $stdout;
 }
 
@@ -235,18 +252,6 @@ sub progress {
 
     $self->{progress} = $progress if $progress;
     return $self->{progress};
-}
-
-sub _rename {
-    my ($self) = @_;
-
-    rename $self->_canonical( $self->output . ".part$self->{_tmp}" ),
-    $self->_canonical( scalar $self->output )
-    or croak sprintf
-    "%s: can't rename %s to %s: %s",
-    _this_sub_name(),
-    $self->_canonical( $self->output . ".part$self->{_tmp}" ),
-    $self->_canonical( scalar $self->output ), $!;
 }
 
 sub _progress {
@@ -262,7 +267,23 @@ sub _progress {
     my $input_size = 0;
 
     $input_size += -s $_ for $self->input;
-    #TODO
+
+    # my $class = ref $class;
+    # return $class->new(
+    #     interpreter => 'perl',
+    #     arguments   => [{-e => q{'$s = shift @ARGV'; $S=0; while(<>) {} }}],
+}
+
+sub _rename {
+    my ($self) = @_;
+
+    rename $self->_canonical( $self->output . ".part$self->{_tmp}" ),
+    $self->_canonical( scalar $self->output )
+    or croak sprintf
+    "%s: can't rename %s to %s: %s",
+    _this_sub_name(),
+    $self->_canonical( $self->output . ".part$self->{_tmp}" ),
+    $self->_canonical( scalar $self->output ), $!;
 }
 
 sub _can_run {
@@ -333,7 +354,7 @@ sub _flatten {
     while ( ref $struct ) {
         if ( 'ARRAY' eq ref $struct ) {
 
-            $struct = [@$struct];
+            $struct = [@$struct]; # Storable sometimes gives me segv
 
             last unless @$struct;
             push @expanded, $self->_flatten( shift @$struct );
@@ -350,7 +371,7 @@ sub _flatten {
         }
         elsif ( 'SCALAR' eq ref $struct ) {
 
-            $struct = ${$struct};
+            $struct = \${$struct};
 
             last unless $$struct;
             push @expanded, $self->_flatten($$struct);
@@ -373,20 +394,35 @@ sub _this_sub_name {
 sub DESTROY {
     my ($self) = @_;
 
-    my ( undef, $out_dir, undef )
-    = File::Spec->splitpath( $self->output );
+    return unless $self->{_destroy};
 
-    unlink glob "*.part$self->{_tmp}";
+    if ($self->{_tmp}) {
+        my ( undef, $out_dir, undef )
+        = File::Spec->splitpath( $self->output );
+        my $out_files = File::Spec->catfile( $out_dir, "*$self->{_tmp}" );
+
+        unlink glob $out_files;
+    }
+
+    if ($self->{_fifo}) {
+        my $tmp_dir = File::Spec->tmpdir();
+        my $tmp_files = File::Spec->catfile( $tmp_dir, "*$self->{_fifo}" );
+
+        unlink glob $tmp_files;
+    }
 }
 
 1; # Magic true value required at end of module
 
 package main;
+use Carp;
+use Data::Dumper;
 
 my $obj1 = System::Wrapper->new(
     interpreter => 'perl',
-    arguments   => [-pe => q{'BEGIN{$|++}'}],
+    arguments   => [-pe => q{''}],
     input       => ['/work/genomes/AT/TAIR_reference.fas'],
+    output      => { '>' => 'forward' },
     description => 'Concatenate Arabidopsis thaliana reference genome to STDOUT',
 );
 
@@ -394,10 +430,13 @@ my $obj2 = System::Wrapper->new(
     interpreter => 'perl',
     arguments   => [-pe => q{'$_ = reverse $_'}],
     description => 'Reverse input',
-    output      => { '>' => 'output' },
+    input       => ['/work/genomes/AT/TAIR_reference.fas'],
+    output      => { '>' => 'reverse' },
 );
 
-System::Wrapper->serial( $obj1, $obj2 );
+croak "failed to run at least one command"
+if grep $_, System::Wrapper->pipeline( $obj1, $obj2 );
+
 
 __END__
 
