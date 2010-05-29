@@ -57,52 +57,6 @@ sub parallel {
     _parallel( shift, 0, @_ );
 }
 
-sub _parallel {
-    my ($class, $pipe, $previous, @commands) = @_;
-
-    return unless @commands;
-
-    eval {
-        require POSIX; POSIX->import();
-        require threads;
-    };
-    croak sprintf
-    "%s: requires POSIX::mkfifo to be installed and threads to be compiled in:\n%s",
-    _this_sub_name(), $@ if $@;
-
-    my $tmp_dir = File::Spec->tmpdir() if $pipe;
-    my @threads;
-
-    for my $command (@commands) {
-
-        croak sprintf
-        "%s: type of args to serial must be '%s', not '%s'",
-        _this_sub_name(), $class, ref $command || $command
-        unless ref $command eq $class;
-
-        if ($pipe) {
-            my $named_pipe = File::Spec->catfile( $tmp_dir, "$class:" . int \$command );
-
-            POSIX::mkfifo( $named_pipe, 0777 )
-              or croak sprintf
-              "%s: couldn't create named pipe %s: %s",
-              _this_sub_name(), $named_pipe, $!;
-
-            $previous->output( { '>' => $named_pipe } );
-            $command->input( $named_pipe );
-
-            $command->{_fifo} = int \$command;
-        }
-        push @threads, threads->new( sub{ $previous->run } );
-        $previous = $command;
-    }
-
-    push @threads, threads->new( sub{ $previous->run } );
-    $previous->{_fifo} = int \$previous if $pipe;
-
-    return map { $_->join } @threads;
-}
-
 sub interpreter {
     my ( $self, $interpreter ) = @_;
 
@@ -131,7 +85,7 @@ sub arguments {
     $self->{_arguments} = $self->_flatten( $self->{arguments} )
     if $self->{arguments};
 
-    return wantarray ? %{$self->{arguments} ||= {}} : $self->{_arguments};
+    return wantarray ? @{$self->{arguments} ||= []} : $self->{_arguments};
 }
 
 sub input {
@@ -272,6 +226,76 @@ sub _progress {
     # return $class->new(
     #     interpreter => 'perl',
     #     arguments   => [{-e => q{'$s = shift @ARGV'; $S=0; while(<>) {} }}],
+}
+
+{
+    my $tmp_dir;
+    sub _connect {
+        my ($upstream, $downstream) = @_;
+        my $class = ref $downstream;
+
+        my $named_pipe = File::Spec->catfile( 
+            $tmp_dir ||= File::Spec->tmpdir(), qq{$class:}. int \$downstream
+        );
+
+        POSIX::mkfifo( $named_pipe, 0777 )
+          or croak sprintf
+          "%s: couldn't create named pipe %s: %s",
+          _this_sub_name(), $named_pipe, $!;
+
+        my %output_spec = $upstream->output;
+
+        croak sprintf
+        "%s: can't install fifo %s as output to downstream because there are multiple output specifications (%s):\n%s",
+        _this_sub_name(), $named_pipe,
+        join (q{, }, map { qq{'$_'} } sort keys %output_spec),
+        $upstream->description || "$upstream"
+        if keys  %output_spec > 1;
+
+        $upstream->output( { scalar each %output_spec => $named_pipe } );
+        $downstream->input( $named_pipe );
+
+        return $named_pipe;
+    }
+}
+
+sub _parallel {
+    my ($class, $pipe, $previous, @commands) = @_;
+
+    return unless @commands;
+
+    eval {
+        require POSIX; POSIX->import();
+        #require threads;
+    };
+    croak sprintf
+    "%s: requires POSIX::mkfifo to be installed and threads to be compiled in:\n%s",
+    _this_sub_name(), $@ if $@;
+
+    #my @threads;
+    my @results;
+    for my $command (@commands, 'dummy') {
+        croak sprintf
+        "%s: type of args to serial must be '%s', not '%s'",
+        _this_sub_name(), $class, ref $command || $command
+        unless ref $command eq $class or 'dummy' eq $command;
+
+        if ($pipe) {
+            _connect( $previous, $command ) if ref $command;
+            $previous->{_fifo} = int \$previous;
+        }
+
+        unless (my $pid = fork) {
+            push @results, $previous->run;
+            exit;
+        }
+
+        #push @threads, threads->new( sub{ $previous->run } );
+        $previous = $command;
+    }
+
+    #return map { $_->join } @threads;
+    return @results;
 }
 
 sub _rename {
