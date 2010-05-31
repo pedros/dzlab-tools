@@ -38,6 +38,8 @@ sub _fields {
     };
 }
 
+
+## CLASS METHODS
 sub new {
     my ( $class, %args ) = @_;
 
@@ -61,6 +63,8 @@ sub parallel {
     _parallel( shift, 0, @_ );
 }
 
+
+## OBJECT METHODS
 sub interpreter {
     my ( $self, $interpreter ) = @_;
 
@@ -177,7 +181,6 @@ sub progress {
     return $self->{progress};
 }
 
-
 sub order {
     my ($self, $order) = @_;
 
@@ -244,6 +247,7 @@ sub run {
     return $stdout;
 }
 
+## INTERNAL METHODS
 sub _progress {
     my ($self) = @_;
 
@@ -257,36 +261,33 @@ sub _progress {
     $input_size += -s $_ for $self->input;
 }
 
-{
-    my $tmp_dir;
+sub _connect {
+    my ( $upstream, $downstream ) = @_;
+    my $class = ref $downstream;
 
-    sub _connect {
-        my ( $upstream, $downstream ) = @_;
-        my $class = ref $downstream;
+    my $named_pipe = File::Spec->catfile(
+        File::Spec->tmpdir(),
+        qq{$class:} . int rand MAX_RAND
+    );
 
-        my $named_pipe = File::Spec->catfile(
-            $tmp_dir ||= File::Spec->tmpdir(),
-            qq{$class:} . int rand MAX_RAND
-        );
+    POSIX::mkfifo( $named_pipe, 0777 )
+      or _err( "couldn't create named pipe %s: %s", $named_pipe, $! );
 
-        POSIX::mkfifo( $named_pipe, 0777 )
-            or _err( "couldn't create named pipe %s: %s", $named_pipe, $! );
+    my %output_spec = $upstream->output;
 
-        my %output_spec = $upstream->output;
+    _err(
+        "can't install fifo %s as output to downstream because there are multiple output specifications (%s):\n%s",
+        $named_pipe,
+        join( q{, }, map {qq{'$_' }} sort keys %output_spec ),
+        $upstream->description || "$upstream"
+    ) if keys %output_spec > 1;
 
-        _err(
-            "can't install fifo %s as output to downstream because there are multiple output specifications (%s):\n%s",
-            $named_pipe,
-            join( q{, }, map {qq{'$_' }} sort keys %output_spec ),
-            $upstream->description || "$upstream"
-        ) if keys %output_spec > 1;
+    $upstream->output(
+        {
+            scalar each %output_spec || q{>} => $named_pipe } );
+    $downstream->input($named_pipe);
 
-        $upstream->output(
-            { scalar each %output_spec || q{>} => $named_pipe } );
-        $downstream->input($named_pipe);
-
-        return $named_pipe;
-    }
+    return $named_pipe;
 }
 
 sub _parallel {
@@ -376,6 +377,11 @@ sub _program_in_path {
 
     return unless $program;
 
+    my ($vol, $dir, $file) = File::Spec->splitpath( $program );
+
+    return $program
+	if $dir and -x $program and ( -f $program or -l $program );
+
     for ( @{ $self->path } ) {
         my $path = File::Spec->catfile( $_, $program );
 
@@ -398,17 +404,25 @@ sub _flatten {
 
     return $struct unless ref $struct;
 
+    eval {
+	require Storable;
+	Storable->import();
+    };
+    _err( "Storable module required: $@" ) if $@;
+
+    $struct = Storable::dclone($struct);
+
     my @expanded;
     while ( ref $struct ) {
 
         if ( 'ARRAY' eq ref $struct ) {
-            $struct = [@$struct];
+            #$struct = [@$struct];
             last unless @$struct;
             push @expanded, $self->_flatten( shift @$struct );
         }
 
         elsif ( 'HASH' eq ref $struct ) {
-            $struct = {%$struct};
+            #$struct = {%$struct};
             last unless %$struct;
             my ( $key, $value ) = each %$struct;
             return unless defined $key and defined $value;
@@ -417,7 +431,7 @@ sub _flatten {
         }
 
         elsif ( 'SCALAR' eq ref $struct ) {
-            $struct = \${$struct};
+            #$struct = \${$struct};
             last unless $$struct;
             push @expanded, $self->_flatten($$struct);
             $struct = undef;
@@ -433,19 +447,10 @@ sub _flatten {
     return wantarray ? @expanded : "@expanded";
 }
 
-sub _this_sub_name {
-    return ( caller( shift || 1 ) )[3];
-}
-
-sub _err {
-    my ( $spec, @args ) = @_;
-    croak sprintf "%s error: $spec",  _this_sub_name(2), @args;
-}
-
 sub DESTROY {
     my ($self) = @_;
 
-    return unless $self->{_destroy};
+    #return unless $self->{_destroy};
 
     if ( $self->{_tmp} ) {
         my ( undef, $out_dir, undef )
@@ -463,7 +468,18 @@ sub DESTROY {
     }
 }
 
+## INTERNAL SUBROUTINES
+sub _this_sub_name {
+    return ( caller( shift || 1 ) )[3];
+}
+
+sub _err {
+    my ( $spec, @args ) = @_;
+    croak sprintf "%s error: $spec",  _this_sub_name(2), @args;
+}
+
 1;    # Magic true value required at end of module
+
 
 package main;
 use Carp;
@@ -539,6 +555,7 @@ my $tpb = System::Wrapper->new(
         q{'My Progress Viewer'}, q{121223234}
     ],
     input => ['/work/genomes/AT/TAIR_reference.fas'],
+    output => { '' => '' },
 );
 
 my $pv = System::Wrapper->new(
