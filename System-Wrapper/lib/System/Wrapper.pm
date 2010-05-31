@@ -72,7 +72,7 @@ sub interpreter {
         $self->{interpreter} = $interpreter;
     }
 
-    $self->{_interpreter} = $self->_program_in_path( $self->{interpreter} );
+    $self->{_interpreter} = $self->_program_in_path( $self->{interpreter}, 1 );
 
     return $self->{_interpreter} || $self->{interpreter};
 }
@@ -373,20 +373,23 @@ sub _did_run {
 }
 
 sub _program_in_path {
-    my ( $self, $program ) = @_;
+    my ( $self, $program, $is_executable ) = @_;
 
     return unless $program;
 
     my ($vol, $dir, $file) = File::Spec->splitpath( $program );
 
     return $program
-	if $dir and -x $program and ( -f $program or -l $program );
+	if $dir 
+	  and ( -f $program or -l $program )
+	    and ( not defined $is_executable or -x $program);
 
     for ( @{ $self->path } ) {
         my $path = File::Spec->catfile( $_, $program );
 
         return $path
-            if -x $path and ( -f $path or -l $path );
+            if ( -f $path or -l $path )
+	      and ( not defined $is_executable or -x $path);
     }
 
     return q{};
@@ -488,7 +491,7 @@ use Data::Dumper;
 my $cat = System::Wrapper->new(
     interpreter => 'perl',
     arguments   => [ -pe => q{''} ],
-    input       => ['/work/genomes/AT/TAIR_reference.fas'],
+    input       => ['/work/genomes/AT/TAIR_reference.fas.rc'],
     output      => { '>' => 'forward' },
     description =>
         'Concatenate Arabidopsis thaliana reference genome to STDOUT',
@@ -554,14 +557,13 @@ my $tpb = System::Wrapper->new(
         '-e' => qq{'$prog'},
         q{'My Progress Viewer'}, q{121223234}
     ],
-    input => ['/work/genomes/AT/TAIR_reference.fas'],
-    output => { '' => '' },
+    input => ['/work/genomes/AT/TAIR_reference.fas.rc'],
 );
 
 my $pv = System::Wrapper->new(
     executable => 'pv',
-    arguments  => [ '-s 121223234', '-c -N Test' ],
-    input      => ['/work/genomes/AT/TAIR_reference.fas'],
+    arguments  => [ '-s 242427548', '-c -N Test' ],
+    input      => ['/work/genomes/AT/TAIR_reference.fas.rc'],
 );
 
 croak "failed to run at least one command"
@@ -569,6 +571,7 @@ croak "failed to run at least one command"
     System::Wrapper->pipeline( $pv, $cat, $pv, $reverse, $pv, $complement );
 
 __END__
+
 
 =head1 NAME
 
