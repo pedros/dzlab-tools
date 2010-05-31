@@ -2,8 +2,8 @@ package System::Wrapper;
 
 use warnings;
 use strict;
-use overload q{""}    => 'command';
-use constant MAX_RAND => 2**32;
+use overload q{""}    => \&command;
+use constant MAX_RAND => 2 ** 32;
 
 use Carp;
 use Data::Dumper;
@@ -103,7 +103,7 @@ sub input {
 
     if ( defined $input ) {
         _err(
-            "type of arg 1 to input must be string or reference to array of strings, not %s",
+            "type of arg 1 to 'input' must be string or reference to array of strings, not %s",
             ref $input
             )
             unless 'ARRAY' eq ref $input
@@ -121,7 +121,7 @@ sub output {
 
     if ( defined $output ) {
         _err(
-            "type of arg 1 to output must be reference to hash with keys 'spec' => 'file', not %s",
+            "type of arg 1 to 'output' must be reference to hash with keys 'spec' => 'file', not %s",
             ref $output ? ref $output : ref \$output
         ) unless 'HASH' eq ref $output;
 
@@ -140,7 +140,7 @@ sub path {
 
         for (@$path) {
             _err(
-                "type of arg 1 to path must be directory or reference to array of directories (not non-directory '%s')",
+                "type of arg 1 to 'path' must be directory or reference to array of directories (not non-directory '%s')",
                 $_
             ) unless -d $_;
         }
@@ -177,16 +177,41 @@ sub progress {
     return $self->{progress};
 }
 
+
+sub order {
+    my ($self, $order) = @_;
+
+    if (defined $order) {
+        if ('ARRAY' eq ref $order) {
+            if (@$order) {
+                _err( "parameter 1 to 'order' must have at most %s elements, not %s",
+                      scalar @{$self->{order}}, scalar @$order )
+                if scalar @{$self->{order}} < scalar @$order;
+
+                my %spec = map { $_ => 1 } @{$self->{order}};
+
+                for (0 .. @{$self->{order}} - 1) {
+                    _err( 
+                        "parameter 1 values to 'order' must be any of [%s], not '%s'",
+                        join (q{, }, sort keys %spec), $order->[$_] )
+                    unless exists $spec{$order->[$_]};
+                }
+                $self->{order} = $order;
+            }
+            else {
+                _err( "type of parameter 1 to 'order' must be ARRAY, not %s",
+                      ref $order || ref \$order );
+            }
+        }
+    }
+    return wantarray ? @{$self->{order}} : $self->{order};
+}
+
 sub command {
     my ($self) = @_;
 
-    my @command = grep {$_} (
-        $self->interpreter,
-        $self->executable,
-        scalar $self->arguments,
-        scalar $self->input,
-        scalar $self->output
-    );
+    my @command = grep { $_ }
+    map { scalar $self->$_ } $self->order;
 
     return wantarray ? @command : "@command";
 }
@@ -279,8 +304,8 @@ sub _parallel {
 
     my @results;
     for my $command ( @commands, 'dummy' ) {
-        _err( "type of args to serial must be '%s', not '%s'",
-            $class, ref $command || $command )
+        _err( "type of args to '%s' must be '%s', not '%s'",
+            (split /:+/, _this_sub_name(2))[1], $class, ref $command || $command )
             unless ref $command eq $class
                 or 'dummy' eq $command;
 
@@ -399,7 +424,7 @@ sub _flatten {
         }
         else {
             _err(
-                "type of arg 1 to _flatten must be a scalar, hash or array reference (not '%s')",
+                "type of arg 1 to '_flatten' must be a scalar, hash or array reference (not '%s')",
                 ref $struct
             );
         }
@@ -413,8 +438,8 @@ sub _this_sub_name {
 }
 
 sub _err {
-    my ( $spec, @args ) = @_;      
-    croak sprintf "%s: $spec", _this_sub_name(2), @args;
+    my ( $spec, @args ) = @_;
+    croak sprintf "%s error: $spec",  _this_sub_name(2), @args;
 }
 
 sub DESTROY {
@@ -523,8 +548,8 @@ my $pv = System::Wrapper->new(
 );
 
 croak "failed to run at least one command"
-    if grep $_,
-    System::Wrapper->pipeline( $pv, $cat, $reverse, $complement );
+    if grep { $_ }
+    System::Wrapper->pipeline( $pv, $cat, $pv, $reverse, $pv, $complement );
 
 __END__
 
