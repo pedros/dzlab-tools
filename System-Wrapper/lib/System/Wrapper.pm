@@ -11,60 +11,104 @@ use File::Spec;
 
 our $VERSION = '0.0.1';
 
-sub _fields {
-    {   interpreter => undef,
-        executable  => undef,
-        arguments   => undef,
-        input       => undef,
-        output      => undef,
-        capture     => undef,
-        description => undef,
-        progress    => undef,
-        order       => [qw/interpreter executable arguments input output/],
-        path        => [ grep $_, File::Spec->path, q{.} ],
-        _destroy =>
-            undef,    # internal: safe for additional cleanup in destructor
-        _fifo =>
-            undef
-        ,    # internal: integer unique to current object's fifo pipe if any
-        _tmp => int rand
-            MAX_RAND,   # internal: integer unique to current object's address
-        _arguments =>
-            undef,      # internal: stringified form of arguments structure
-        _input => undef, # internal: stringified form of input files array ref
-        _output =>
-            undef
-        ,    # internal: stringified form of output file specification hash
-    };
-}
-
+# sub _fields {
+#     {   interpreter => undef,
+#         executable  => undef,
+#         arguments   => undef,
+#         input       => undef,
+#         output      => undef,
+#         capture     => undef,
+#         description => undef,
+#         progress    => undef,
+#         order       => [qw/interpreter executable arguments input output/],
+#         path        => [ grep $_, File::Spec->path, q{.} ],
+#         _destroy    => undef,
+#         _fifo =>
+#             undef
+#         ,    # internal: integer unique to current object's fifo pipe if any
+#         _tmp => int rand
+#             MAX_RAND,   # internal: integer unique to current object's address
+#         _arguments =>
+#             undef,      # internal: stringified form of arguments structure
+#         _input => undef, # internal: stringified form of input files array ref
+#         _output =>
+#             undef
+#         ,    # internal: stringified form of output file specification hash
+#     };
+# }
 
 ## CLASS METHODS
+# sub new {
+#     my ( $class, %args ) = @_;
+
+#     my $self = bless( _fields(), $class );
+
+#     while ( my ( $key, $value ) = each %args ) {
+#         _err( "can't access field '%s' in class '%s'", $key, $class )
+#             if not exists $self->{$key}
+#                 or $key =~ m/^_/;
+
+#         $self->$key($value);
+#     }
+#     return $self;
+# }
+
+use fields qw/
+    interpreter  executable  arguments  input  output
+    description  path        order
+    progress     spec        capture
+    _interpreter _executable _arguments
+    _input       _output     _destroy
+    _fifo        _tmp
+    /;
+
 sub new {
     my ( $class, %args ) = @_;
+    my __PACKAGE__ $self = fields::new($class);
+    return $self->_init(%args);
+}
 
-    my $self = bless( _fields(), $class );
+sub _init {
+    my ( $self, %args ) = @_;
+
+    $self->{order} = [qw/interpreter executable arguments input output/];
+    $self->{path}  = [ grep {$_} File::Spec->path, q{.} ];
+    $self->{_tmp}  = int rand MAX_RAND;
 
     while ( my ( $key, $value ) = each %args ) {
-        _err( "can't access field '%s' in class '%s'", $key, $class )
-            if not exists $self->{$key}
-                or $key =~ m/^_/;
-
         $self->$key($value);
     }
+
     return $self;
 }
 
-sub pipeline {
-    _parallel( shift, 'pipe', @_ );
-}
-
-sub parallel {
-    _parallel( shift, 0, @_ );
-}
-
+sub pipeline { _parallel( shift, 1, @_ ) }
+sub parallel { _parallel( shift, 0, @_ ) }
+sub validate { _err("Unimplemented abstract method") }
 
 ## OBJECT METHODS
+
+sub _interpreter {
+    my ($self, $arg) = @_;
+    $self->{_interpreter} = $arg if $arg;
+    return $self->{_interpreter};
+}
+
+
+sub AUTOLOAD {
+    my ($self, $arg) = @_;
+
+    use vars qw/$AUTOLOAD/;    
+    my $key = $AUTOLOAD;
+       $key =~ s/.*://;
+
+    if ( defined $arg ) {
+        $self->{$key} = $arg;
+    }
+
+    return $self->{$key};
+}
+                 
 sub interpreter {
     my ( $self, $interpreter ) = @_;
 
@@ -72,9 +116,9 @@ sub interpreter {
         $self->{interpreter} = $interpreter;
     }
 
-    $self->{_interpreter} = $self->_program_in_path( $self->{interpreter}, 1 );
+    $self->_interpreter( $self->_program_in_path( $self->{interpreter}, 1 ) );
 
-    return $self->{_interpreter} || $self->{interpreter};
+    return $self->_interpreter || $self->{interpreter};
 }
 
 sub executable {
@@ -84,9 +128,9 @@ sub executable {
         $self->{executable} = $executable;
     }
 
-    $self->{_executable} = $self->_program_in_path( $self->{executable} );
+    $self->_executable( $self->_program_in_path( $self->{executable} ) );
 
-    return $self->{_executable} || $self->{executable};
+    return $self->_executable || $self->{executable};
 }
 
 sub arguments {
@@ -99,7 +143,7 @@ sub arguments {
     $self->{_arguments} = $self->_flatten( $self->{arguments} )
         if $self->{arguments};
 
-    return wantarray ? @{ $self->{arguments} ||= [] } : $self->{_arguments};
+    return wantarray ? @{ $self->{arguments} ||= [] } : $self->_arguments;
 }
 
 sub input {
@@ -113,11 +157,11 @@ sub input {
             unless 'ARRAY' eq ref $input
                 or 'SCALAR' eq ref \$input;
 
-        $self->{input} = ref $input ? [$input] : $input;
+        $self->{input} = ref $input ? $input : [$input];
         $self->{_input} = $self->_flatten( $self->{input} );
     }
 
-    return wantarray ? @{ $self->{input} ||= [] } : $self->{_input};
+    return wantarray ? @{ $self->{input} ||= [] } : $self->_input;
 }
 
 sub output {
@@ -129,11 +173,11 @@ sub output {
             ref $output ? ref $output : ref \$output
         ) unless 'HASH' eq ref $output;
 
-        $self->{output}  = $output;
+        $self->{output} = $output;
         $self->{_output} = $self->_flatten( $self->{output} );
     }
 
-    return wantarray ? %{ $self->{output} ||= {} } : $self->{_output};
+    return wantarray ? %{ $self->{output} ||= {} } : $self->_output;
 }
 
 sub path {
@@ -182,39 +226,44 @@ sub progress {
 }
 
 sub order {
-    my ($self, $order) = @_;
+    my ( $self, $order ) = @_;
 
-    if (defined $order) {
-        if ('ARRAY' eq ref $order) {
+    if ( defined $order ) {
+        if ( 'ARRAY' eq ref $order ) {
             if (@$order) {
-                _err( "parameter 1 to 'order' must have at most %s elements, not %s",
-                      scalar @{$self->{order}}, scalar @$order )
-                if scalar @{$self->{order}} < scalar @$order;
+                _err(
+                    "parameter 1 to 'order' must have at most %s elements, not %s",
+                    scalar @{ $self->{order} },
+                    scalar @$order
+                ) if scalar @{ $self->{order} } < scalar @$order;
 
-                my %spec = map { $_ => 1 } @{$self->{order}};
+                my %spec = map { $_ => 1 } @{ $self->{order} };
 
-                for (0 .. @{$self->{order}} - 1) {
-                    _err( 
+                for ( 0 .. @{ $self->{order} } - 1 ) {
+                    _err(
                         "parameter 1 values to 'order' must be any of [%s], not '%s'",
-                        join (q{, }, sort keys %spec), $order->[$_] )
-                    unless exists $spec{$order->[$_]};
+                        join( q{, }, sort keys %spec ),
+                        $order->[$_]
+                    ) unless exists $spec{ $order->[$_] };
                 }
                 $self->{order} = $order;
             }
             else {
-                _err( "type of parameter 1 to 'order' must be ARRAY, not %s",
-                      ref $order || ref \$order );
             }
         }
+        else {
+            _err( "type of parameter 1 to 'order' must be ARRAY, not %s",
+                ref $order || ref \$order );
+        }
     }
-    return wantarray ? @{$self->{order}} : $self->{order};
+    return wantarray ? @{ $self->{order} } : $self->{order};
 }
 
 sub command {
     my ($self) = @_;
 
-    my @command = grep { $_ }
-    map { scalar $self->$_ } $self->order;
+    my @command = grep {$_}
+        map { scalar $self->$_ } $self->order;
 
     return wantarray ? @command : "@command";
 }
@@ -222,27 +271,28 @@ sub command {
 sub run {
     my ($self) = @_;
 
-    $self->_can_run or return;
+    $self->_can_run;
 
     my @command = $self->command;
 
-    #print STDERR q{# }, $self->description, "\n"
-    #if $self->description;
-
-    #print STDERR scalar $self->command, "\n";
+    # print STDERR q{# }, $self->description, "\n"
+    # if $self->description;
+    # print STDERR scalar $self->command, "\n";
 
     if ( $self->output and not -p ( $self->output )[1] ) {
-        $command[-1] .= ".part$self->{_tmp}";
+        $command[-1] .= '.part' . $self->_tmp;
     }
 
     my $stdout;
     eval { $stdout = $self->capture ? qx/"@command"/ : system "@command" };
 
+    print STDERR "child";
+
     $self->_did_run( $@, $? ) or return;
 
     $self->_rename if $self->output and not -p ( $self->output )[1];
 
-    $self->{_destroy} = 1;
+    $self->_destroy(1);
 
     return $stdout;
 }
@@ -265,63 +315,65 @@ sub _connect {
     my ( $upstream, $downstream ) = @_;
     my $class = ref $downstream;
 
-    my $named_pipe = File::Spec->catfile(
-        File::Spec->tmpdir(),
-        qq{$class:} . int rand MAX_RAND
-    );
+    my $named_pipe = File::Spec->catfile( File::Spec->tmpdir(),
+        qq{$class:} . int rand MAX_RAND );
 
     POSIX::mkfifo( $named_pipe, 0777 )
-      or _err( "couldn't create named pipe %s: %s", $named_pipe, $! );
+        or _err( "couldn't create named pipe %s: %s", $named_pipe, $! );
 
     my %output_spec = $upstream->output;
 
     _err(
-        "can't install fifo %s as output to downstream because there are multiple output specifications (%s):\n%s",
+        "can't install fifo %s as output because there are multiple output specifications (%s):\n%s",
         $named_pipe,
         join( q{, }, map {qq{'$_' }} sort keys %output_spec ),
         $upstream->description || "$upstream"
     ) if keys %output_spec > 1;
 
-    $upstream->output(
-        {
-            scalar each %output_spec || q{>} => $named_pipe } );
+    $upstream->output( { scalar each %output_spec || q{>} => $named_pipe } );
     $downstream->input($named_pipe);
 
     return $named_pipe;
 }
 
 sub _parallel {
-    my ( $class, $pipe, $previous, @commands ) = @_;
+    my ( $class, $pipe, $previous, @commands, @results ) = @_;
 
     return unless @commands;
+    return if $pipe and not _mkfifo_works();
 
-    eval {
-        require POSIX;
-        POSIX->import();
-        require threads;
-    };
-    _err( "requires POSIX::mkfifo and threads:\n%s", $@ )
-        if $@;
+    use threads;
 
-    my @results;
+COMMAND:
     for my $command ( @commands, 'dummy' ) {
-        _err( "type of args to '%s' must be '%s', not '%s'",
-            (split /:+/, _this_sub_name(2))[1], $class, ref $command || $command )
+
+        _err(
+            "type of args to '%s' must be '%s', not '%s'",
+            ( split /:+/, _this_sub_name(2) )[1],
+            $class, ref $command || $command
+            )
             unless ref $command eq $class
                 or 'dummy' eq $command;
 
-        if ($pipe) {
-            _connect( $previous, $command ) if ref $command;
-            $previous->{_fifo} = int rand MAX_RAND;
+        if ( $pipe and ref $command ) {
+            $previous->{_fifo} = _connect( $previous, $command );
         }
 
-        # unless (my $pid = fork) {
+        # my $pid = fork;
+        # if ( !defined $pid ) {
+        #     croak q{Couldn't fork!};
+        # }
+        # elsif (0 == $pid) {
         #     push @results, $previous->run;
         #     exit;
+        # }
+        # else {
+        #     push @results, $previous->run;
         # }
 
         push @results, threads->new( sub { $previous->run } );
 
+        #exit unless defined $results[-1];
         $previous = $command;
     }
     return map { $_->join } @results;
@@ -330,11 +382,11 @@ sub _parallel {
 sub _rename {
     my ($self) = @_;
 
-    rename $self->_canonical( $self->output . ".part$self->{_tmp}" ),
+    rename $self->_canonical( $self->output . '.part' . $self->_tmp ),
         $self->_canonical( scalar $self->output )
         or _err(
         "can't rename %s to %s: %s",
-        $self->_canonical( $self->output . ".part$self->{_tmp}" ),
+        $self->_canonical( $self->output . '.part' . $self->_tmp ),
         $self->_canonical( scalar $self->output ), $!
         );
 }
@@ -342,14 +394,21 @@ sub _rename {
 sub _can_run {
     my ($self) = @_;
 
+    if ( my $nonexistent_file = $self->_inputs_not_available ) {
+        _err( "%s %s", $nonexistent_file,
+            -e $nonexistent_file
+            ? 'is not readable'
+            : 'does not exist' );
+    }
+
     _err("need interpreter or executable to be set to run")
         unless $self->interpreter
             or $self->executable;
 
     _err( "need interpreter '%s' or executable '%s' to be in path to run",
         $self->interpreter, $self->executable )
-        unless $self->{_interpreter}
-            or $self->{_executable};
+        unless $self->_interpreter
+            or $self->_executable;
 
     return 1;
 }
@@ -372,24 +431,34 @@ sub _did_run {
     return 1;
 }
 
+sub _inputs_not_available {
+    my ($self) = @_;
+
+    for ( $self->input ) {
+        return $_ unless -r $_;
+    }
+
+    return;
+}
+
 sub _program_in_path {
     my ( $self, $program, $is_executable ) = @_;
 
     return unless $program;
 
-    my ($vol, $dir, $file) = File::Spec->splitpath( $program );
+    my ( $vol, $dir, $file ) = File::Spec->splitpath($program);
 
     return $program
-	if $dir 
-	  and ( -f $program or -l $program )
-	    and ( not defined $is_executable or -x $program);
+        if $dir
+            and ( -f $program or -l $program )
+            and ( not defined $is_executable or -x $program );
 
     for ( @{ $self->path } ) {
         my $path = File::Spec->catfile( $_, $program );
 
         return $path
             if ( -f $path or -l $path )
-	      and ( not defined $is_executable or -x $path);
+            and ( not defined $is_executable or -x $path );
     }
 
     return q{};
@@ -408,10 +477,10 @@ sub _flatten {
     return $struct unless ref $struct;
 
     eval {
-	require Storable;
-	Storable->import();
+        require Storable;
+        Storable->import();
     };
-    _err( "Storable module required: $@" ) if $@;
+    _err("Storable module required: $@") if $@;
 
     $struct = Storable::dclone($struct);
 
@@ -419,13 +488,11 @@ sub _flatten {
     while ( ref $struct ) {
 
         if ( 'ARRAY' eq ref $struct ) {
-            #$struct = [@$struct];
             last unless @$struct;
             push @expanded, $self->_flatten( shift @$struct );
         }
 
         elsif ( 'HASH' eq ref $struct ) {
-            #$struct = {%$struct};
             last unless %$struct;
             my ( $key, $value ) = each %$struct;
             return unless defined $key and defined $value;
@@ -434,7 +501,6 @@ sub _flatten {
         }
 
         elsif ( 'SCALAR' eq ref $struct ) {
-            #$struct = \${$struct};
             last unless $$struct;
             push @expanded, $self->_flatten($$struct);
             $struct = undef;
@@ -453,21 +519,18 @@ sub _flatten {
 sub DESTROY {
     my ($self) = @_;
 
-    #return unless $self->{_destroy};
+    return unless $self->_destroy;
 
-    if ( $self->{_tmp} ) {
+    if ( $self->_tmp ) {
         my ( undef, $out_dir, undef )
             = File::Spec->splitpath( $self->output );
-        my $out_files = File::Spec->catfile( $out_dir, "*$self->{_tmp}" );
+        my $out_files = File::Spec->catfile( $out_dir, "*{$self->_tmp}" );
 
         unlink glob $out_files;
     }
 
-    if ( $self->{_fifo} ) {
-        my $tmp_dir = File::Spec->tmpdir();
-        my $tmp_files = File::Spec->catfile( $tmp_dir, "*$self->{_fifo}" );
-
-        unlink glob $tmp_files;
+    if ( $self->_fifo ) {
+        unlink glob $self->_fifo;
     }
 }
 
@@ -478,23 +541,44 @@ sub _this_sub_name {
 
 sub _err {
     my ( $spec, @args ) = @_;
-    croak sprintf "%s error: $spec",  _this_sub_name(2), @args;
+    croak sprintf "%s error: $spec", _this_sub_name(2), @args;
+}
+
+sub _mkfifo_works {
+    eval {
+        require POSIX;
+        POSIX->import();
+        my $test_named_pipe = File::Spec->catfile( File::Spec->tmpdir(),
+            'test.' . int rand MAX_RAND );
+
+        POSIX::mkfifo( $test_named_pipe, 0777 )
+            or _err( "couldn't create test named pipe %s: %s",
+            $test_named_pipe, $! );
+
+        unlink $test_named_pipe;
+    };
+    _err( "requires POSIX::mkfifo:\n%s", $@ )
+        if $@;
+
+    return 1;
 }
 
 1;    # Magic true value required at end of module
-
 
 package main;
 use Carp;
 use Data::Dumper;
 
+my $pv = System::Wrapper->new(
+    executable => 'pv',
+    arguments  => [ '-s 7042', '-c -N cat' ],
+    input      => ['/home/psilva/.emacs'],
+);
+
 my $cat = System::Wrapper->new(
     interpreter => 'perl',
     arguments   => [ -pe => q{''} ],
-    input       => ['/work/genomes/AT/TAIR_reference.fas.rc'],
-    output      => { '>' => 'forward' },
-    description =>
-        'Concatenate Arabidopsis thaliana reference genome to STDOUT',
+    description => 'Concatenate .emacs to STDOUT',
 );
 
 my $reverse = System::Wrapper->new(
@@ -510,6 +594,11 @@ my $complement = System::Wrapper->new(
     output      => { '>' => 'complement' },
 );
 
+die "failed to run at least one command"
+    if grep {$_}
+        System::Wrapper->pipeline( $pv, $cat, $reverse, $complement );
+
+__END__
 my $prog = <<'EOF';
 my ($name, $input_size) = (shift, shift);
 
@@ -559,18 +648,6 @@ my $tpb = System::Wrapper->new(
     ],
     input => ['/work/genomes/AT/TAIR_reference.fas.rc'],
 );
-
-my $pv = System::Wrapper->new(
-    executable => 'pv',
-    arguments  => [ '-s 242427548', '-c -N Test' ],
-    input      => ['/work/genomes/AT/TAIR_reference.fas.rc'],
-);
-
-croak "failed to run at least one command"
-    if grep { $_ }
-    System::Wrapper->pipeline( $pv, $cat, $pv, $reverse, $pv, $complement );
-
-__END__
 
 
 =head1 NAME
