@@ -11,48 +11,7 @@ use File::Spec;
 
 our $VERSION = '0.0.1';
 
-# sub _fields {
-#     {   interpreter => undef,
-#         executable  => undef,
-#         arguments   => undef,
-#         input       => undef,
-#         output      => undef,
-#         capture     => undef,
-#         description => undef,
-#         progress    => undef,
-#         order       => [qw/interpreter executable arguments input output/],
-#         path        => [ grep $_, File::Spec->path, q{.} ],
-#         _destroy    => undef,
-#         _fifo =>
-#             undef
-#         ,    # internal: integer unique to current object's fifo pipe if any
-#         _tmp => int rand
-#             MAX_RAND,   # internal: integer unique to current object's address
-#         _arguments =>
-#             undef,      # internal: stringified form of arguments structure
-#         _input => undef, # internal: stringified form of input files array ref
-#         _output =>
-#             undef
-#         ,    # internal: stringified form of output file specification hash
-#     };
-# }
-
 ## CLASS METHODS
-# sub new {
-#     my ( $class, %args ) = @_;
-
-#     my $self = bless( _fields(), $class );
-
-#     while ( my ( $key, $value ) = each %args ) {
-#         _err( "can't access field '%s' in class '%s'", $key, $class )
-#             if not exists $self->{$key}
-#                 or $key =~ m/^_/;
-
-#         $self->$key($value);
-#     }
-#     return $self;
-# }
-
 use fields qw/
     interpreter  executable  arguments  input  output
     description  path        order
@@ -64,7 +23,18 @@ use fields qw/
 
 sub new {
     my ( $class, %args ) = @_;
-    my __PACKAGE__ $self = fields::new($class);
+    # my $self = bless( { map { $_ => undef }
+    #                     qw/
+    #                           interpreter  executable  arguments  input  output
+    #                           description  path        order
+    #                           progress     spec        capture
+    #                           _interpreter _executable _arguments
+    #                           _input       _output     _destroy
+    #                           _fifo        _tmp
+    #                       /
+    #                   }, $class);
+
+    my $self = fields::new($class);
     return $self->_init(%args);
 }
 
@@ -87,28 +57,15 @@ sub parallel { _parallel( shift, 0, @_ ) }
 sub validate { _err("Unimplemented abstract method") }
 
 ## OBJECT METHODS
+sub _interpreter : lvalue { shift->{_interpreter} }
+sub _executable  : lvalue { shift->{_executable}  }
+sub _input       : lvalue { shift->{_input}       }
+sub _output      : lvalue { shift->{_output}      }
+sub _arguments   : lvalue { shift->{_arguments}   }
+sub _fifo        : lvalue { shift->{_fifo}        }
+sub _tmp         : lvalue { shift->{_tmp}         }
+sub _destroy     : lvalue { shift->{_destroy}     }
 
-sub _interpreter {
-    my ($self, $arg) = @_;
-    $self->{_interpreter} = $arg if $arg;
-    return $self->{_interpreter};
-}
-
-
-sub AUTOLOAD {
-    my ($self, $arg) = @_;
-
-    use vars qw/$AUTOLOAD/;    
-    my $key = $AUTOLOAD;
-       $key =~ s/.*://;
-
-    if ( defined $arg ) {
-        $self->{$key} = $arg;
-    }
-
-    return $self->{$key};
-}
-                 
 sub interpreter {
     my ( $self, $interpreter ) = @_;
 
@@ -116,7 +73,7 @@ sub interpreter {
         $self->{interpreter} = $interpreter;
     }
 
-    $self->_interpreter( $self->_program_in_path( $self->{interpreter}, 1 ) );
+    $self->_interpreter = $self->_program_in_path( $self->{interpreter}, 1 );
 
     return $self->_interpreter || $self->{interpreter};
 }
@@ -128,7 +85,7 @@ sub executable {
         $self->{executable} = $executable;
     }
 
-    $self->_executable( $self->_program_in_path( $self->{executable} ) );
+    $self->_executable = $self->_program_in_path( $self->{executable} );
 
     return $self->_executable || $self->{executable};
 }
@@ -138,10 +95,8 @@ sub arguments {
 
     if ( defined $args ) {
         $self->{arguments} = $args;
+        $self->_arguments  = $self->_flatten( $self->{arguments} )
     }
-
-    $self->{_arguments} = $self->_flatten( $self->{arguments} )
-        if $self->{arguments};
 
     return wantarray ? @{ $self->{arguments} ||= [] } : $self->_arguments;
 }
@@ -158,7 +113,7 @@ sub input {
                 or 'SCALAR' eq ref \$input;
 
         $self->{input} = ref $input ? $input : [$input];
-        $self->{_input} = $self->_flatten( $self->{input} );
+        $self->_input  = $self->_flatten( $self->{input} );
     }
 
     return wantarray ? @{ $self->{input} ||= [] } : $self->_input;
@@ -174,7 +129,7 @@ sub output {
         ) unless 'HASH' eq ref $output;
 
         $self->{output} = $output;
-        $self->{_output} = $self->_flatten( $self->{output} );
+        $self->_output  = $self->_flatten( $self->{output} );
     }
 
     return wantarray ? %{ $self->{output} ||= {} } : $self->_output;
@@ -275,9 +230,9 @@ sub run {
 
     my @command = $self->command;
 
-    # print STDERR q{# }, $self->description, "\n"
-    # if $self->description;
-    # print STDERR scalar $self->command, "\n";
+    print STDERR q{# }, $self->description, "\n"
+    if $self->description;
+    print STDERR scalar $self->command, "\n";
 
     if ( $self->output and not -p ( $self->output )[1] ) {
         $command[-1] .= '.part' . $self->_tmp;
@@ -286,13 +241,11 @@ sub run {
     my $stdout;
     eval { $stdout = $self->capture ? qx/"@command"/ : system "@command" };
 
-    print STDERR "child";
-
     $self->_did_run( $@, $? ) or return;
 
     $self->_rename if $self->output and not -p ( $self->output )[1];
 
-    $self->_destroy(1);
+    $self->_destroy = 1;
 
     return $stdout;
 }
@@ -339,12 +292,10 @@ sub _connect {
 sub _parallel {
     my ( $class, $pipe, $previous, @commands, @results ) = @_;
 
-    return unless @commands;
+    _err( "parallel execution requires more than one command" ) unless @commands;
     return if $pipe and not _mkfifo_works();
 
-    use threads;
-
-COMMAND:
+  COMMAND:
     for my $command ( @commands, 'dummy' ) {
 
         _err(
@@ -356,27 +307,21 @@ COMMAND:
                 or 'dummy' eq $command;
 
         if ( $pipe and ref $command ) {
-            $previous->{_fifo} = _connect( $previous, $command );
+            $previous->_fifo = _connect( $previous, $command );
         }
 
-        # my $pid = fork;
-        # if ( !defined $pid ) {
-        #     croak q{Couldn't fork!};
-        # }
-        # elsif (0 == $pid) {
-        #     push @results, $previous->run;
-        #     exit;
-        # }
-        # else {
-        #     push @results, $previous->run;
-        # }
+        unless (my $pid = fork) {
+            push @results, $previous->run;
+            exit if ref $command;
+        }
 
-        push @results, threads->new( sub { $previous->run } );
+        #push @results, threads->new( sub { $previous->run } );
 
         #exit unless defined $results[-1];
         $previous = $command;
     }
-    return map { $_->join } @results;
+    return @results;
+    # return map { $_->join } @results;
 }
 
 sub _rename {
@@ -524,7 +469,7 @@ sub DESTROY {
     if ( $self->_tmp ) {
         my ( undef, $out_dir, undef )
             = File::Spec->splitpath( $self->output );
-        my $out_files = File::Spec->catfile( $out_dir, "*{$self->_tmp}" );
+        my $out_files = File::Spec->catfile( $out_dir, q{*} . $self->_tmp );
 
         unlink glob $out_files;
     }
@@ -577,7 +522,8 @@ my $pv = System::Wrapper->new(
 
 my $cat = System::Wrapper->new(
     interpreter => 'perl',
-    arguments   => [ -pe => q{''} ],
+    arguments   => [ -pe => q{''} ], 
+    input       => ['/home/psilva/.emacs'], 
     description => 'Concatenate .emacs to STDOUT',
 );
 
@@ -596,7 +542,26 @@ my $complement = System::Wrapper->new(
 
 die "failed to run at least one command"
     if grep {$_}
-        System::Wrapper->pipeline( $pv, $cat, $reverse, $complement );
+        System::Wrapper->pipeline( $pv, $cat );
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 __END__
 my $prog = <<'EOF';
