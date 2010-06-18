@@ -4,186 +4,84 @@ use warnings;
 use strict;
 use overload q{""}    => \&command;
 use constant MAX_RAND => 2 ** 32;
-
 use Carp;
+use Data::Dumper;
 use File::Spec;
+use Moose;
 
 our $VERSION = '0.0.1';
 
-## CLASS METHODS
-sub new {
-    my ( $class, %args ) = @_;
-    my $self = bless( { map { $_ => undef }
-                        qw/
-                              interpreter  executable  arguments  input  output
-                              description  path        order
-                              progress     spec        capture
-                              _interpreter _executable _arguments
-                              _input       _output     _destroy
-                              _fifo        _tmp
-                          /
-                      }, $class);
+has [qw/interpreter executable description/] => ( is => 'rw', isa => 'Str' );
 
-    return $self->_init(%args);
-}
+has [qw/arguments input output/] => ( is => 'rw' );
+has 'path'  => ( is => 'rw', isa => 'ArrayRef[Str]', default => sub {[ grep {$_} File::Spec->path, q{.} ]} );
+has 'order' => ( is => 'rw', isa => 'ArrayRef[Str]', default => sub {[qw/interpreter executable arguments input output/]} );
+has [qw/progress capture/] => ( is => 'rw', isa => 'Bool', default => 0 );
+has 'spec' => ( is => 'rw', isa => 'HashRef' );
 
-## OBJECT METHODS
-sub _interpreter : lvalue { shift->{_interpreter} }
-sub _executable  : lvalue { shift->{_executable}  }
-sub _input       : lvalue { shift->{_input}       }
-sub _output      : lvalue { shift->{_output}      }
-sub _arguments   : lvalue { shift->{_arguments}   }
-sub _fifo        : lvalue { shift->{_fifo}        }
-sub _tmp         : lvalue { shift->{_tmp}         }
-sub _destroy     : lvalue { shift->{_destroy}     }
+has '_destroy' => ( is => 'rw', isa => 'Bool');
+has '_fifo'    => ( is => 'rw', isa => 'Str');
+has '_tmp'     => ( is => 'ro', isa => 'Str',  default => int rand MAX_RAND );
 
-sub interpreter {
-    my ( $self, $interpreter ) = @_;
+has '_canonicals' => ( is => 'ro', isa => 'HashRef[Str]', 
+                       default => sub {
+                           return {
+                               map { $_ => '' }
+                               qw/interpreter executable arguments input output/
+                           }
+                       },
+                   );
 
-    if ( defined $interpreter ) {
-        $self->{interpreter} = $interpreter;
+sub BUILD {
+    my $self = shift;
+    my $args = shift;
+
+    for (my ($k, $v) = each %$args) {
+        $self->$k($v);
     }
-
-    $self->_interpreter = $self->_program_in_path( $self->{interpreter}, 1 );
-
-    return $self->_interpreter || $self->{interpreter};
 }
 
-sub executable {
-    my ( $self, $executable ) = @_;
+for my $method (qw/interpreter executable/) {
+    around $method => sub {
+        my ($code, $self, $arg) = @_;
 
-    if ( defined $executable ) {
-        $self->{executable} = $executable;
-    }
-
-    $self->_executable = $self->_program_in_path( $self->{executable} );
-
-    return $self->_executable || $self->{executable};
+        if (defined $arg) {
+            $self->$code(
+                $self->_canonicals->{$method}
+                =  $self->_program_in_path( $arg, 'interpreter' eq $method )
+                || $arg
+            );
+        }
+        return $self->$code;
+    };
 }
 
-sub arguments {
-    my ( $self, $args ) = @_;
+for my $method (qw/arguments input output/) {
+    around $method => sub {
+        my ($code, $self, $args) = @_;
 
-    if ( defined $args ) {
-        $self->{arguments} = $args;
-        $self->_arguments  = $self->_flatten( $self->{arguments} )
-    }
+        if (defined $args) {
+            $self->_canonicals->{$method}
+            = $self->_flatten( $args );
 
-    return wantarray ? @{ $self->{arguments} ||= [] } : $self->_arguments;
-}
-
-sub input {
-    my ( $self, $input ) = @_;
-
-    if ( defined $input ) {
-        _err(
-            "type of arg 1 to 'input' must be string or reference to array of strings, not %s",
-            ref $input
-            )
-            unless 'ARRAY' eq ref $input
-                or 'SCALAR' eq ref \$input;
-
-        $self->{input} = ref $input ? $input : [$input];
-        $self->_input  = $self->_flatten( $self->{input} );
-    }
-
-    return wantarray ? @{ $self->{input} ||= [] } : $self->_input;
-}
-
-sub output {
-    my ( $self, $output ) = @_;
-
-    if ( defined $output ) {
-        _err(
-            "type of arg 1 to 'output' must be reference to hash with keys 'spec' => 'file', not %s",
-            ref $output ? ref $output : ref \$output
-        ) unless 'HASH' eq ref $output;
-
-        $self->{output} = $output;
-        $self->_output  = $self->_flatten( $self->{output} );
-    }
-
-    return wantarray ? %{ $self->{output} ||= {} } : $self->_output;
-}
-
-sub path {
-    my ( $self, $path ) = @_;
-
-    if ( defined $path ) {
-        $path = [$path] if 'SCALAR' eq ref \$path;
-
-        for (@$path) {
-            _err(
-                "type of arg 1 to 'path' must be directory or reference to array of directories (not non-directory '%s')",
-                $_
-            ) unless -d $_;
+            $self->$code( $args );
         }
 
-        $self->{path} = $path;
-    }
-    return wantarray ? @{ $self->{path} ||= [] } : $self->{path};
+        return wantarray
+        ? _deref( $self->$code )
+        : $self->_canonicals->{$method};
+    };
 }
 
-sub capture {
-    my ( $self, $capture ) = @_;
+around [qw/path order/] => sub {
+    my ($method, $self, $args) = @_;
 
-    if ($capture) {
-        $self->{capture} = $capture;
+    if (defined $args) {
+        $self->$method( $args );
     }
-    return $self->{capture};
-}
 
-sub description {
-    my ( $self, $description ) = @_;
-
-    if ($description) {
-        $self->{description} = $description;
-    }
-    return $self->{description};
-}
-
-sub progress {
-    my ( $self, $progress ) = @_;
-
-    if ($progress) {
-        $self->{progress} = $progress;
-    }
-    return $self->{progress};
-}
-
-sub order {
-    my ( $self, $order ) = @_;
-
-    if ( defined $order ) {
-        if ( 'ARRAY' eq ref $order ) {
-            if (@$order) {
-                _err(
-                    "parameter 1 to 'order' must have at most %s elements, not %s",
-                    scalar @{ $self->{order} },
-                    scalar @$order
-                ) if scalar @{ $self->{order} } < scalar @$order;
-
-                my %spec = map { $_ => 1 } @{ $self->{order} };
-
-                for ( 0 .. @{ $self->{order} } - 1 ) {
-                    _err(
-                        "parameter 1 values to 'order' must be any of [%s], not '%s'",
-                        join( q{, }, sort keys %spec ),
-                        $order->[$_]
-                    ) unless exists $spec{ $order->[$_] };
-                }
-                $self->{order} = $order;
-            }
-            else {
-            }
-        }
-        else {
-            _err( "type of parameter 1 to 'order' must be ARRAY, not %s",
-                ref $order || ref \$order );
-        }
-    }
-    return wantarray ? @{ $self->{order} } : $self->{order};
-}
+    return wantarray ? _deref( $self->$method ) : $self->$method;
+};
 
 sub command {
     my ($self) = @_;
@@ -196,14 +94,14 @@ sub command {
 
 sub run {
     my ($self) = @_;
-    
+
     $self->_can_run;
 
     my @command = $self->command;
 
-    # print STDERR q{# }, $self->description, "\n"
-    # if $self->description;
-    # print STDERR scalar $self->command, "\n";
+    print STDERR q{# }, $self->description, "\n"
+    if $self->description;
+    print STDERR scalar $self->command, "\n";
 
     if ( $self->output and not -p ( $self->output )[1] ) {
         $command[-1] .= '.part' . $self->_tmp;
@@ -216,44 +114,11 @@ sub run {
 
     $self->_rename if $self->output and not -p ( $self->output )[1];
 
-    $self->_destroy = 1;
+    $self->_destroy( 1 );
 
     return $stdout;
 }
 
-## INTERNAL METHODS
-sub _init {
-    my ( $self, %args ) = @_;
-
-    $self->{order} = [qw/interpreter executable arguments input output/];
-    $self->{path}  = [ grep {$_} File::Spec->path, q{.} ];
-    $self->{_tmp}  = int rand MAX_RAND;
-
-    while ( my ( $key, $value ) = each %args ) {
-
-        _err( "Can't access '%s' field in class '%s'",
-              $key, ref $self )
-        if !exists $self->{$key}
-        or $key =~ m/^_/;
-
-        $self->$key($value);
-    }
-
-    return $self;
-}
-
-sub _progress {
-    my ($self) = @_;
-
-    return unless $self->progress;
-
-    _err("need input to be set to track progress")
-        unless $self->input;
-
-    my $input_size = 0;
-
-    $input_size += -s $_ for $self->input;
-}
 
 sub _rename {
     my ($self) = @_;
@@ -283,8 +148,8 @@ sub _can_run {
 
     _err( "need interpreter '%s' or executable '%s' to be in path to run",
         $self->interpreter, $self->executable )
-        unless $self->_interpreter
-            or $self->_executable;
+        unless $self->_canonicals->{interpreter}
+            or $self->_canonicals->{executable};
 
     return 1;
 }
@@ -318,7 +183,7 @@ sub _inputs_not_available {
 }
 
 sub _program_in_path {
-    my ( $self, $program, $is_executable ) = @_;
+    my ( $self, $program, $is_executable ) = @_; die Dumper \@_;
 
     return unless $program;
 
@@ -337,7 +202,7 @@ sub _program_in_path {
             and ( not defined $is_executable or -x $path );
     }
 
-    return q{};
+    return;
 }
 
 sub _canonical {
@@ -345,6 +210,16 @@ sub _canonical {
 
     $name =~ s/\s*[<>]\s*//g;
     return File::Spec->canonpath($name);
+}
+
+sub _deref {
+    my ($struct) = @_;
+
+    return unless $struct;
+    return $struct unless          ref $struct;
+    return @$struct if 'ARRAY'  eq ref $struct;
+    return %$struct if 'HASH'   eq ref $struct;
+    return $$struct if 'SCALAR' eq ref $struct;
 }
 
 sub _flatten {
@@ -392,7 +267,7 @@ sub _flatten {
     return wantarray ? @expanded : "@expanded";
 }
 
-sub DESTROY {
+sub DEMOLISH {
     my ($self) = @_;
 
     return unless $self->_destroy;
@@ -417,9 +292,8 @@ sub _this_sub_name {
 
 sub _err {
     my ( $spec, @args ) = @_;
-    croak sprintf "%s error: $spec", _this_sub_name(2), @args;
+    confess sprintf "%s error: $spec", _this_sub_name(2), @args;
 }
-
 
 1;    # Magic true value required at end of module
 
