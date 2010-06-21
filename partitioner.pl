@@ -11,7 +11,7 @@ use List::Util 'sum';
 my $DATA_HANDLE = 'ARGV';
 my $output;
 my $size    = 10;
-my $column  = 0;
+my $column  = 5;
 my $numeric = 1;
 my $remove_mean = 0;
 my $no_split    = 0;
