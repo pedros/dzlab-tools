@@ -110,6 +110,9 @@ __END__
  # sort and split a gff file on its score column (#6) into percentiles with output filenames prefixed by base_name
  partitioner.pl in.gff -s 100 -c 6 -o base_name
 
+ # sort and split a gene score file on its score column (#2) into percentiles with output filenames prefixed by base_name
+ partitioner.pl in.dat -s 100 -c 2 -o base_name
+
 =head1 DESCRIPTION
 
 =head1 OPTIONS
