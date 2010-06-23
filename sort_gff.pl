@@ -18,8 +18,8 @@ GetOptions(
 my ( $INH, $OUTH, $ERRH ) = _prepare_io( \%ARGV, \@ARGV );
 
 print $OUTH map  { $_->[0] }
-sort { $a->[1] <=> $b->[1] }
-map  { [$_, (split /\t/, $_)[3]] }
+sort { $a->[1] cmp $b->[1] or $a->[2] <=> $b->[2] }
+map  { [$_, (split /\t/, $_)[0,3]] }
 <$INH>;
 
 
