@@ -20,7 +20,7 @@ sub new {
                               progress     spec        capture
                               _interpreter _executable _arguments
                               _input       _output     _destroy
-                              _fifo        _tmp
+                              _fifo        _tmp        verbose
                           /
                       }, $class);
 
@@ -36,6 +36,7 @@ sub _arguments   : lvalue { shift->{_arguments}   }
 sub _fifo        : lvalue { shift->{_fifo}        }
 sub _tmp         : lvalue { shift->{_tmp}         }
 sub _destroy     : lvalue { shift->{_destroy}     }
+sub verbose      : lvalue { shift->{verbose}      }
 
 sub interpreter {
     my ( $self, $interpreter ) = @_;
@@ -201,9 +202,11 @@ sub run {
 
     my @command = $self->command;
 
-    # print STDERR q{# }, $self->description, "\n"
-    # if $self->description;
-    # print STDERR scalar $self->command, "\n";
+    if ($self->verbose) {
+        print STDERR q{# }, $self->description, ":\n"
+        if $self->description;
+        print STDERR scalar $self->command, "\n";
+    }
 
     if ( $self->output and not -p ( $self->output )[1] ) {
         $command[-1] .= '.part' . $self->_tmp;
@@ -445,7 +448,8 @@ This document describes System::Wrapper version 0.0.1
     $command->input( \@ARGV );
     $command->output( { '--output' => 'file'}, q{>} => 'file2' );
     $command->path( [$command->path, q{.}] );
-    $command->capture(1);
+    $command->capture = 1;
+    $command->verbose = 1;
     print $command->command;
     $command->run;
 

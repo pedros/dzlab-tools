@@ -12,3 +12,8 @@ cover_db
 pod2htm*.tmp
 System-Wrapper-*
 SIGNATURE
+MYMETA.yml
+META.yml
+Makefile.PL
+.svnignore
+MANIFEST.SKIP

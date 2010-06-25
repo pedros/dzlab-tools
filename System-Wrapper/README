@@ -15,7 +15,8 @@ SYNOPSIS
         $command->input( \@ARGV );
         $command->output( { '--output' => 'file'}, q{>} => 'file2' );
         $command->path( [$command->path, q{.}] );
-        $command->capture(1);
+        $command->capture = 1;
+        $command->verbose = 1;
         print $command->command;
         $command->run;
 
