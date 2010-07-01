@@ -76,14 +76,16 @@ if ($absolute) {
 }
 
 my $gff_iterator
-    = make_gff_iterator( parser => \&gff_read, handle => 'ARGV' );
+    = make_gff_iterator( parser => \&gff_read, file => $ARGV[0] );
 
 my %gff_records = ();
 LOAD:
 while ( my $gff_line = $gff_iterator->() ) {
     next LOAD unless ref $gff_line eq 'HASH';
-    push @{ $gff_records{ $gff_line->{seqname} } }, $gff_line;
+    $gff_records{ $gff_line->{seqname} } = undef;
+#    push @{ $gff_records{ $gff_line->{seqname} } }, {@{$gff_line}{qw/attribute score start end/}};
 }
+
 
 my $fasta_lengths = {};
 if ( $absolute and $no_skip ) {
@@ -108,6 +110,7 @@ for my $sequence ( sort keys %gff_records ) {
             @{ $gff_records{$sequence} };
     }
 
+
     unless ($gff) {
         $window_iterator = make_window_iterator(
             width => $width,
@@ -127,12 +130,21 @@ for my $sequence ( sort keys %gff_records ) {
 WINDOW:
     while ( my ( $ranges, $locus ) = $window_iterator->($sequence) ) {
 
-        my $brs_iterator = binary_range_search(
+        my $search_iterator
+        = $no_sort
+        ? linear_range_search(
+            range   => $ranges,
+            file    => $ARGV[0],
+            seqname => $sequence,
+        )
+        : binary_range_search(
             range  => $ranges,
             ranges => $gff_records{$sequence},
         );
 
-        my $scores_ref = $scoring_dispatch{$scoring}->($brs_iterator, $reverse);
+        my $scores_ref = $scoring_dispatch{$scoring}->( $search_iterator, $reverse );
+
+        print Dumper $scores_ref;
 
         my ( $score, $attribute );
 
@@ -171,6 +183,8 @@ WINDOW:
     delete $gff_records{$sequence};
 }
 
+
+
 sub index_fasta_lengths {
     my %options = @_;
 
@@ -201,6 +215,7 @@ sub index_fasta_lengths {
     return \%fasta_lengths;
 }
 
+
 sub make_window_iterator {
     my (%options) = @_;
 
@@ -229,7 +244,7 @@ sub make_annotation_iterator {
     my (%options) = @_;
 
     my $annotation_file = $options{file};
-    my $locus_tag       = $options{tag} || 'ID';
+    my $locus_tag       = $options{tag}   || 'ID';
     my $merge_exons     = $options{merge} || 0;
 
     open my $GFFH, '<', $annotation_file
@@ -359,7 +374,7 @@ COORD:
     while ( my $gff_line = $brs_iterator->() ) {
         next COORD unless ref $gff_line eq 'HASH';
 
-        $score_sum += $gff_line->{score} eq q{.} ? 1 : $gff_line->{score};
+        $score_sum += ($gff_line->{score} eq q{.} or $gff_line->{score} eq q{} ? 1 : $gff_line->{score});
         $score_count++;
     }
 
@@ -460,6 +475,56 @@ COORD:
     }
 }
 
+sub linear_range_search {       ## assume sorted data
+    my (%args) = @_;
+
+    my $targets  = $args{range}    || croak 'Need a range parameter';
+    my $file     = $args{file}     || croak 'Need a file parameter';
+    my $sequence = $args{seqname}  || croak 'Need a seqname parameter';
+
+    my $gff_iterator
+    = make_gff_iterator(
+        parser  => \&gff_read,
+        file    => $file,
+        seqname => $sequence,
+    );
+
+    my @iterators = ();
+    
+  TARGET:
+    for my $range (@$targets) {
+        
+      RANGE_CHECK:
+        while (my $gff_line = $gff_iterator->()) {
+
+            # INVARIANTS:
+            # 1. start of current gff locus is less than or equal to the end of the current range
+            # 2. end of current gff locus is greater than or equal to the start of the current range
+            # 3. therefore, current gff locus overlaps current range in the same sequence
+
+            last RANGE_CHECK if $gff_line->{start} > $range->[1];
+
+            next RANGE_CHECK if $gff_line->{end}   < $range->[0];
+
+            push @iterators, sub {return $gff_line};
+                
+        }
+    }
+
+    return wantarray
+    ? @iterators
+    : sub {
+        while (@iterators) {
+            if ( my $range = $iterators[0]->() ) {
+                return $range;
+            }
+            shift @iterators;
+        }
+        return;
+    };
+}
+
+
 sub binary_range_search {
     my %options = @_;
 
@@ -515,11 +580,11 @@ TARGET:
         }
     }
 
-# In scalar context return master iterator that iterates over the list of range iterators.
-# In list context returns a list of range iterators.
+    # In scalar context return master iterator that iterates over the list of range iterators.
+    # In list context returns a list of range iterators.
     return wantarray
-        ? @iterators
-        : sub {
+    ? @iterators
+    : sub {
         while (@iterators) {
             if ( my $range = $iterators[0]->() ) {
                 return $range;
@@ -527,7 +592,7 @@ TARGET:
             shift @iterators;
         }
         return;
-        };
+    };
 }
 
 sub gff_read {
@@ -560,28 +625,54 @@ sub make_gff_iterator {
 
     my $parser     = $options{parser};
     my $file       = $options{file};
+    my $seqname    = $options{seqname};
     my $GFF_HANDLE = $options{handle};
 
     croak
         "Need parser function reference and file name or handle to build iterator"
-        unless $parser
-            and ref $parser eq 'CODE'
-            and (
-                ( defined $file and -e $file )
-                xor(defined $GFF_HANDLE and ref $GFF_HANDLE eq 'GLOB'
-                        or $GFF_HANDLE eq 'ARGV'
-                )
-            );
+        unless $parser and ($file or $GFF_HANDLE);
 
     if ($file) {
         open $GFF_HANDLE, '<', $file
             or croak "Can't read $file: $!";
     }
 
+    my @buffer;
+
     return sub {
-        $parser->( scalar <$GFF_HANDLE> );
+
+        if (@buffer and $seqname) {
+            return pop @buffer if $buffer[0]->{seqname} eq $seqname;
+        }
+
+        my $gff_line = $parser->( scalar <$GFF_HANDLE> ) || return;
+
+        if ($seqname and $gff_line->{seqname} ne $seqname) {
+            push @buffer, $gff_line;
+            return;
+        }
+
+        return $gff_line;
     };
 }
+
+sub memusage {
+    use Proc::ProcessTable;
+    my @results;
+    my $pid = (defined($_[0])) ? $_[0] : $$;
+    my $proc = Proc::ProcessTable->new;
+    my %fields = map { $_ => 1 } $proc->fields;
+    return undef unless exists $fields{'pid'};
+    foreach (@{$proc->table}) {
+        if ($_->pid eq $pid) {
+            push (@results, $_->size / (1024 ** 2)) if exists $fields{'size'};
+            push (@results, $_->pctmem) if exists $fields{'pctmem'};
+        };
+    };
+    return @results;
+}
+
+
 
 =head1 NAME
 
