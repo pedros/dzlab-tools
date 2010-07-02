@@ -16,7 +16,7 @@ my $min_score = 0;
 my $max_score = 0;
 my $ends_tag  = 'ID=';
 my $sort      = 0;
-my $id_column = 0;
+my $id_column = 1;
 my $output;
 
 # Grabs and parses command line options
@@ -26,7 +26,7 @@ my $result = GetOptions (
     'min-score|s=f'    => \$min_score,
     'max-score|S=f'    => \$max_score,
     'ends-tag|t=s'     => \$ends_tag,
-    'id-column|i=c'    => \$id_column,
+    'id-column|c=i'    => \$id_column,
     'output|o=s'       => \$output,
     'verbose|v'        => sub { use diagnostics; },
     'quiet|q'          => sub { no warnings; },
@@ -42,10 +42,16 @@ if ($output) {
 $list = index_list ($list, $ends_tag) if $list;
 my @sorted_list;
 
+$id_column--;
+
 ID:
 while (<>) {
     chomp;
-    my ($id) = (split /\t/)[$id_column];
+    my @a = split /\t/, $_; die \@a if @a < 9;
+
+    my $id = $a[$id_column];
+
+    die Dumper \@a if not defined $id;
 
     $id =~ s/$ends_tag//;
 
