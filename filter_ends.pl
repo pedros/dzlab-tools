@@ -47,12 +47,8 @@ $id_column--;
 ID:
 while (<>) {
     chomp;
-    my @a = split /\t/, $_; die \@a if @a < 9;
 
-    my $id = $a[$id_column];
-
-    die Dumper \@a if not defined $id;
-
+    my $id = (split /\t/, $_)[$id_column];
     $id =~ s/$ends_tag//;
 
     next ID unless
@@ -77,17 +73,17 @@ sub index_list {
 
     my $counter = 0;
     my %list = ();
-    open my $LIST, '<', $list or croak "Can't open $list for reading";
+    open my $LIST, '<', $list or croak "Can't open $list: $!";
     while (<$LIST>) {
 
         my ($id, $freq, $alt) = (0, 0, 0);
 
         my @fields = split /\t/, $_;
 
-        if (@fields < 9) {
+        if (@fields > 1 and @fields < 9) {
             ($id, $freq, $alt) = @fields;
         }
-        elsif (@fields == 9) {
+        elsif (@fields > 8) {
             ($id, $freq, $alt) = @fields[8, 5, 0];
             $id =~ s/^.*$ends_tag([^;]+).*$/$1/;
         }
@@ -96,7 +92,7 @@ sub index_list {
         }
 
         $id =~ s/[\r\n]//g;
-        
+
         $list{$id} = [$freq, $alt, $counter++];
     }
     close $LIST or carp "Can't close $list after reading";
@@ -124,7 +120,7 @@ __END__
  -s, --min-score   minimum score to filter by (0 by default)
  -S, --max-score   maximum score to filter by (0 by default)
  -r, --sort        sort input file by order in list
- -c, --id-column   select which column in file to filter contains the locus id (default: 0)
+ -c, --id-column   select which column in file to filter contains the locus id (default: 1)
  -o, --output      filename to write results to (defaults to STDOUT)
  -v, --verbose     output perl's diagnostic and warning messages
  -q, --quiet       supress perl's diagnostic and warning messages
