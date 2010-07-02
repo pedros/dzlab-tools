@@ -16,6 +16,7 @@ my $min_score = 0;
 my $max_score = 0;
 my $ends_tag  = 'ID=';
 my $sort      = 0;
+my $id_column = 0;
 my $output;
 
 # Grabs and parses command line options
@@ -25,6 +26,7 @@ my $result = GetOptions (
     'min-score|s=f'    => \$min_score,
     'max-score|S=f'    => \$max_score,
     'ends-tag|t=s'     => \$ends_tag,
+    'id-column|i=c'    => \$id_column,
     'output|o=s'       => \$output,
     'verbose|v'        => sub { use diagnostics; },
     'quiet|q'          => sub { no warnings; },
@@ -37,12 +39,13 @@ if ($output) {
     select $USER_OUT;
 }
 
-$list = index_list ($list) if $list;
+$list = index_list ($list, $ends_tag) if $list;
 my @sorted_list;
 
 ID:
 while (<>) {
-    my ($id, undef) = split /\t/;
+    chomp;
+    my ($id) = (split /\t/)[$id_column];
 
     $id =~ s/$ends_tag//;
 
@@ -56,15 +59,15 @@ while (<>) {
         $sorted_list[$list->{$id}->[2]] = $_;
     }
     else {
-        print $_;
+        print "$_\n";
     }
 }
 
-print grep {defined $_} @sorted_list if $sort;
+print map { "$_\n" } grep {defined $_} @sorted_list if $sort;
 
 
 sub index_list {
-    my ($list) = @_;
+    my ($list, $ends_tag) = @_;
 
     my $counter = 0;
     my %list = ();
