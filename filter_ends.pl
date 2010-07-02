@@ -118,6 +118,7 @@ __END__
  -s, --min-score   minimum score to filter by (0 by default)
  -S, --max-score   maximum score to filter by (0 by default)
  -r, --sort        sort input file by order in list
+ -c, --id-column   select which column in file to filter contains the locus id (default: 0)
  -o, --output      filename to write results to (defaults to STDOUT)
  -v, --verbose     output perl's diagnostic and warning messages
  -q, --quiet       supress perl's diagnostic and warning messages
