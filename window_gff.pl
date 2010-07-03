@@ -9,17 +9,17 @@ use Pod::Usage;
 use List::Util qw(sum);
 
 my $output;
-my $width   = 50;
-my $step    = 50;
-my $merge   = 0;
-my $no_sort = 0;
-my $no_skip = 0;
-my $scoring = 'meth';    # meth, average, sum or seq_freq
-my $reverse = 0;         # reverse score and count
-my $gff;
-my $tag = 'ID';
-my $feature;
+my $width    = 50;
+my $step     = 50;
+my $merge    = 0;
+my $no_sort  = 0;
+my $no_skip  = 0;
+my $scoring  = 'meth';    # meth, average, sum or seq_freq
+my $tag      = 'ID';
+my $reverse  = 0;         # reverse score and count
 my $absolute = 0;
+my $feature;
+my $gff;
 
 # Grabs and parses command line options
 my $result = GetOptions(
@@ -86,7 +86,6 @@ while ( my $gff_line = $gff_iterator->() ) {
 #    push @{ $gff_records{ $gff_line->{seqname} } }, {@{$gff_line}{qw/attribute score start end/}};
 }
 
-
 my $fasta_lengths = {};
 if ( $absolute and $no_skip ) {
     $fasta_lengths = index_fasta_lengths( handle => 'DATA' );
@@ -143,8 +142,6 @@ WINDOW:
         );
 
         my $scores_ref = $scoring_dispatch{$scoring}->( $search_iterator, $reverse );
-
-        print Dumper $scores_ref;
 
         my ( $score, $attribute );
 
@@ -497,17 +494,22 @@ sub linear_range_search {       ## assume sorted data
       RANGE_CHECK:
         while (my $gff_line = $gff_iterator->()) {
 
-            # INVARIANTS:
-            # 1. start of current gff locus is less than or equal to the end of the current range
-            # 2. end of current gff locus is greater than or equal to the start of the current range
-            # 3. therefore, current gff locus overlaps current range in the same sequence
-
             last RANGE_CHECK if $gff_line->{start} > $range->[1];
 
             next RANGE_CHECK if $gff_line->{end}   < $range->[0];
 
-            push @iterators, sub {return $gff_line};
-                
+            # INVARIANTS:
+            # 0. sequence name of current gff locus is equal to sequence name of current range
+            # 1. start of current gff locus is less than or equal to the end of the current range
+            # 2. end of current gff locus is greater than or equal to the start of the current range
+            # 3. therefore, current gff locus overlaps current range in the same sequence
+
+            push @iterators, sub {
+                die;
+                printf STDERR "found [%d-%d] in range %s[%d-%d]\n",
+                $gff_line->{start}, $gff_line->{end}, $sequence, $range->[0], $range->[1];
+                return $gff_line;
+            };
         }
     }
 
@@ -637,40 +639,43 @@ sub make_gff_iterator {
             or croak "Can't read $file: $!";
     }
 
-    my @buffer;
+    return sub { $parser->( scalar <$GFF_HANDLE> ) }
+    unless $seqname;
 
     return sub {
+        my $gff_line = peek( $GFF_HANDLE ) or return;
 
-        if (@buffer and $seqname) {
-            return pop @buffer if $buffer[0]->{seqname} eq $seqname;
-        }
-
-        my $gff_line = $parser->( scalar <$GFF_HANDLE> ) || return;
-
-        if ($seqname and $gff_line->{seqname} ne $seqname) {
-            push @buffer, $gff_line;
-            return;
-        }
-
-        return $gff_line;
+        return $parser->( scalar <$GFF_HANDLE> )
+        if 'HASH' eq ref $gff_line and $gff_line->{seqname} eq $seqname;
     };
 }
 
-sub memusage {
-    use Proc::ProcessTable;
-    my @results;
-    my $pid = (defined($_[0])) ? $_[0] : $$;
-    my $proc = Proc::ProcessTable->new;
-    my %fields = map { $_ => 1 } $proc->fields;
-    return undef unless exists $fields{'pid'};
-    foreach (@{$proc->table}) {
-        if ($_->pid eq $pid) {
-            push (@results, $_->size / (1024 ** 2)) if exists $fields{'size'};
-            push (@results, $_->pctmem) if exists $fields{'pctmem'};
-        };
-    };
-    return @results;
+sub peek {
+    my ($HANDLE) = @_;
+
+    my $pos = tell $HANDLE;
+    my $next = <$HANDLE>;
+    seek $HANDLE, $pos, 0;
+
+    return $next;
 }
+
+
+# sub memusage {
+#     use Proc::ProcessTable;
+#     my @results;
+#     my $pid = (defined($_[0])) ? $_[0] : $$;
+#     my $proc = Proc::ProcessTable->new;
+#     my %fields = map { $_ => 1 } $proc->fields;
+#     return undef unless exists $fields{'pid'};
+#     foreach (@{$proc->table}) {
+#         if ($_->pid eq $pid) {
+#             push (@results, $_->size / (1024 ** 2)) if exists $fields{'size'};
+#             push (@results, $_->pctmem) if exists $fields{'pctmem'};
+#         };
+#     };
+#     return @results;
+# }
 
 
 
