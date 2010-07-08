@@ -10,6 +10,8 @@ use version; our $VERSION = qv('0.0.1');
 
 use File::Path qw(make_path remove_tree);
 use File::Spec;
+use System::Wrapper;
+use System::Wrapper::Parallel;
 
 use threads;
 
@@ -17,7 +19,7 @@ GetOptions(
     \%ARGV,
     'input|i=s',        'output|o=s',       'error|e=s',
     'ecotype-a|ea=s',   'ecotype-b|eb=s',   'genotype|g=s', 'tissue|t=s',
-    'reference-a|ra=s', 'reference-b|rb=s', 'annotation|a=s',
+    'reference-a|ra=s', 'reference-b|rb=s', 'annotation|a=s', 'debug',
     _meta_options( \%ARGV ),
 )
 and (@ARGV or $ARGV{input})
@@ -30,47 +32,60 @@ or pod2usage( -verbose => 1 );
 my ( $INH, $OUTH, $ERRH ) = _prepare_io( \%ARGV, \@ARGV );
 
 my %file_names = (
-    a => build_file_names(
-        @ARGV{ qw/input output ecotype-a ecotype-b tissue genotype/ } ),
-    b => build_file_names(
-        @ARGV{ qw/input output ecotype-b ecotype-a tissue genotype/ } ),
+    aa => build_file_names(
+        @ARGV{ qw/input output ecotype-a ecotype-b tissue genotype/ }, 0 ),
+    ab => build_file_names(
+        @ARGV{ qw/input output ecotype-a ecotype-b tissue genotype/ }, 1 ),
+    bb => build_file_names(
+        @ARGV{ qw/input output ecotype-b ecotype-a tissue genotype/ }, 0 ),
+    ba => build_file_names(
+        @ARGV{ qw/input output ecotype-b ecotype-a tissue genotype/ }, 1 ),
 );
 
 my %commands = (
-    a => build_common_commands( 
-        $file_names{a}, @ARGV{ qw/reference-a annotation/ } ),
-    b => build_common_commands( 
-        $file_names{b}, @ARGV{ qw/reference-b annotation/ } ),
-    c => build_unique_commands(
-        $file_names{a}, $file_names{b}, @ARGV{ qw/ecotype-a ecotype-b/ }),
+    aa => build_common_commands( $file_names{aa}, @ARGV{ qw/reference-a annotation/ } ),
+    ab => build_common_commands( $file_names{ab}, @ARGV{ qw/reference-b annotation/ } ),
+    bb => build_common_commands( $file_names{bb}, @ARGV{ qw/reference-b annotation/ } ),
+    ba => build_common_commands( $file_names{ba}, @ARGV{ qw/reference-a annotation/ } ),
+    ca => build_unique_commands( $file_names{aa}, $file_names{ab} ),
+    cb => build_unique_commands( $file_names{ba}, $file_names{bb} ),
 );
 
-@{$commands{a}} == @{$commands{b}} and @{$commands{a}} == @{$commands{c}}
+
+@{$commands{aa}} == @{$commands{bb}} and @{$commands{aa}} == @{$commands{ab}}
+and @{$commands{aa}} == @{$commands{ba}} and @{$commands{aa}} == @{$commands{ca}}
+and @{$commands{cb}}
 or croak "Wrong number of job stages";
 
 build_output_directory( @ARGV{ qw/output ecotype-a ecotype-b/ } );
 
-while ( @{$commands{a}} and @{$commands{b}} and @{$commands{c}} ) {
+while ( @{$commands{aa}} ) {
 
     my %threads = (
-        a => threads->new( \&run_commands, shift @{$commands{a}} ),
-        b => threads->new( \&run_commands, shift @{$commands{b}} ),
+        aa => threads->new( \&run_commands, shift @{$commands{aa}} ),
+        bb => threads->new( \&run_commands, shift @{$commands{bb}} ),
+        ab => threads->new( \&run_commands, shift @{$commands{ab}} ),
+        ba => threads->new( \&run_commands, shift @{$commands{ba}} ),
     );
 
-    $threads{a}->join;
-    $threads{b}->join;
+    $threads{aa}->join;
+    $threads{bb}->join;
+    $threads{ab}->join;
+    $threads{ba}->join;
 
-    $threads{c} = threads->new( \&run_commands, shift @{$commands{c}} );
-    $threads{c}->join;
+    $threads{ca} = threads->new( \&run_commands, shift @{$commands{ca}} );
+    $threads{cb} = threads->new( \&run_commands, shift @{$commands{cb}} );
+    $threads{ca}->join;
+    $threads{cb}->join;
 }
+
 
 
 sub build_output_directory {
     my ($out_dir) = @_;
 
     if (-d $out_dir
-        and print STDERR "Overwrite $out_dir (y/N)?: " and q{y} eq <STDIN>) {
-        ### removing $out_dir
+        and print STDERR "Overwrite $out_dir (y/N)?: " and scalar <STDIN> =~ m/^y/i) {
         remove_tree ( $out_dir, {keep_root => 1} );
     }
     else {
@@ -83,10 +98,18 @@ sub build_unique_commands {
 
     my @pre_wrapup = (
 
-        "split_on_mismatches.pl -a $ARGV{'ecotype-a'} -b $ARGV{'ecotype-b'} \\
-             $names_a->{eland} $names_b->{eland}",
+        (
+            need_file( $names_a->{reads_gff} )
+         || need_file( $names_b->{reads_gff} )
+        )
+        ? System::Wrapper->new(
+            interpreter => 'perl',
+            executable  => 'split_on_mismatches.pl',
+            arguments   => [ -a => $ARGV{'ecotype-a'}, -b => $ARGV{'ecotype-b'},
+                             $names_a->{eland}, $names_b->{eland} ])
+        : 0,
     );
-
+    
     my @post_wrapup = (
 
     );
@@ -100,38 +123,88 @@ sub build_common_commands {
     my @pre_processing = (
 
         need_file( $reference . '.1.ebwt' )
-        ? "bowtie-build --quiet $reference $reference" : 0,
+        ? System::Wrapper->new(
+            executable => 'bowtie-build',
+            arguments  => ['--quiet'],
+            input      => [$reference],
+            output     => [$reference])
+        : 0,
     
         need_file( $names->{bowtie} )
-        ? "bowtie -B 1 --quiet -v 3 --best \\
-            $reference $names->{fastq} $names->{bowtie}" : 0,
+        ? System::Wrapper->new(
+            executable => 'bowtie',
+            arguments => [ -B => 1, '--quiet', -v => 3, '--best' ],
+            input     => [$reference, $names->{fastq}],
+            output    => [$names->{bowtie}])
+        : 0,
 
         need_file( $names->{eland} )
-        ? "parse_bowtie.pl -u $names->{fastq} -o $names->{eland}  \\
-            $names->{bowtie}       " : 0,
+        ? System::Wrapper->new(
+            interpreter => 'perl',
+            executable  => 'parse_bowtie.pl',
+            arguments   => [ -u => $names->{fastq} ],
+            input       => [ $names->{bowtie} ],
+            output      => { -o => $names->{eland}})
+        : 0,
 
-        "sort -k1,1 -S 50% $names->{eland} > $names->{eland}.sort \\
-            && mv $names->{eland}.sort $names->{eland}",
+        need_file( $names->{reads_gff} )
+        ? System::Wrapper->new(
+            executable => 'sort',
+            arguments  => [ -k => '1,1', -S => '25%'],
+            input      => [ $names->{eland} ],
+            output     => { q{>} => $names->{eland} },)
+        : 0,
     );
-
 
     my @post_processing = (
 
         need_file( $names->{reads_gff} )
-        ? "parse_eland.pl -3 -o $names->{reads_gff} $names->{eland} " : 0,
-
-        "sort -k1,1 -k4,4n -k5,5n -k7,7 -S 50% \\
-            $names->{reads_gff} > $names->{reads_gff}.sort \\
-            && mv $names->{reads_gff}.sort $names->{reads_gff}",
+        ? System::Wrapper->new(
+            interpreter => 'perl', 
+            executable  => 'parse_eland.pl',
+            arguments   => [ '-3' ],
+            input       => [ $names->{eland} ],
+            output      => { -o => $names->{reads_gff}},)
+        : 0,
 
         need_file( $names->{repeats} )
-        ? "filter_repeats.pl -o $names->{reads_gff}.filter \\
-            $names->{reads_gff} 2> $names->{repeats} \\
-            && mv $names->{reads_gff}.filter $names->{reads_gff}" : 0,
+        ? System::Wrapper->new(
+            executable => 'sort',
+            arguments  => [ -k => '1,1', -k => '4,4n', -k => '5,5n', -k => '7,7', -S => '25%' ],
+            input      => [ $names->{reads_gff}],
+            output     => { q{>} => $names->{reads_gff} },)
+        : 0,
+
+        need_file( $names->{filter_gff} )
+        ? System::Wrapper->new(
+            interpreter => 'perl',
+            executable  => 'filter_repeats.pl',
+            output      => {
+                -o   => $names->{filter_gff},
+                '2>' => $names->{repeats},
+            },
+            input       => [ $names->{reads_gff} ],)
+        : 0,
 
         need_file( $names->{genes_gff} )
-        ? "window_gff_REFACTORED.pl -c sum -k -t ID -f gene -r \\
-            -g $annotation -o $names->{genes_gff} $names->{reads_gff}" : 0,
+        ? System::Wrapper->new(
+            interpreter => 'perl',
+            executable  => 'window_gff.pl',
+            arguments   => [ -c => 'sum', '-k', -t => 'ID', -f => 'gene', '-r',
+                             -g => $annotation ],
+            output      => { -o => $names->{genes_gff} },
+            input       => [ $names->{reads_gff} ],)
+        : 0,
+
+        need_file( $names->{genes_filter} )
+        ? System::Wrapper->new(
+            interpreter => 'perl',
+            executable  => 'window_gff.pl',
+            arguments   => [ -c => 'sum', '-k', -t => 'ID', -f => 'gene', '-r',
+                             -g => $annotation ],
+            output      => { -o => $names->{genes_filter} },
+            input       => [ $names->{filter_gff} ],)
+        : 0,
     );
 
     return [\@pre_processing, \@post_processing];
@@ -139,7 +212,7 @@ sub build_common_commands {
 }
 
 sub build_file_names {
-    my ($input, $out_dir, $ecotype_a, $ecotype_b, $tissue, $genotype) = @_;
+    my ($input, $out_dir, $ecotype_a, $ecotype_b, $tissue, $genotype, $reverse) = @_;
 
     my $base_name = File::Spec->catfile(
         $out_dir,
@@ -150,20 +223,26 @@ sub build_file_names {
           )
     );
 
+    my $ecotype = $reverse ? $ecotype_b : $ecotype_a;
+
     my $fastq_name   = $input;
-    my $bowtie_names = join q{_}, $base_name, $ecotype_a . '.bowtie';
-    my $eland_names  = join q{_}, $base_name, $ecotype_a . '.eland3';
-    my $gff_names    = join q{_}, $base_name, $ecotype_a . '.gff';
-    my $repeat_names = join q{_}, $base_name, $ecotype_a . '.repeats';
-    my $gff_genes    = join q{_}, $base_name, $ecotype_a, 'genes' . '.gff';
+    my $bowtie_names = join q{_}, $base_name, $ecotype . '.bowtie';
+    my $eland_names  = join q{_}, $base_name, $ecotype . '.eland3';
+    my $gff_names    = join q{_}, $base_name, $ecotype . '.gff';
+    my $filter_names = join q{_}, $base_name, $ecotype . '_filtered.gff';
+    my $gff_genes    = join q{_}, $base_name, $ecotype . '_genes.gff';
+    my $filter_genes = join q{_}, $base_name, $ecotype . '_filtered_genes.gff';
+    my $repeat_names = join q{_}, $base_name, $ecotype . '.repeats';
 
     return {
-        fastq     => $fastq_name,
-        bowtie    => $bowtie_names,
-        eland     => $eland_names,
-        reads_gff => $gff_names,
-        genes_gff => $gff_genes,
-        repeats   => $repeat_names,
+        fastq        => $fastq_name,
+        bowtie       => $bowtie_names,
+        eland        => $eland_names,
+        reads_gff    => $gff_names,
+        filter_gff   => $filter_names,
+        genes_gff    => $gff_genes,
+        genes_filter => $filter_genes,
+        repeats      => $repeat_names,
     };
 }
 
@@ -174,19 +253,13 @@ sub need_file {
 sub run_commands {
     my ($commands) = @_;
 
-    run_cmd( $_ ) for grep { $_ } @$commands;
+    return unless ref $commands and 'ARRAY' eq ref $commands;
 
-    return 1;
-}
-
-
-sub run_cmd {
-    my ($cmd) = @_;
-
-    print STDERR "-- CMD: $cmd\n";
-
-    my $exit_code = system $cmd;
-    croak "** FAIL: non-zero exit status ($exit_code)" if $exit_code;
+    for (grep { $_ } @$commands) {
+        $_->debug   = 1 if $ARGV{debug};
+        $_->verbose = 1 if $ARGV{verbose};
+        $_->run;
+    }
 
     return 1;
 }
@@ -197,7 +270,7 @@ sub _meta_options {
 
     return (
         'quiet'     => sub { $opt->{quiet}   = 1;          $opt->{verbose} = 0 },
-        'verbose:i' => sub { $opt->{verbose} = $_[1] // 1; $opt->{quiet}   = 0 },
+        'verbose:i' => sub { $opt->{verbose} = $_[1] || 1; $opt->{quiet}   = 0 },
         'version'   => sub { pod2usage( -sections => ['VERSION', 'REVISION'],
                                         -verbose  => 99 )                      },
         'license'   => sub { pod2usage( -sections => ['AUTHOR', 'COPYRIGHT'],
