@@ -70,13 +70,16 @@ for my $gene (sort keys %{$genes}) {
 print q{=} x 40, "\n";
 print "Genes per list:\n";
 print q{=} x 40, "\n";
+
 while (my ($list, $count) = each %$sets) {
     print $list, "\t", $count, "\n";
 }
+
 print "\n";
 print q{=} x 40, "\n";
 print "Genes per intersection:\n";
 print q{=} x 40, "\n";
+
 while (my ($list, $count) = each %$intersections) {
     print $list, "\t", $count, "\n";
 }
