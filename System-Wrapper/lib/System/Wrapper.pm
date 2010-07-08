@@ -2,7 +2,7 @@ package System::Wrapper;
 
 use warnings;
 use strict;
-use overload q{""}    => \&command;
+use overload q{""}    => \&stringify;
 use constant MAX_RAND => 2 ** 32;
 
 use Carp;
@@ -20,7 +20,8 @@ sub new {
                               progress     spec        capture
                               _interpreter _executable _arguments
                               _input       _output     _destroy
-                              _fifo        _tmp        verbose
+                              _fifo        _tmp        _input_type _output_type
+                              debug        verbose
                           /
                       }, $class);
 
@@ -36,7 +37,10 @@ sub _arguments   : lvalue { shift->{_arguments}   }
 sub _fifo        : lvalue { shift->{_fifo}        }
 sub _tmp         : lvalue { shift->{_tmp}         }
 sub _destroy     : lvalue { shift->{_destroy}     }
+sub _input_type  : lvalue { shift->{_input_type}  }
+sub _output_type : lvalue { shift->{_output_type} }
 sub verbose      : lvalue { shift->{verbose}      }
+sub debug        : lvalue { shift->{debug}        }
 
 sub interpreter {
     my ( $self, $interpreter ) = @_;
@@ -75,36 +79,28 @@ sub arguments {
 
 sub input {
     my ( $self, $input ) = @_;
-
-    if ( defined $input ) {
-        _err(
-            "type of arg 1 to 'input' must be string or reference to array of strings, not %s",
-            ref $input
-            )
-            unless 'ARRAY' eq ref $input
-                or 'SCALAR' eq ref \$input;
-
-        $self->{input} = ref $input ? $input : [$input];
-        $self->_input  = $self->_flatten( $self->{input} );
-    }
-
-    return wantarray ? @{ $self->{input} ||= [] } : $self->_input;
+    return $self->_io_spec( $input, 'input' );
 }
 
 sub output {
     my ( $self, $output ) = @_;
+    return $self->_io_spec( $output, 'output' );
+}
 
-    if ( defined $output ) {
-        _err(
-            "type of arg 1 to 'output' must be reference to hash with keys 'spec' => 'file', not %s",
-            ref $output ? ref $output : ref \$output
-        ) unless 'HASH' eq ref $output;
+sub _io_spec {
+    my ($self, $spec, $io) = @_;
 
-        $self->{output} = $output;
-        $self->_output  = $self->_flatten( $self->{output} );
+    my $private_method = "_$io";
+
+    if ( defined $spec ) {
+        
+        my $io_type = $private_method . '_type';
+        $self->$io_type        = ref $spec || 'SCALAR';
+        $self->{$io}           = $spec;
+        $self->$private_method = $self->_flatten( $self->{$io} );
     }
 
-    return wantarray ? %{ $self->{output} ||= {} } : $self->_output;
+    return wantarray ? $self->_deref( $self->{$io} ) : $self->$private_method;
 }
 
 sub path {
@@ -195,29 +191,36 @@ sub command {
     return wantarray ? @command : "@command";
 }
 
+sub stringify {
+    my ($self) = @_;
+
+    my $out = $self->description ? q{# } . $self->description . qq{\n}
+                                 : q{}
+            . $self->command                                  . qq{\n};
+
+    return $out;
+}
+
 sub run {
     my ($self) = @_;
     
+    if ($self->verbose or $self->debug) {
+        print STDERR $self->stringify;
+        return if $self->debug;
+    }
+
     $self->_can_run;
 
+    $self->_rename_to_tmp;
+
     my @command = $self->command;
-
-    if ($self->verbose) {
-        print STDERR q{# }, $self->description, ":\n"
-        if $self->description;
-        print STDERR scalar $self->command, "\n";
-    }
-
-    if ( $self->output and not -p ( $self->output )[1] ) {
-        $command[-1] .= '.part' . $self->_tmp;
-    }
 
     my $stdout;
     eval { $stdout = $self->capture ? qx/"@command"/ : system "@command" };
 
     $self->_did_run( $@, $? ) or return;
 
-    $self->_rename if $self->output and not -p ( $self->output )[1];
+    $self->_rename_from_tmp;
 
     $self->_destroy = 1;
 
@@ -258,16 +261,108 @@ sub _progress {
     $input_size += -s $_ for $self->input;
 }
 
-sub _rename {
+sub _tmp_name {
+    my ($self, $name) = @_;
+    return $name . '.part' . $self->_tmp;
+}
+
+sub _rename_to_tmp {
     my ($self) = @_;
 
-    rename $self->_canonical( $self->output . '.part' . $self->_tmp ),
-        $self->_canonical( scalar $self->output )
-        or _err(
-        "can't rename %s to %s: %s",
-        $self->_canonical( $self->output . '.part' . $self->_tmp ),
-        $self->_canonical( scalar $self->output ), $!
+    return unless $self->output;
+
+    if ('HASH' eq $self->_output_type) {
+        my %output = $self->output;
+      NAME:
+        for my $spec ( keys %output ) {
+
+            use Data::Dumper;
+            print STDERR Dumper \%output if not defined $output{$spec};
+
+            next NAME if -p $output{$spec};
+            my $tmp = $self->_tmp_name($output{$spec});
+
+            $output{$spec} = $tmp;
+        }
+        $self->output(\%output);
+    }
+    elsif ('ARRAY' eq $self->_output_type) {
+        my @output = $self->output;
+      NAME:
+        for my $name (@output) {
+            next NAME if -p $name;
+            my $tmp = $self->_tmp_name($name);
+            
+            $name = $tmp;
+        }
+        $self->output(\@output);
+    }
+    elsif ('SCALAR' eq $self->_output_type) {
+        my ($name) = $self->output;
+        my $tmp = $self->_tmp_name($name);
+        $self->output($tmp);
+    }
+    else {
+        _err( 
+            "%s is not an accepted output type. It should be impossible to get this error",
+            $self->_output_type
         );
+    }
+}
+
+sub _rename_from_tmp {
+    my ($self) = @_;
+
+    return unless $self->output;
+
+    if ('HASH' eq $self->_output_type) {
+        my %output = $self->output;
+      NAME:
+        for my $spec ( keys %output ) {
+            next NAME if -p $output{$spec};
+            my $tmp  = $output{$spec};
+            my $name = $output{$spec};
+               $name =~ s/\.part.+//;
+
+            rename $tmp, $name
+            or _err(
+                "can't rename %s to %s: %s",
+                $tmp, $name, $!
+            );
+        }
+    }
+    elsif ('ARRAY' eq $self->_output_type) {
+        my @output = $self->output;
+      NAME:
+        for my $tmp (@output) {
+            next NAME if -p $tmp;
+            my $name = $tmp;
+               $name =~ s/\.part.+//;
+
+            rename $tmp, $name
+            or _err(
+                "can't rename %s to %s: %s",
+                $tmp, $name, $!
+            );
+        }
+    }
+    elsif ('SCALAR' eq $self->_output_type) {
+        my ($tmp) = $self->output;
+        my $name  = $tmp;
+               $name =~ s/\.part.+//;
+
+        rename $tmp, $name
+        or _err(
+            "can't rename %s to %s: %s",
+            $tmp, $name, $!
+        );
+    }
+    else {
+        _err( 
+            "%s is not an accepted output type. It should be impossible to get this error",
+            $self->_output_type
+        );
+    }
 }
 
 sub _can_run {
@@ -343,11 +438,14 @@ sub _program_in_path {
     return q{};
 }
 
-sub _canonical {
-    my ( $self, $name ) = @_;
+sub _deref {
+    my ($self, $struct) = @_;
 
-    $name =~ s/\s*[<>]\s*//g;
-    return File::Spec->canonpath($name);
+    return unless $struct;
+    return $struct unless ref $struct;
+    return $$struct if 'SCALAR' eq ref $struct;
+    return @$struct if 'ARRAY'  eq ref $struct;
+    return %$struct if 'HASH'   eq ref $struct;
 }
 
 sub _flatten {
