@@ -19,7 +19,8 @@ use threads;
 GetOptions(
     \%ARGV,
     'input|i=s',        'output|o=s',       'error|e=s',
-    'ecotype-a|ea=s',   'ecotype-b|eb=s',   'genotype|g=s', 'tissue|t=s',
+    'ecotype-a|ea=s',   'ecotype-b|eb=s',   'genotype-a|ga=s', 'genotype-b|gb=s', 
+    'tissue|t=s',
     'reference-a|ra=s', 'reference-b|rb=s', 'annotation|a=s', 'debug',
     _meta_options( \%ARGV ),
 )
@@ -34,13 +35,13 @@ my ( $INH, $OUTH, $ERRH ) = _prepare_io( \%ARGV, \@ARGV );
 
 my %file_names = (
     aa => build_file_names(
-        @ARGV{ qw/input output ecotype-a ecotype-b tissue genotype/ }, 0 ),
+        @ARGV{ qw/input output ecotype-a ecotype-b tissue genotype-a genotype-b/ }, 0 ),
     ab => build_file_names(
-        @ARGV{ qw/input output ecotype-a ecotype-b tissue genotype/ }, 1 ),
+        @ARGV{ qw/input output ecotype-a ecotype-b tissue genotype-a genotype-b/ }, 1 ),
     bb => build_file_names(
-        @ARGV{ qw/input output ecotype-b ecotype-a tissue genotype/ }, 0 ),
+        @ARGV{ qw/input output ecotype-b ecotype-a tissue genotype-a genotype-b/ }, 0 ),
     ba => build_file_names(
-        @ARGV{ qw/input output ecotype-b ecotype-a tissue genotype/ }, 1 ),
+        @ARGV{ qw/input output ecotype-b ecotype-a tissue genotype-a genotype-b/ }, 1 ),
 );
 
 my %commands = (
@@ -229,14 +230,13 @@ sub build_common_commands {
 }
 
 sub build_file_names {
-    my ($input, $out_dir, $ecotype_a, $ecotype_b, $tissue, $genotype, $reverse) = @_;
+    my ($input, $out_dir, $ecotype_a, $ecotype_b, $tissue, $genotype_a, $genotype_b, $reverse) = @_;
 
     my $base_name = File::Spec->catfile(
         $out_dir,
         join (q{_},
-              $ecotype_a . q{x} . $ecotype_b,
+              "$ecotype_a-$genotype_a" . q{x} . "$ecotype_b-$genotype_b",
               $tissue,
-              $genotype,
           )
     );
 
