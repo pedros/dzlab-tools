@@ -204,9 +204,15 @@ sub stringify {
 sub run {
     my ($self) = @_;
     
-    if ($self->verbose or $self->debug) {
+    if ($self->debug) {
+        $self->_rename_to_tmp;
         print STDERR $self->stringify;
-        return if $self->debug;
+        $self->_rename_from_tmp;
+        return;
+    }
+
+    if ($self->verbose) {
+        print STDERR $self->stringify;
     }
 
     $self->_can_run;
@@ -315,53 +321,50 @@ sub _rename_from_tmp {
 
     return unless $self->output;
 
+    my (@name, @tmp);
+
     if ('HASH' eq $self->_output_type) {
         my %output = $self->output;
       NAME:
         for my $spec ( keys %output ) {
-            next NAME if -p $output{$spec};
-            my $tmp  = $output{$spec};
-            my $name = $output{$spec};
-               $name =~ s/\.part.+//;
-
-            rename $tmp, $name
-            or _err(
-                "can't rename %s to %s: %s",
-                $tmp, $name, $!
-            );
+            push @tmp,  $output{$spec};
+            push @name, $output{$spec};
+            $name[-1] =~ s/\.part.+//;
         }
     }
     elsif ('ARRAY' eq $self->_output_type) {
         my @output = $self->output;
       NAME:
         for my $tmp (@output) {
-            next NAME if -p $tmp;
-            my $name = $tmp;
-               $name =~ s/\.part.+//;
-
-            rename $tmp, $name
-            or _err(
-                "can't rename %s to %s: %s",
-                $tmp, $name, $!
-            );
+            push @tmp, $tmp;
+            push @name, $tmp;
+            $name[-1] =~ s/\.part.+//;
         }
     }
     elsif ('SCALAR' eq $self->_output_type) {
-        my ($tmp) = $self->output;
-        my $name  = $tmp;
-               $name =~ s/\.part.+//;
-
-        rename $tmp, $name
-        or _err(
-            "can't rename %s to %s: %s",
-            $tmp, $name, $!
-        );
+        push @tmp, $self->output;
+        push @name, $tmp[-1];
+        $name[-1] =~ s/\.part.+//;
     }
     else {
         _err( 
             "%s is not an accepted output type. It should be impossible to get this error",
             $self->_output_type
         );
+    }
+
+  NAME:
+    for (0 .. @name - 1) {
+        my ($name, $tmp) = ($name[$_], $tmp[$_]);
+        next NAME if -p $name;
+
+        my $mv = System::Wrapper->new(
+            interpreter => 'perl',
+            arguments   => qq{-e 'rename "$tmp", "$name" or die "\$!"'},
+        );
+        $mv->verbose = 1 if $self->verbose;
+        $mv->debug   = 1 if $self->debug;
+        $mv->run;
     }
 }
 

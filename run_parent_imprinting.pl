@@ -10,6 +10,7 @@ use version; our $VERSION = qv('0.0.1');
 
 use File::Path qw(make_path remove_tree);
 use File::Spec;
+use Digest::MD5 qw(md5_hex);
 use System::Wrapper;
 use System::Wrapper::Parallel;
 
@@ -57,15 +58,16 @@ and @{$commands{aa}} == @{$commands{ba}} and @{$commands{aa}} == @{$commands{ca}
 and @{$commands{cb}}
 or croak "Wrong number of job stages";
 
-build_output_directory( @ARGV{ qw/output ecotype-a ecotype-b/ } );
+my $done_dir 
+= build_output_directory( @ARGV{ qw/output ecotype-a ecotype-b/ } );
 
 while ( @{$commands{aa}} ) {
 
     my %threads = (
-        aa => threads->new( \&run_commands, shift @{$commands{aa}} ),
-        bb => threads->new( \&run_commands, shift @{$commands{bb}} ),
-        ab => threads->new( \&run_commands, shift @{$commands{ab}} ),
-        ba => threads->new( \&run_commands, shift @{$commands{ba}} ),
+        aa => threads->new( \&run_commands, shift @{$commands{aa}}, $done_dir ),
+        bb => threads->new( \&run_commands, shift @{$commands{bb}}, $done_dir ),
+        ab => threads->new( \&run_commands, shift @{$commands{ab}}, $done_dir ),
+        ba => threads->new( \&run_commands, shift @{$commands{ba}}, $done_dir ),
     );
 
     $threads{aa}->join;
@@ -73,8 +75,8 @@ while ( @{$commands{aa}} ) {
     $threads{ab}->join;
     $threads{ba}->join;
 
-    $threads{ca} = threads->new( \&run_commands, shift @{$commands{ca}} );
-    $threads{cb} = threads->new( \&run_commands, shift @{$commands{cb}} );
+    $threads{ca} = threads->new( \&run_commands, shift @{$commands{ca}}, $done_dir );
+    $threads{cb} = threads->new( \&run_commands, shift @{$commands{cb}}, $done_dir );
     $threads{ca}->join;
     $threads{cb}->join;
 }
@@ -84,13 +86,17 @@ while ( @{$commands{aa}} ) {
 sub build_output_directory {
     my ($out_dir) = @_;
 
+    my $done_dir
+    = File::Spec->catfile (File::Spec->catdir($out_dir, '.done'));
+
     if (-d $out_dir
         and print STDERR "Overwrite $out_dir (y/N)?: " and scalar <STDIN> =~ m/^y/i) {
         remove_tree ( $out_dir, {keep_root => 1} );
     }
     else {
-        make_path ( File::Spec->catfile ($out_dir) );
+        make_path ( $done_dir );
     }
+    return $done_dir;
 }
 
 sub build_unique_commands {
@@ -111,7 +117,18 @@ sub build_unique_commands {
     );
     
     my @post_wrapup = (
-
+        need_file( $names_a->{table} )
+        ? System::Wrapper->new(
+            interpreter => 'perl',
+            executable  => 'build_gff_score_table.pl',
+            input       => [
+                $names_a->{genes_gff},
+                $names_a->{genes_filter},
+                $names_b->{genes_gff},
+                $names_b->{genes_filter},
+            ],
+            output      => { -o => $names_a->{table} },)
+        : 0,
     );
     
     return [\@pre_wrapup, \@post_wrapup];
@@ -150,7 +167,7 @@ sub build_common_commands {
         need_file( $names->{reads_gff} )
         ? System::Wrapper->new(
             executable => 'sort',
-            arguments  => [ -k => '1,1', -S => '25%'],
+            arguments  => [ -k => '1,1', -S => '15%'],
             input      => [ $names->{eland} ],
             output     => { q{>} => $names->{eland} },)
         : 0,
@@ -170,7 +187,7 @@ sub build_common_commands {
         need_file( $names->{repeats} )
         ? System::Wrapper->new(
             executable => 'sort',
-            arguments  => [ -k => '1,1', -k => '4,4n', -k => '5,5n', -k => '7,7', -S => '25%' ],
+            arguments  => [ -k => '1,1', -k => '4,4n', -k => '5,5n', -k => '7,7', -S => '15%' ],
             input      => [ $names->{reads_gff}],
             output     => { q{>} => $names->{reads_gff} },)
         : 0,
@@ -230,9 +247,10 @@ sub build_file_names {
     my $eland_names  = join q{_}, $base_name, $ecotype . '.eland3';
     my $gff_names    = join q{_}, $base_name, $ecotype . '.gff';
     my $filter_names = join q{_}, $base_name, $ecotype . '_filtered.gff';
-    my $gff_genes    = join q{_}, $base_name, $ecotype . '_genes.gff';
-    my $filter_genes = join q{_}, $base_name, $ecotype . '_filtered_genes.gff';
+    my $gff_genes    = join q{_}, $base_name, $ecotype . '.genes.gff';
+    my $filter_genes = join q{_}, $base_name, $ecotype . '_filtered.genes.gff';
     my $repeat_names = join q{_}, $base_name, $ecotype . '.repeats';
+    my $score_table  = join q{_}, $base_name           . '.table';
 
     return {
         fastq        => $fastq_name,
@@ -243,6 +261,7 @@ sub build_file_names {
         genes_gff    => $gff_genes,
         genes_filter => $filter_genes,
         repeats      => $repeat_names,
+        table        => $score_table,
     };
 }
 
@@ -251,14 +270,24 @@ sub need_file {
 }
 
 sub run_commands {
-    my ($commands) = @_;
+    my ($commands, $done_dir) = @_;
 
     return unless ref $commands and 'ARRAY' eq ref $commands;
-
+    
     for (grep { $_ } @$commands) {
         $_->debug   = 1 if $ARGV{debug};
         $_->verbose = 1 if $ARGV{verbose};
-        $_->run;
+
+        my $out_md5 = File::Spec->catfile( $done_dir, md5_hex( "$_ " ) );
+
+        unless (-e $out_md5) {
+            my $stdout = $_->run;
+
+            if (defined ($stdout) and 0 == $stdout ) {
+                open my $DONE, q{>}, $out_md5 or die $!;
+                print $DONE "$_";
+            }
+        }
     }
 
     return 1;
