@@ -34,52 +34,33 @@ or pod2usage( -verbose => 1 );
 my ( $INH, $OUTH, $ERRH ) = _prepare_io( \%ARGV, \@ARGV );
 
 my %file_names = (
-    aa => build_file_names(
+    a => build_file_names(
         @ARGV{ qw/input output ecotype-a ecotype-b tissue genotype-a genotype-b/ }, 0 ),
-    ab => build_file_names(
+    b => build_file_names(
         @ARGV{ qw/input output ecotype-a ecotype-b tissue genotype-a genotype-b/ }, 1 ),
-    bb => build_file_names(
-        @ARGV{ qw/input output ecotype-b ecotype-a tissue genotype-a genotype-b/ }, 0 ),
-    ba => build_file_names(
-        @ARGV{ qw/input output ecotype-b ecotype-a tissue genotype-a genotype-b/ }, 1 ),
 );
 
 my %commands = (
-    aa => build_common_commands( $file_names{aa}, @ARGV{ qw/reference-a annotation/ } ),
-    ab => build_common_commands( $file_names{ab}, @ARGV{ qw/reference-b annotation/ } ),
-    bb => build_common_commands( $file_names{bb}, @ARGV{ qw/reference-b annotation/ } ),
-    ba => build_common_commands( $file_names{ba}, @ARGV{ qw/reference-a annotation/ } ),
-    ca => build_unique_commands( $file_names{aa}, $file_names{ab} ),
-    cb => build_unique_commands( $file_names{ba}, $file_names{bb} ),
+    a => build_common_commands( $file_names{a}, @ARGV{ qw/reference-a annotation/ } ),
+    b => build_common_commands( $file_names{b}, @ARGV{ qw/reference-b annotation/ } ),
+    c => build_unique_commands( $file_names{a}, $file_names{b} ),
 );
-
-
-@{$commands{aa}} == @{$commands{bb}} and @{$commands{aa}} == @{$commands{ab}}
-and @{$commands{aa}} == @{$commands{ba}} and @{$commands{aa}} == @{$commands{ca}}
-and @{$commands{cb}}
-or croak "Wrong number of job stages";
 
 my $done_dir 
 = build_output_directory( @ARGV{ qw/output ecotype-a ecotype-b/ } );
 
-while ( @{$commands{aa}} ) {
+while ( @{$commands{a}} ) {
 
     my %threads = (
-        aa => threads->new( \&run_commands, shift @{$commands{aa}}, $done_dir ),
-        bb => threads->new( \&run_commands, shift @{$commands{bb}}, $done_dir ),
-        ab => threads->new( \&run_commands, shift @{$commands{ab}}, $done_dir ),
-        ba => threads->new( \&run_commands, shift @{$commands{ba}}, $done_dir ),
+        a => threads->new( \&run_commands, shift @{$commands{a}}, $done_dir ),
+        b => threads->new( \&run_commands, shift @{$commands{b}}, $done_dir ),
     );
 
-    $threads{aa}->join;
-    $threads{bb}->join;
-    $threads{ab}->join;
-    $threads{ba}->join;
+    $threads{a}->join;
+    $threads{b}->join;
 
-    $threads{ca} = threads->new( \&run_commands, shift @{$commands{ca}}, $done_dir );
-    $threads{cb} = threads->new( \&run_commands, shift @{$commands{cb}}, $done_dir );
-    $threads{ca}->join;
-    $threads{cb}->join;
+    $threads{c} = threads->new( \&run_commands, shift @{$commands{c}}, $done_dir );
+    $threads{c}->join;
 }
 
 
