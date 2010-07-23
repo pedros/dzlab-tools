@@ -257,8 +257,10 @@ sub count_reads {
     # read in chromosome/model lengths
     my %reference = %{ index_fasta($reference) };
 
-# sort and print target id, read frequency on mapped to target per kb, average alternative mappings
-TARGET:
+    $id_regex ||= qr/ID=(.+)/;
+
+    # sort and print target id, read frequency on mapped to target per kb, average alternative mappings
+  TARGET:
     for my $target ( sort keys %{$counts_ref} ) {
 
         my ($id) = $target =~ m/$id_regex/;
