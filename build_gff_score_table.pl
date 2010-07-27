@@ -27,8 +27,15 @@ while (1) {
     last unless @lines;
 
     for ( @lines ) {
-        my ($id) = $_ =~ m/ID=(\w+)/;
-        my ($sc) = (split /\t/, $_)[5];
+        my ($id, $sc);
+
+        if (9 == my @fields = split /\t/, $_) {
+            ($id) = $fields[9] =~ m/ID=(\w+)/;
+            ($sc) = $fields[5];
+        }
+        else {
+            ($id, $sc) = @fields[0,1];
+        }
 
         $gene ||= $id;
         die "$gene different from $id" unless $gene eq $id;
