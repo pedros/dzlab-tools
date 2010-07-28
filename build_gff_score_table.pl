@@ -9,6 +9,9 @@ use Pod::Usage;
 use version; our $VERSION = qv('0.0.1');
 use File::Basename;
 
+# use File::Spec;
+#print map { File::Spec->rel2abs($_) ."\n" } @ARGV[0,1,2,3];exit;
+
 GetOptions(
     \%ARGV,
     'input|i=s', 'output|o=s', 'error|e=s',
@@ -27,25 +30,30 @@ while (1) {
     last unless @lines;
 
     for ( @lines ) {
-        my ($id, $sc);
+        my ($id, $sc, @fields);
 
-        if (9 == my @fields = split /\t/, $_) {
-            ($id) = $fields[9] =~ m/ID=(\w+)/;
-            ($sc) = $fields[5];
-        }
-        else {
+        @fields = split /\t/, $_;
+        @fields = split /\s+/, $_ unless @fields > 1;
+
+        if (@fields == 2) {
             ($id, $sc) = @fields[0,1];
         }
+        else {
+            ($id) = $fields[-1] =~ m/ID=(\w+)/;
+            ($sc) = $fields[5];
+        }
+
+        $id or die $fields[-1];
+        $sc or die $_;
 
         $gene ||= $id;
-        die "$gene different from $id" unless $gene eq $id;
+        die "$gene different from $id in $_" unless $gene eq $id;
         $sc = 0 if q{.} eq $sc;
         push @scores, $sc;
     }
 
     print $OUTH join ("\t", $gene, @scores), "\n";
 }
-
 
 {
     my %handles;
@@ -56,7 +64,7 @@ while (1) {
         for (@files) {
 
             unless (exists $handles{$_}) {
-                open my $IN, '<', $_ or die $!;
+                open my $IN, '<', $_ or die "Can't open $_ $!";
                 $handles{$_} = $IN;
             }
 
