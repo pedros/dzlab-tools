@@ -44,7 +44,7 @@ while (1) {
         }
 
         $id or die $fields[-1];
-        $sc or die $_;
+        defined $sc or die $_;
 
         $gene ||= $id;
         die "$gene different from $id in $_" unless $gene eq $id;
