@@ -20,7 +20,7 @@ GetOptions(
     \%ARGV,
     'input|i=s',        'output|o=s',       'error|e=s',
     'ecotype-a|ea=s',   'ecotype-b|eb=s',   'genotype-a|ga=s', 'genotype-b|gb=s', 
-    'tissue|t=s',
+    'tissue|t=s', 'loci-type|l=s',
     'reference-a|ra=s', 'reference-b|rb=s', 'annotation|a=s', 'debug',
     _meta_options( \%ARGV ),
 )
@@ -35,14 +35,14 @@ my ( $INH, $OUTH, $ERRH ) = _prepare_io( \%ARGV, \@ARGV );
 
 my %file_names = (
     a => build_file_names(
-        @ARGV{ qw/input output ecotype-a ecotype-b tissue genotype-a genotype-b/ }, 0 ),
+        @ARGV{ qw/input output ecotype-a ecotype-b tissue genotype-a genotype-b loci-type/ }, 0 ),
     b => build_file_names(
-        @ARGV{ qw/input output ecotype-a ecotype-b tissue genotype-a genotype-b/ }, 1 ),
+        @ARGV{ qw/input output ecotype-a ecotype-b tissue genotype-a genotype-b loci-type/ }, 1 ),
 );
 
 my %commands = (
-    a => build_common_commands( $file_names{a}, @ARGV{ qw/reference-a annotation/ } ),
-    b => build_common_commands( $file_names{b}, @ARGV{ qw/reference-b annotation/ } ),
+    a => build_common_commands( $file_names{a}, @ARGV{ qw/reference-a annotation loci-type/ } ),
+    b => build_common_commands( $file_names{b}, @ARGV{ qw/reference-b annotation loci-type/ } ),
     c => build_unique_commands( $file_names{a}, $file_names{b} ),
 );
 
@@ -117,7 +117,10 @@ sub build_unique_commands {
 }
 
 sub build_common_commands {
-    my ($names, $reference, $annotation) = @_;
+    my ($names, $reference, $annotation, $loci_type) = @_;
+
+    $loci_type ||= 'genes';
+    $loci_type =~ s/s$//;
 
     my @pre_processing = (
 
@@ -189,7 +192,7 @@ sub build_common_commands {
         ? System::Wrapper->new(
             interpreter => 'perl',
             executable  => 'window_gff.pl',
-            arguments   => [ -c => 'sum', '-k', -t => 'ID', -f => 'gene', '-r',
+            arguments   => [ -c => 'sum', '-k', -t => 'ID', -f => $loci_type, '-r',
                              -g => $annotation ],
             output      => { -o => $names->{genes_gff} },
             input       => [ $names->{reads_gff} ],)
@@ -199,7 +202,7 @@ sub build_common_commands {
         ? System::Wrapper->new(
             interpreter => 'perl',
             executable  => 'window_gff.pl',
-            arguments   => [ -c => 'sum', '-k', -t => 'ID', -f => 'gene', '-r',
+            arguments   => [ -c => 'sum', '-k', -t => 'ID', -f => $loci_type, '-r',
                              -g => $annotation ],
             output      => { -o => $names->{genes_filter} },
             input       => [ $names->{filter_gff} ],)
@@ -211,7 +214,7 @@ sub build_common_commands {
 }
 
 sub build_file_names {
-    my ($input, $out_dir, $ecotype_a, $ecotype_b, $tissue, $genotype_a, $genotype_b, $reverse) = @_;
+    my ($input, $out_dir, $ecotype_a, $ecotype_b, $tissue, $genotype_a, $genotype_b, $loci_type, $reverse) = @_;
 
     my $base_name = File::Spec->catfile(
         $out_dir,
@@ -221,6 +224,7 @@ sub build_file_names {
           )
     );
 
+    $loci_type ||= 'genes';
     my $ecotype = $reverse ? $ecotype_b : $ecotype_a;
 
     my $fastq_name   = $input;
@@ -228,8 +232,8 @@ sub build_file_names {
     my $eland_names  = join q{_}, $base_name, $ecotype . '.eland3';
     my $gff_names    = join q{_}, $base_name, $ecotype . '.gff';
     my $filter_names = join q{_}, $base_name, $ecotype . '_filtered.gff';
-    my $gff_genes    = join q{_}, $base_name, $ecotype . '.genes.gff';
-    my $filter_genes = join q{_}, $base_name, $ecotype . '_filtered.genes.gff';
+    my $gff_genes    = join q{_}, $base_name, $ecotype . ".$loci_type.gff";
+    my $filter_genes = join q{_}, $base_name, $ecotype . "_filtered.$loci_type.gff";
     my $repeat_names = join q{_}, $base_name, $ecotype . '.repeats';
     my $score_table  = join q{_}, $base_name           . '.table';
 
