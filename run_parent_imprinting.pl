@@ -234,8 +234,8 @@ sub build_file_names {
     my $filter_names = join q{_}, $base_name, $ecotype . '_filtered.gff';
     my $gff_genes    = join q{_}, $base_name, $ecotype . ".$loci_type.gff";
     my $filter_genes = join q{_}, $base_name, $ecotype . "_filtered.$loci_type.gff";
-    my $repeat_names = join q{_}, $base_name, $ecotype . '.repeats';
-    my $score_table  = join q{_}, $base_name           . '.table';
+    my $repeat_names = join q{_}, $base_name, $ecotype . ".$loci_type.repeats";
+    my $score_table  = join q{_}, $base_name           . ".$loci_type.table";
 
     return {
         fastq        => $fastq_name,
