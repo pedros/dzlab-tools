@@ -257,15 +257,13 @@ sub count_reads {
     # read in chromosome/model lengths
     my %reference = %{ index_fasta($reference) };
 
-    $id_regex ||= qr/ID=(.+)/;
+    $id_regex //= 'ID';
 
     # sort and print target id, read frequency on mapped to target per kb, average alternative mappings
   TARGET:
     for my $target ( sort keys %{$counts_ref} ) {
 
-        my ($id) = $target =~ m/$id_regex/;
-
-        print STDERR $id, "\n";
+        my ($id) = $target =~ m/$id_regex\s*=?([^;]+)/;
 
         unless ( exists $reference{$target} ) {
             carp "$target doesn't exist in $reference\n";
@@ -275,7 +273,6 @@ sub count_reads {
         print join(
             "\t",
 
-            #$target,
             $id,
             sprintf(
                 "%g",
