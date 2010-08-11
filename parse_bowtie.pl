@@ -15,7 +15,6 @@ pod2usage( -verbose => 1 )
 my $type = 'verbose';
 my $frequencies;
 my $paired;
-my $eland;
 my $id_regex;
 my $reference;
 my $output;
@@ -30,7 +29,6 @@ my $result = GetOptions(
     'type|t=s'      => \$type,
     'frequencies|f' => \$frequencies,
     'paired|p'      => \$paired,
-    'eland|e'       => \$eland,
     'id-regex|i=s'  => \$id_regex,
     'reference|r=s' => \$reference,
     'verbose|v'     => sub { use diagnostics; },
@@ -348,6 +346,9 @@ __END__
 
  parse_bowtie.pl [OPTION]... [FILE]...
 
+ -p, --paired      merge paired ends into gff fragments
+ -s, --splice      splice original sequences when recovering (x y)
+ -f, --frequencies output SEQID    FREQUENCY(reads/100bp)    ALTERNATIVES
  -t, --type        type of bowtie output file (verbose or concise -- only verbose supported for now)
  -i, --id-regex    perl-type regular expression to identify feature id (ie. gene) in fasta alignment header (must include capturing parenthesis)
  -r, --reference   genome/cDNA models file in fasta format (for calculating relative frequency scores, etc.)
