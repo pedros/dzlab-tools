@@ -261,7 +261,7 @@ sub count_reads {
   TARGET:
     for my $target ( sort keys %{$counts_ref} ) {
 
-        my ($id) = $target =~ m/$id_regex\s*=?([^;]+)/;
+        my ($id) = $target =~ m/$id_regex\s*=?([^;]+)?/;
 
         unless ( exists $reference{$target} ) {
             carp "$target doesn't exist in $reference\n";
