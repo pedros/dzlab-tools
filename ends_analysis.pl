@@ -319,7 +319,7 @@ sub check_neighbourhood {
         $flag_start,     $flag_end,       $memory[1]->[2],
         $memory[1]->[3], $memory[1]->[0], $memory[1]->[1]
     ]
-        if $flag_start <= $flag_end;
+    if $flag_start <= $flag_end;
 
     return 1;
 }

@@ -4,129 +4,107 @@ use warnings;
 use strict;
 use Data::Dumper;
 use Carp;
-use Getopt::Long qw(:config gnu_getopt no_bundling);
+use Getopt::Long;
 use Pod::Usage;
+use version; our $VERSION = qv('0.0.1');
+use List::Util qw/sum/;
+use List::MoreUtils qw/uniq/;
 
 my %statistics = (
-    'CHI::phi'          => 1,
-    'CHI::tscore'       => 1,
-    'CHI::x2'           => 1,
-    'Dice::dice'        => 1,
-    'Dice::jaccard'     => 1,
-    'Fisher::left'      => 1,
-    'Fisher::right'     => 1,
-    'Fisher::twotailed' => 1,
-    'MI::ll'            => 1,
-    'MI::pmi'           => 1,
-    'MI::ps'            => 1,
-    'MI::tmi'           => 1,
+    'CHI::phi'     => 1, 'CHI::tscore'   => 1, 'CHI::x2'           => 1,
+    'Dice::dice'   => 1, 'Dice::jaccard' => 1,
+    'Fisher::left' => 1, 'Fisher::right' => 1, 'Fisher::twotailed' => 1,
+    'MI::ll'       => 1, 'MI::pmi'       => 1, 'MI::ps'            => 1, 'MI::tmi' => 1,
 );
 
-GetOptions (
+@ARGV{qw/statistics
+         expected-maternal-imprinting-ratio
+         expected-paternal-imprinting-ratio/}
+= ( 'Fisher::twotailed', 2/3, 1/3 );
+
+@ARGV{qw/maternal-test paternal-test
+         maternal-control paternal-control/}
+= ([], [], [], []);
+
+GetOptions(
     \%ARGV,
-    'maternal-proportion|m=f',
-    'columns|c=i{4}' => \@{$ARGV{columns}}, # mm, mp, pm, pp
-    'statistics|s=s' => sub {exists $statistics{$_[1]}
-                             ? do {
-                                 $ARGV{$_[0]} = $_[1];
-                                 eval "use Text::NSP::Measures::2D::$_[1]";
-                             }
-                             : pod2usage -sections => ['OPTIONS'],
-                                         -message  => "Invalid statistic: $_[1]",
-                                         -verbose  => 99                       },
-    # meta-options
-    'input|i=s',
-    'output|o=s',
-    'debug:i',
-    'quiet'          => sub {$ARGV{quiet}   = 1; no  diagnostics; no warnings  },
-    'verbose'        => sub {$ARGV{verbose} = 1; use diagnostics; use warnings},
-    'version'        => sub {pod2usage -sections => ['VERSION','REVISION'],
-                                        -verbose  => 99                        },
-    'license'        => sub {pod2usage -sections => ['AUTHOR','COPYRIGHT'],
-                                        -verbose  => 99                        },
-    'usage'          => sub {pod2usage -sections => ['SYNOPSIS'],
-                                        -verbose  => 99                        },
-    'help'           => sub {pod2usage -verbose  => 1                          },
-    'manual'         => sub {pod2usage -verbose  => 2                          },
-    )
-    or pod2usage (-verbose => 1);
+    'input|i=s', 'output|o=s', 'error|e=s',
+    'maternal-test|mt=i{,}', 'maternal-control|mc=i{,}',
+    'paternal-test|pt=i{,}', 'paternal-control|pc=i{,}',
+    'expected-maternal-imprinting-ratio|m=f',
+    'expected-paternal-imprinting-ratio|p=f',
+    'statistics|s=s',
+    _meta_options( \%ARGV ),
+) and (@ARGV or $ARGV{input}) or pod2usage( -verbose => 1 );
 
-my $INH  = *ARGV;
-my $ERRH = *STDERR;
-my $OUTH = *STDOUT;
+my ( $INH, $OUTH, $ERRH ) = _prepare_io( \%ARGV, \@ARGV );
 
-# We use the ARGV magical handle to read input
-# If user explicitly sets -i, put the argument in @ARGV
-if (exists $ARGV{input}) {
-    unshift @ARGV, $ARGV{input};
+if (exists $statistics{$ARGV{statistics}}) {
+    eval "use Text::NSP::Measures::2D::$ARGV{statistics}";
 }
-# Allow in-situ arguments (equal input and output filenames)
-# FIXME: infinite loop. Makes sense, but why does Conway recommend it?
-if (exists $ARGV{input} and exists $ARGV{output}
-    and    $ARGV{input} eq         $ARGV{output}) {
-    croak "Bug: don't use in-situ editing (same input and output files"; #
-    open $INH, q{<}, $ARGV{input} or croak "Can't read $ARGV{input}: $!";
-    unlink $ARGV{input};
-}
-# Redirect STDOUT to a file if so specified
-if (exists $ARGV{output} and q{-} ne $ARGV{output}) {
-    open $OUTH, q{>}, $ARGV{output}
-    or croak "Can't write $ARGV{output}: $!";
+else {
+    pod2usage( -sections => ['OPTIONS'],
+               -message  => "Invalid statistic: $ARGV{statistics}",
+               -verbose  => 99 );
 }
 
-MAIN:
-my @headers = split /\t/, scalar <$INH>;
-chomp $headers[-1];
+chomp( my @headers = split /\t/, scalar <$INH> );
 
-print join("\t",
-           @headers[0,1,2], $ARGV{statistics},
-           @headers[3,4],   $ARGV{statistics}
-       ), "\n";
+my @uniq_sorted_headers
+= sort { $a <=> $b }
+uniq
+grep { defined $headers[$_] }
+map { ref $_ ? @$_ : $_ }
+@ARGV{qw/maternal-test paternal-test maternal-control paternal-control/};
 
-while(<$INH>){
-    chomp;
-    my @values = split /\t/, $_;
+print $OUTH join( "\t",
+            $headers[0],
+            @headers[@uniq_sorted_headers],
+            $ARGV{statistics},
+            $ARGV{debug} ? qw/mt mc pt pc/ : (),
+        ), "\n";
 
+while ( <$INH> ) {
     # columns: mm, mp, pp. pm
     # contigency table:
-    #  |observ|expect|
-    # -|------|------|----
-    # m| n11  | n12  | n1p
-    # -|------|------|----
-    # p| n21  | n22  |
-    #  |------|------|----
-    #  | np1  |      | npp 
+    #  |test   |control|
+    # -|-------|-------|----
+    # m| n11   | n12   | n1p
+    # -|-------|-------|----
+    # p| n21   | n22   |
+    #  |-------|-------|----
+    #  | np1   |       | npp 
+    chomp;
+    my @fields = split /\t/;
 
-    my $n11 =  $values[$ARGV{columns}->[0]];
-    my $n21 =  $values[$ARGV{columns}->[1]];
+    my ($n11, $n12, $n21, $n22);
 
-    my $n12 = ($n11 + $n21)
-              * $ARGV{'maternal-proportion'};
-    my $n22 = ($n11 + $n21)
-              * (1 - $ARGV{'maternal-proportion'});
+    $n11 = sum @fields[ @{ $ARGV{'maternal-test'} } ];
+    $n12 = sum @fields[ @{ $ARGV{'paternal-test'} } ];
 
-    print join("\t",
-               @values[0,1,2],
-               sprintf("%g", get_p($n11, $n12, $n21, $n22))
-           ), "\t";
+    if (grep {@$_} @ARGV{qw/maternal-control paternal-control/}) {
+        $n21 = sum @fields[ @{ $ARGV{'maternal-control'} } ];
+        $n22 = sum @fields[ @{ $ARGV{'paternal-control'} } ];
+    }
+    else {
+        $n21 = $ARGV{'expected-maternal-imprinting-ratio'} * ($n11 + $n12);
+        $n22 = $ARGV{'expected-paternal-imprinting-ratio'} * ($n11 + $n12);
+    }
 
-    $n11 =  $values[$ARGV{columns}->[2]];
-    $n21 =  $values[$ARGV{columns}->[3]];
+    die Dumper $n11, $n12, \%ARGV unless defined $n21 and defined $n22;
 
-    $n12 = ($n11 + $n21)
-              * (1 - $ARGV{'maternal-proportion'});
-    $n22 = ($n11 + $n21)
-              * $ARGV{'maternal-proportion'};    
+    my $p = get_p( (map { sprintf "%.0f", $_ } $n11, $n12, $n21, $n22), $fields[0]);
 
-    print join("\t",
-               @values[3,4],
-               sprintf("%g", get_p($n11, $n12, $n21, $n22))
-           ), "\n";
+    print $OUTH join( "\t",
+                $fields[0],
+                @fields[@uniq_sorted_headers],
+                sprintf( "%g", $p),
+                $ARGV{debug} ? map {sprintf "%g",  $_}( $n11, $n12, $n21, $n22 ) : (),
+            ), "\n";
 }
 
-## done
 sub get_p {
-    my ($n11, $n12, $n21, $n22) = @_;
+    my ($n11, $n12, $n21, $n22, $gene) = @_;
 
     if ($n11 + $n12 + $n21 + $n22) {
         return calculateStatistic
@@ -138,24 +116,81 @@ sub get_p {
         );
     }
 
-    if ( my $error_code = getErrorCode() ) {
-        print STDERR "$error_code: ", getErrorMessage(), "\n";
+   if ( my $error_code = getErrorCode() ) {
+        print $ERRH "$error_code: ", getErrorMessage(), "\n";
     }
     else {return 0}
 }
 
+sub _meta_options {
+    my ($opt) = @_;
+
+    return (
+        'debug',
+        'quiet'     => sub { $opt->{quiet}   = 1;          $opt->{verbose} = 0 },
+        'verbose:i' => sub { $opt->{verbose} = $_[1] // 1; $opt->{quiet}   = 0 },
+        'version'   => sub { pod2usage( -sections => ['VERSION', 'REVISION'],
+                                        -verbose  => 99 )                      },
+        'license'   => sub { pod2usage( -sections => ['AUTHOR', 'COPYRIGHT'],
+                                        -verbose  => 99 )                      },
+        'usage'     => sub { pod2usage( -sections => ['SYNOPSIS'],
+                                        -verbose  => 99 )                      },
+        'help'      => sub { pod2usage( -verbose  => 1  )                      },
+        'manual'    => sub { pod2usage( -verbose  => 2  )                      },
+    );
+}
+
+sub _prepare_io {
+    my ($opt, $argv) = @_;
+
+    my ($INH, $OUTH, $ERRH);
+    
+    # If user explicitly sets -i, put the argument in @$argv
+    unshift @$argv, $opt->{input} if exists $opt->{input};
+
+    # Allow in-situ arguments (equal input and output filenames)
+    if (    exists $opt->{input} and exists $opt->{output}
+               and $opt->{input} eq $opt->{output} ) {
+        open $INH, q{<}, $opt->{input}
+            or croak "Can't read $opt->{input}: $!";
+        unlink $opt->{output};
+    }
+    else { $INH = *ARGV }
+
+    # Redirect STDOUT to a file if so specified
+    if ( exists $opt->{output} and q{-} ne $opt->{output} ) {
+        open $OUTH, q{>}, $opt->{output}
+            or croak "Can't write $opt->{output}: $!";
+    }
+    else { $OUTH = *STDOUT }
+
+    # Log STDERR if so specified
+    if ( exists $opt->{error} and q{-} ne $opt->{error} ) {
+        open $ERRH, q{>}, $opt->{error}
+            or croak "Can't write $opt->{error}: $!";
+    }
+    elsif ( exists $opt->{quiet} and $opt->{quiet} ) {
+        use File::Spec;
+        open $ERRH, q{>}, File::Spec->devnull
+            or croak "Can't write $opt->{error}: $!";
+    }
+    else { $ERRH = *STDERR }
+
+    return ( $INH, $OUTH, *STDERR = $ERRH );
+}
 
 __DATA__
+
 
 __END__
 
 =head1 NAME
 
- parent_imprinting.pl - Short description
+ APerlyName.pl - Short description
 
 =head1 SYNOPSIS
 
- parent_imprinting.pl [OPTION]... [FILE]...
+ APerlyName.pl [OPTION]... [[-i] FILE]...
 
 =head1 DESCRIPTION
 
@@ -163,15 +198,15 @@ __END__
 
 =head1 OPTIONS
 
- -i, --input       filename to read from                            (STDIN)
- -o, --output      filename to write to                             (STDOUT)
-     --debug       print additional information
-     --verbose     print diagnostic and warning messages
-     --quiet       print no diagnostic or warning messages
-     --version     print current version
-     --license     print author's contact and copyright information
-     --help        print this information
-     --manual      print the plain old documentation page
+ -i, --input       <string>     input filename                           (STDIN)
+ -o, --output      <string>     output filename                          (STDOUT)
+ -e, --error       <string>     output error filename                    (STDERR)
+     --verbose     [integer]    print increasingly verbose error messages
+     --quiet                    print no diagnostic or warning messages
+     --version                  print current version
+     --license                  print author's contact and copyright information
+     --help                     print this information
+     --manual                   print the plain old documentation page
 
 =head1 VERSION
 
