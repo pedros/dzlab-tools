@@ -200,6 +200,7 @@ __END__
  -f, --filter           only include sequences of length between -f n m
  -w, --use-max-win      try to find attribute fields 'maxstart=n' and 'maxend=m'
  -d, --distance         only go distance -d n/2 from center of locus 
+ -i, --id               locus gff ID tag
  -t, --tss              extract $distance around transcription start site
  -r, --reference        reference fasta file from which to extract sequences.
  -l, --default-locus    default fasta header to use when extracting locus ID is not possible
