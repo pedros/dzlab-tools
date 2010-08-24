@@ -231,9 +231,9 @@ sub read_bowtie {
 
     my ( $read_id, $strand, $target, $coordinate, $sequence, $qualities,
         $alternatives, $snp )
-        = split /\t/, $bowtie_line;
+        = split /\t|\s+/, $bowtie_line;
 
-    my @mm = split /,/, $snp;
+    my @mm = $snp ? split /,/, $snp : ();
 
     return {
         'read_id'      => $read_id,
