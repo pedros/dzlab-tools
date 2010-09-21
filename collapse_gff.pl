@@ -33,12 +33,15 @@ while (<$DATA_HANDLE>) {
     next if /\s*#/;
     my @fields = split /\t/;
 
-    push @buffer, \@fields and next
-    if !@buffer
-    || ($fields[3] - 1 == $buffer[-1]->[4] and $fields[5] == $buffer[-1]->[5]);
-
-    print join ("\t", @{$buffer[0]}[0,1,2,3], $buffer[-1]->[4], @{$buffer[0]}[5,6,7,8]);
-    @buffer = (\@fields);
+    if ( !@buffer || ($fields[3] - 1 == $buffer[-1]->[4] and $fields[5] == $buffer[-1]->[5]) ) {
+        push @buffer, [@fields[0,1,2], 0, @fields[4,5,6,7,8]] if !@buffer;
+        push @buffer, \@fields;
+    }
+    else {
+        print join ("\t", @{$buffer[0]}[0,1,2,3], $buffer[-1]->[4], @{$buffer[0]}[5,6,7,8]);
+        print join ("\t", @{$buffer[0]}[0,1,2], $buffer[-1]->[4] + 1, $fields[4] - 1, 0, @{$buffer[0]}[6,7,8]);
+        @buffer = (\@fields);
+    }
 }
 
 print join ("\t", @{$buffer[0]}[0,1,2,3], $buffer[-1]->[4], @{$buffer[0]}[5,6,7,8])
