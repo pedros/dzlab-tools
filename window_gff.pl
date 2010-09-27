@@ -75,16 +75,6 @@ if ($absolute) {
     $no_skip = 1;
 }
 
-my $gff_iterator
-    = make_gff_iterator( parser => \&gff_read, handle => 'ARGV' );
-
-my %gff_records = ();
-LOAD:
-while ( my $gff_line = $gff_iterator->() ) {
-    next LOAD unless ref $gff_line eq 'HASH';
-    push @{ $gff_records{ $gff_line->{seqname} } }, $gff_line;
-}
-
 my $fasta_lengths = {};
 if ( $absolute and $no_skip ) {
     $fasta_lengths = index_fasta_lengths( handle => 'DATA' );
@@ -99,8 +89,36 @@ if ($gff) {
     );
 }
 
+
+open my $GFF, '<', $ARGV[0] or croak "Can't open $ARGV[0]:$!";
+my $gff_iterator = make_gff_iterator( parser => \&gff_read, handle => $GFF );
+my %chromosomes;
+while ( my $gff_line = $gff_iterator->() ) {
+    my $sequence = $gff_line->{sequence};
+    $chromosomes{$sequence}++ 
+	if ref $gff_line eq 'HASH'
+	and !exists $chromosomes{$sequence};
+}
+close $GFF or croak "Can't close $ARGV[0]:$!";
+
 SEQUENCE:
-for my $sequence ( sort keys %gff_records ) {
+for my $sequence ( sort keys %chromosomes ) {
+
+    open my $GFF, '<', $ARGV[0] or croak "Can't open $ARGV[0]:$!";
+    my $gff_iterator = make_gff_iterator( parser => \&gff_read, handle => $GFF );
+    
+    my %gff_records = ();
+
+  LOAD:
+    while ( my $gff_line = $gff_iterator->() ) {
+	next LOAD unless ref $gff_line eq 'HASH';	
+	if ($gff_line->{seqname} eq $sequence) {
+	    push @{ $gff_records{ $gff_line->{seqname} } },
+	    { map{ $_ => $gff_line->{$_} } qw(start end score) };
+	}
+    }
+    
+    close $GFF or croak "Can't close $ARGV[0]:$!";    
 
     unless ($no_sort) {
         @{ $gff_records{$sequence} }
@@ -169,6 +187,7 @@ WINDOW:
     }
 
     delete $gff_records{$sequence};
+    
 }
 
 sub index_fasta_lengths {
