@@ -89,18 +89,21 @@ if ($gff) {
     );
 }
 
-
 open my $GFF, '<', $ARGV[0] or croak "Can't open $ARGV[0]:$!";
 my $gff_iterator = make_gff_iterator( parser => \&gff_read, handle => $GFF );
 my %chromosomes;
 
+print STDERR "Loading groups...";
 while ( my $gff_line = $gff_iterator->()) {
     next unless ref $gff_line eq 'HASH';    
     my $sequence = $gff_line->{seqname};
-    $chromosomes{$sequence}++ 
-	if !exists $chromosomes{$sequence};
+
+    ++$chromosomes{$sequence} and print STDERR "\n$sequence"
+    unless exists $chromosomes{$sequence};
 }
 close $GFF or croak "Can't close $ARGV[0]:$!";
+print STDERR "...done\n";
+
 
 SEQUENCE:
 for my $sequence ( sort keys %chromosomes ) {
@@ -110,23 +113,26 @@ for my $sequence ( sort keys %chromosomes ) {
     
     my %gff_records = ();
 
+    print STDERR "Loading $sequence...";
   LOAD:
     while ( my $gff_line = $gff_iterator->() ) {
 	next LOAD unless ref $gff_line eq 'HASH';	
 	if ($gff_line->{seqname} eq $sequence) {
 	    push @{ $gff_records{ $sequence } },
-	    { map{ $_ => $gff_line->{$_} } qw(start end score) };  #does this need more? $seqname, $source, $feature, $start, $end, $score, $strand, $frame, $attribute
-
+	    { map{ $_ => $gff_line->{$_} } qw(start end score) };  
+            # does this need more? $seqname, $source, $feature, $start, $end, $score, $strand, $frame, $attribute
 	}
     }
-    
-    close $GFF or croak "Can't close $ARGV[0]:$!";    
+    close $GFF or croak "Can't close $ARGV[0]:$!";
+    print STDERR "done\n";
 
+    print STDERR "Sorting", scalar @{ $gff_records{$sequence} }, " records...";
     unless ($no_sort) {
         @{ $gff_records{$sequence} }
             = sort { $a->{start} <=> $b->{start} }
             @{ $gff_records{$sequence} };
     }
+    print STDERR "done\n";
 
     unless ($gff) {
         $window_iterator = make_window_iterator(
@@ -144,8 +150,11 @@ for my $sequence ( sort keys %chromosomes ) {
         );
     }
 
-WINDOW:
+    print STDERR "Windowing...";
+  WINDOW:
     while ( my ( $ranges, $locus ) = $window_iterator->($sequence) ) {
+
+        #print STDERR ($locus // "@{$ranges->[0]}"), "\n";
 
         my $brs_iterator = binary_range_search(
             range  => $ranges,
@@ -187,9 +196,9 @@ WINDOW:
             $score, q{.}, q{.}, $attribute, ),
             "\n";
     }
+    print STDERR "done\n";
 
-    delete $gff_records{$sequence};
-    
+    delete $gff_records{$sequence};    
 }
 
 sub index_fasta_lengths {
@@ -380,7 +389,7 @@ COORD:
     while ( my $gff_line = $brs_iterator->() ) {
         next COORD unless ref $gff_line eq 'HASH';
 
-        $score_sum += $gff_line->{score} eq q{.} ? 1 : $gff_line->{score};
+        $score_sum += $gff_line->{score} eq q{.} ? 0 : $gff_line->{score};
         $score_count++;
     }
 
