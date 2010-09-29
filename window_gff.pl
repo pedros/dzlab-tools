@@ -93,11 +93,12 @@ if ($gff) {
 open my $GFF, '<', $ARGV[0] or croak "Can't open $ARGV[0]:$!";
 my $gff_iterator = make_gff_iterator( parser => \&gff_read, handle => $GFF );
 my %chromosomes;
-while ( my $gff_line = $gff_iterator->() ) {
-    my $sequence = $gff_line->{sequence};
+
+while ( my $gff_line = $gff_iterator->()) {
+    next unless ref $gff_line eq 'HASH';    
+    my $sequence = $gff_line->{seqname};
     $chromosomes{$sequence}++ 
-	if ref $gff_line eq 'HASH'
-	and !exists $chromosomes{$sequence};
+	if !exists $chromosomes{$sequence};
 }
 close $GFF or croak "Can't close $ARGV[0]:$!";
 
@@ -113,8 +114,9 @@ for my $sequence ( sort keys %chromosomes ) {
     while ( my $gff_line = $gff_iterator->() ) {
 	next LOAD unless ref $gff_line eq 'HASH';	
 	if ($gff_line->{seqname} eq $sequence) {
-	    push @{ $gff_records{ $gff_line->{seqname} } },
-	    { map{ $_ => $gff_line->{$_} } qw(start end score) };
+	    push @{ $gff_records{ $sequence } },
+	    { map{ $_ => $gff_line->{$_} } qw(start end score) };  #does this need more? $seqname, $source, $feature, $start, $end, $score, $strand, $frame, $attribute
+
 	}
     }
     
@@ -485,7 +487,7 @@ sub binary_range_search {
     my $targets = $options{range}  || croak 'Need a range parameter';
     my $ranges  = $options{ranges} || croak 'Need a ranges parameter';
 
-    my ( $low, $high ) = ( 0, $#{$ranges} );
+    my ( $low, $high ) = ( 0, $#{$ranges} );     #what does this do?
     my @iterators = ();
 
 TARGET:
