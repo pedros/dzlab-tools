@@ -39,7 +39,7 @@ while (<$DATA_HANDLE>) {
     }
     else {
         print join ("\t", @{$buffer[0]}[0,1,2,3], $buffer[-1]->[4], @{$buffer[0]}[5,6,7,8]);
-        print join ("\t", @{$buffer[0]}[0,1,2], $buffer[-1]->[4] + 1, $fields[4] - 1, 0, 1;2000;0c@{$buffer[0]}[6,7,8]);
+        print join ("\t", @{$buffer[0]}[0,1,2], $buffer[-1]->[4] + 1, $fields[4] - 1, 0, @{$buffer[0]}[6,7,8]);
         @buffer = (\@fields);
     }
 }
