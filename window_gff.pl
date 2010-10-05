@@ -7,7 +7,7 @@ use Carp;
 use Getopt::Long qw(:config bundling);
 use Pod::Usage;
 use List::Util qw(sum);
-use Devel::Size qw(size total_size);
+#use Devel::Size qw(size total_size);
 
 my $output;
 my $width   = 50;
@@ -127,8 +127,8 @@ for my $sequence ( sort keys %chromosomes ) {
     close $GFF or croak "Can't close $ARGV[0]:$!";
     print STDERR "done\n";
 
-    printf STDERR "gff_records occupies %g MiB of memory\n",
-    total_size( \%gff_records ) / 1024 / 1024;
+    #printf STDERR "gff_records occupies %g MiB of memory\n",
+    #total_size( \%gff_records ) / 1024 / 1024;
 
     print STDERR 'Sorting ', scalar @{ $gff_records{$sequence} }, ' records...';
     unless ($no_sort) {
