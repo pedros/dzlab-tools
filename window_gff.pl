@@ -120,7 +120,7 @@ for my $sequence ( sort keys %chromosomes ) {
 	next LOAD unless ref $gff_line eq 'HASH';	
 	if ($gff_line->{seqname} eq $sequence) {
 	    push @{ $gff_records{ $sequence } },
-	    { map{ $_ => $gff_line->{$_} } qw(start end score) };  
+	    { map{ $_ => $gff_line->{$_} } qw(start end score attribute) };  
             # does this need more? $seqname, $source, $feature, $start, $end, $score, $strand, $frame, $attribute
 	}
     }
@@ -355,7 +355,7 @@ sub fractional_methylation {
 
     my ( $c_count, $t_count, $score_count ) = ( 0, 0, 0 );
 
-COORD:
+  COORD:
     while ( my $gff_line = $brs_iterator->() ) {
 
         next COORD unless ref $gff_line eq 'HASH';
@@ -365,8 +365,6 @@ COORD:
                                                      .*
                                                      t=(\d+)
                                                  /xms;
-
-        next unless defined $c and defined $t;
 
         $c_count += $c;
         $t_count += $t;
