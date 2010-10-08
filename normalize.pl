@@ -39,20 +39,24 @@ open my $GFF_B, '<', $gff_b or croak "Can't read $gff_b";
 while (1) {
     my $tmp = <$GFF_A>;
     last if !defined $tmp;
+    chomp $tmp;
     my $a = (split /\t/, $tmp)[5];
 
-    my ($a_chr, $a_start, $a_end) = (split /\t/, $tmp)[0, 3, 4];
+    my ($a_chr, $a_start, $a_end, $a_attr) = (split /\t/, $tmp)[0, 3, 4, 8];
 
     $tmp = <$GFF_B>;
     last if !defined $tmp;
+    chomp $tmp;
     my $b = (split /\t/, $tmp)[5];
 
-    my ($b_chr, $b_start, $b_end) = (split /\t/, $tmp)[0, 3, 4];
+    my ($b_chr, $b_start, $b_end, $b_attr) = (split /\t/, $tmp)[0, 3, 4, 8];
 
     $probes{$a_chr}{$a_start}->[0] = $a_end;
     $probes{$b_chr}{$b_start}->[1] = $b_end;
     $probes{$a_chr}{$a_start}->[2] = $a;
     $probes{$b_chr}{$b_start}->[3] = $b;
+    $probes{$a_chr}{$a_start}->[4] = $a_attr;
+    $probes{$b_chr}{$b_start}->[5] = $b_attr;
 }
 close $GFF_A;
 close $GFF_B;
@@ -68,18 +72,21 @@ for my $chr (sort keys %probes) {
 
         my $a    = $probes{$chr}{$start}->[2];
         my $b    = $probes{$chr}{$start}->[3];
+
+        next if $a eq q{.} or $b eq q{.};
+
         my $frac = log_ratio ($a, $b);
 
         print join ("\t",
                     $chr,
                     q{.},
-                    'ChIP/INPUT',
+                    'a-b',
                     $start,
                     $a_end,
                     sprintf("%g", $frac),
                     q{.},
                     q{.},
-                    "chIP=$a;input=$b\n",
+                    "$probes{$chr}{$start}->[4];a=$a;b=$b\n",
                 );
     }
 }
@@ -90,6 +97,7 @@ sub log_ratio {
     croak "log_ratio requires two values."
     unless defined $a and defined $b;
 
+    return $a - $b;
     return (log (1 / $b)) / log 2 if $a == 0 and $b != 0;
     return (log ($a / 1)) / log 2   if $a != 0 and $b == 0;
     return (log ($a / $b)) / log 2 if $a != 0 and $b != 0;
