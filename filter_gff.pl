@@ -14,6 +14,7 @@ my $loci_list;
 my $include       = 0;
 my $attribute_id  = 'ID';
 my $random_sample = 0;
+my $type;
 my $min_score     = 0;
 my $max_score     = 0;
 my $min_length    = 0;
@@ -29,6 +30,7 @@ my $result = GetOptions(
     'max-score|S=f'     => \$max_score,
     'min-length|m=f'    => \$min_length,
     'max-length|M=f'    => \$max_length,
+    'type|t=s'          => \$type,
     'output|o=s'        => \$output,
     'verbose'         => sub { use diagnostics; },
     'quiet'           => sub { no warnings; },
@@ -68,21 +70,22 @@ while ( my $gff_line = $gff_iterator->() ) {
                                 ([^;\s]+)
                                 .*
                                /$1/mx
-        if $attribute_id;
-
+                               if $attribute_id;
+    
     my $matches 
     =   (( 0 == $min_score  or $gff_line->{score} eq q{.} or $gff_line->{score} >= $min_score )
     and ( 0 == $max_score  or $gff_line->{score} eq q{.} or $gff_line->{score} <= $max_score )
     and ( 0 == $min_length or ( $gff_line->{end} - $gff_line->{start} ) >= $min_length )
     and ( 0 == $max_length or ( $gff_line->{end} - $gff_line->{start} ) <= $max_length )
+    and ( not defined $type or $gff_line->{attribute} =~ m/$type/ )
     and ( not defined $loci_list or exists $loci_to_delete{ $gff_line->{attribute} } ));
 
     next GFF if $include xor $matches;
 
     my $out_string = join( "\t",
-        $gff_line->{seqname}, $gff_line->{source}, $gff_line->{feature},
-        $gff_line->{start},   $gff_line->{end},    $gff_line->{score},
-        $gff_line->{strand},  $gff_line->{frame},  $attribute ) . "\n";
+                           $gff_line->{seqname}, $gff_line->{source}, $gff_line->{feature},
+                           $gff_line->{start},   $gff_line->{end},    $gff_line->{score},
+                           $gff_line->{strand},  $gff_line->{frame},  $attribute ) . "\n";
 
     if ($random_sample) {
         push @random, $out_string;
@@ -156,6 +159,7 @@ __END__
  -M, --max-length    maximum length to filter by (0 by default)
  -i, --include       only print out those loci in GFF with matching IDs to the loci-list
  -a, --attribute-id  attribute tag in GFF file (default 'ID')
+ -t, --type          match type in attribute value
  -r, --random-sample take a random sample of size of the parameter
  -o, --output        filename to write results to (defaults to STDOUT)
  -v, --verbose       output perl's diagnostic and warning messages
