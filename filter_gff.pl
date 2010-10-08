@@ -4,46 +4,59 @@ use warnings;
 use strict;
 use Data::Dumper;
 use Carp;
-use Getopt::Long;
+use Getopt::Long qw(:config no_ignore_case bundling);
 use Pod::Usage;
 use List::Util 'shuffle';
 
 my $DATA_HANDLE = 'ARGV';
 my $output;
 my $loci_list;
-my $include = 0;
-my $attribute_id = 'ID';
+my $include       = 0;
+my $attribute_id  = 'ID';
 my $random_sample = 0;
+my $min_score     = 0;
+my $max_score     = 0;
+my $min_length    = 0;
+my $max_length    = 0;
 
 # Grabs and parses command line options
-my $result = GetOptions (
-    'loci-list|l=s' => \$loci_list,
-    'include|i'     => \$include,
-    'attribute-id|a=s' => $attribute_id,
+my $result = GetOptions(
+    'list|l=s'          => \$loci_list,
+    'include|i'         => \$include,
+    'attribute-id|a=s'  => \$attribute_id,
     'random-sample|r=i' => \$random_sample,
-    'output|o=s'  => \$output,
-    'verbose|v'   => sub { use diagnostics; },
-    'quiet|q'     => sub { no warnings; },
-    'help|h'      => sub { pod2usage ( -verbose => 1 ); },
-    'manual|m'    => sub { pod2usage ( -verbose => 2 ); }
+    'min-score|s=f'     => \$min_score,
+    'max-score|S=f'     => \$max_score,
+    'min-length|m=f'    => \$min_length,
+    'max-length|M=f'    => \$max_length,
+    'output|o=s'        => \$output,
+    'verbose'         => sub { use diagnostics; },
+    'quiet'           => sub { no warnings; },
+    'help'            => sub { pod2usage( -verbose => 1 ); },
+    'manual'          => sub { pod2usage( -verbose => 2 ); }
 );
 
 # Check required command line parameters
-pod2usage ( -verbose => 1 )
-unless @ARGV and $result and $loci_list;
+pod2usage( -verbose => 1 )
+    unless @ARGV and $result;
 
 if ($output) {
-    open my $USER_OUT, '>', $output or croak "Can't open $output for writing: $!";
+    open my $USER_OUT, '>', $output
+        or croak "Can't open $output for writing: $!";
     select $USER_OUT;
 }
 
-open my $LOCI, '<', $loci_list or croak "Can't read $loci_list: $!";
-my %loci_to_delete = map { chomp $_; $_ => undef } <$LOCI>;
+my @random;
+my %loci_to_delete;
+
+if ($loci_list) {
+    open my $LOCI, '<', $loci_list or croak "Can't read $loci_list: $!";
+    %loci_to_delete = map { chomp $_; $_ => undef } <$LOCI>;
+    close $LOCI or die "Can't close $loci_list: $!";
+}
 
 my $gff_iterator = make_gff_iterator( $ARGV[0], \&gff_read );
-
-my @random = ();
-
+GFF:
 while ( my $gff_line = $gff_iterator->() ) {
 
     next GFF unless ref $gff_line eq 'HASH';
@@ -55,23 +68,21 @@ while ( my $gff_line = $gff_iterator->() ) {
                                 ([^;\s]+)
                                 .*
                                /$1/mx
-                               if $attribute_id;
+        if $attribute_id;
 
-    next if
-    ($include and not exists $loci_to_delete{$gff_line->{attribute}})
-    or (not $include and exists $loci_to_delete{$gff_line->{attribute}});
+    my $matches 
+    =   (( 0 == $min_score  or $gff_line->{score} eq q{.} or $gff_line->{score} >= $min_score )
+    and ( 0 == $max_score  or $gff_line->{score} eq q{.} or $gff_line->{score} <= $max_score )
+    and ( 0 == $min_length or ( $gff_line->{end} - $gff_line->{start} ) >= $min_length )
+    and ( 0 == $max_length or ( $gff_line->{end} - $gff_line->{start} ) <= $max_length )
+    and ( not defined $loci_list or exists $loci_to_delete{ $gff_line->{attribute} } ));
 
-    my $out_string = join ("\t",
-                           $gff_line->{seqname},
-                           $gff_line->{source},
-                           $gff_line->{feature},
-                           $gff_line->{start},
-                           $gff_line->{end},
-                           $gff_line->{score},
-                           $gff_line->{strand},
-                           $gff_line->{frame},
-                           $attribute,
-                       ) . "\n";
+    next GFF if $include xor $matches;
+
+    my $out_string = join( "\t",
+        $gff_line->{seqname}, $gff_line->{source}, $gff_line->{feature},
+        $gff_line->{start},   $gff_line->{end},    $gff_line->{score},
+        $gff_line->{strand},  $gff_line->{frame},  $attribute ) . "\n";
 
     if ($random_sample) {
         push @random, $out_string;
@@ -84,9 +95,8 @@ while ( my $gff_line = $gff_iterator->() ) {
 if ($random_sample) {
     croak "Not enough loci for sample" if $random_sample > @random;
     @random = shuffle @random;
-    print @random[0 .. $random_sample - 1];
+    print @random[ 0 .. $random_sample - 1 ];
 }
-
 
 sub make_gff_iterator {
     my ( $gff_file_name, $gff_parser ) = @_;
@@ -122,7 +132,6 @@ sub gff_read {
     };
 }
 
-
 __END__
 
 
@@ -140,7 +149,11 @@ __END__
 
  filter_gff.pl [OPTION]... [FILE]...
 
- -l, --loci-list     list of loci IDs, one ID per line
+ -l, --list          list of loci IDs, one ID per line
+ -s, --min-score     minimum score to filter by (0 by default)
+ -S, --max-score     maximum score to filter by (0 by default)
+ -m, --min-length    minimum length to filter by (0 by default)
+ -M, --max-length    maximum length to filter by (0 by default)
  -i, --include       only print out those loci in GFF with matching IDs to the loci-list
  -a, --attribute-id  attribute tag in GFF file (default 'ID')
  -r, --random-sample take a random sample of size of the parameter
