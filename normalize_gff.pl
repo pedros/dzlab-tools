@@ -12,7 +12,7 @@ GetOptions(
     \%ARGV,
     'input|i=s', 'output|o=s', 'error|e=s',
     'gff-a|a=s', 'gff-b|b=s', 'scoring|c=s',
-    'feature|f=s',
+    'feature|f=s', 'dot-as-zero|0',
     _meta_options( \%ARGV ),
 ) and (@ARGV or $ARGV{input} or @ARGV{qw/gff-a gff-b/}) or pod2usage( -verbose => 1 );
 
@@ -21,7 +21,7 @@ my ( $INH, $OUTH, $ERRH ) = _prepare_io( \%ARGV, \@ARGV );
 my %scoring_dispatch = (
     log2_ratio => \&log2_ratio,
     difference => sub { 
-        q{.} eq $_[0] or q{.} eq $_[1]
+        (q{.} eq $_[0] or q{.} eq $_[1])
         ? q{.}
         : ($_[0] - $_[1])
     },
@@ -38,6 +38,11 @@ while (     defined( my $gff_a = $gff_a_iterator->() )
 
     die "GFF record mismatch: ", Dumper [$gff_a, $gff_b]
     unless @{$gff_a}{qw/seqname start end/} eq @{$gff_b}{qw/seqname start end/};
+
+    if ($ARGV{0}) {
+        $gff_a->{score} = 0 if $gff_a->{score} eq q{.};
+        $gff_b->{score} = 0 if $gff_b->{score} eq q{.};
+    }
 
     print $OUTH join( "\t",
                       $gff_a->{seqname},
