@@ -126,17 +126,17 @@ my %files = (
 );
 
 # convert reads
-run_cmd ("fq_all2std.pl fq2fa $left_read > $files{lfa}")  unless file_exists($files{lfa});
-run_cmd ("convert.pl c2t $files{lfa} > $files{lc2t}")     unless file_exists($files{lc2t});
+run_cmd ("perl -S fq_all2std.pl fq2fa $left_read > $files{lfa}")  unless file_exists($files{lfa});
+run_cmd ("perl -S convert.pl c2t $files{lfa} > $files{lc2t}")     unless file_exists($files{lc2t});
 unless ($single_ends) {
-    run_cmd ("fq_all2std.pl fq2fa $right_read > $files{rfa}") unless file_exists($files{rfa});
-    run_cmd ("convert.pl g2a $files{rfa} > $files{rg2a}")     unless file_exists($files{rg2a});
+    run_cmd ("perl -S fq_all2std.pl fq2fa $right_read > $files{rfa}") unless file_exists($files{rfa});
+    run_cmd ("perl -S convert.pl g2a $files{rfa} > $files{rg2a}")     unless file_exists($files{rg2a});
 }
 
 # convert genomes
-run_cmd ("rcfas.pl $reference > $reference.rc")           unless file_exists("$reference.rc");
-run_cmd ("convert.pl c2t $reference.rc > $reference.c2t") unless file_exists("$reference.c2t");
-run_cmd ("convert.pl g2a $reference.rc > $reference.g2a") unless file_exists("$reference.g2a") or $single_ends;
+run_cmd ("perl -S rcfas.pl $reference > $reference.rc")           unless file_exists("$reference.rc");
+run_cmd ("perl -S convert.pl c2t $reference.rc > $reference.c2t") unless file_exists("$reference.c2t");
+run_cmd ("perl -S convert.pl g2a $reference.rc > $reference.g2a") unless file_exists("$reference.g2a") or $single_ends;
 
 if ($aligner eq 'bowtie') {
     run_cmd ("bowtie-build $reference.c2t $reference.c2t") unless file_exists("$reference.c2t.1.ebwt");
@@ -154,12 +154,12 @@ if ($aligner eq 'seqmap') {
     }
 
     # get back original non-converted reads
-    run_cmd ("replace_reads.pl -f $files{lfa} -r $read_size -s @left_splice  $files{lel3} > $files{lel3}.post") unless file_exists("$files{lel3}.post");
+    run_cmd ("perl -S replace_reads.pl -f $files{lfa} -r $read_size -s @left_splice  $files{lel3} > $files{lel3}.post") unless file_exists("$files{lel3}.post");
     unless ($single_ends) {
-        run_cmd ("replace_reads.pl -f $files{rfa} -r $read_size -s @right_splice $files{rel3} > $files{rel3}.post") unless file_exists("$files{rel3}.post");
+        run_cmd ("perl -S replace_reads.pl -f $files{rfa} -r $read_size -s @right_splice $files{rel3} > $files{rel3}.post") unless file_exists("$files{rel3}.post");
     }
     else {
-        run_cmd ("replace_reads.pl -f $files{lfa} -r $read_size -s @right_splice $files{rel3} > $files{rel3}.post") unless file_exists("$files{rel3}.post");
+        run_cmd ("perl -S replace_reads.pl -f $files{lfa} -r $read_size -s @right_splice $files{rel3} > $files{rel3}.post") unless file_exists("$files{rel3}.post");
     }
 }
 elsif ($aligner eq 'bowtie') {
@@ -180,33 +180,33 @@ elsif ($aligner eq 'bowtie') {
     }
 
     # get back original non-converted reads and convert from bowtie to eland3
-    run_cmd ("parse_bowtie.pl -u $files{lfa} -s @left_splice  $files{lel3} -o $files{lel3}.post") unless file_exists("$files{lel3}.post");
+    run_cmd ("perl -S parse_bowtie.pl -u $files{lfa} -s @left_splice  $files{lel3} -o $files{lel3}.post") unless file_exists("$files{lel3}.post");
     unless ($single_ends) {
-        run_cmd ("parse_bowtie.pl -u $files{rfa} -s @right_splice  $files{rel3} -o $files{rel3}.post") unless file_exists("$files{rel3}.post");
+        run_cmd ("perl -S parse_bowtie.pl -u $files{rfa} -s @right_splice  $files{rel3} -o $files{rel3}.post") unless file_exists("$files{rel3}.post");
     }
     else {
-        run_cmd ("parse_bowtie.pl -u $files{lfa} -s @right_splice  $files{rel3} -o $files{rel3}.post") unless file_exists("$files{rel3}.post");
+        run_cmd ("perl -S parse_bowtie.pl -u $files{lfa} -s @right_splice  $files{rel3} -o $files{rel3}.post") unless file_exists("$files{rel3}.post");
     }
 }
 
 # make sure reads map together
-run_cmd ("correlatePairedEnds.pl -l $files{lel3}.post -r $files{rel3}.post -ref $reference -o $files{base} -t 0 -d $library_size -s $read_size -2 $trust_dash_2 -1 $single_ends -m $max_hits -a $random_assign") unless file_exists($files{base});
+run_cmd ("perl -S correlatePairedEnds.pl -l $files{lel3}.post -r $files{rel3}.post -ref $reference -o $files{base} -t 0 -d $library_size -s $read_size -2 $trust_dash_2 -1 $single_ends -m $max_hits -a $random_assign") unless file_exists($files{base});
 
 # basic stats about the aligment
-run_cmd ("collect_align_stats.pl $files{lel3}.post $files{rel3}.post $files{base} $organism $batch > $files{log}") unless file_exists($files{log});
+run_cmd ("perl -S collect_align_stats.pl $files{lel3}.post $files{rel3}.post $files{base} $organism $batch > $files{log}") unless file_exists($files{log});
 
 # quantify methylation
 for (@groups) {
-    run_cmd ("split_gff.pl --sequence all $files{base}") unless (file_exists($files{split}->{$_}));
-    run_cmd ("countMethylation.pl --ref $reference --gff $files{split}->{$_} --output $files{freq}->{$_} --sort -d $di_nuc_freqs") unless file_exists($files{freq}->{$_});
+    run_cmd ("perl -S split_gff.pl --sequence all $files{base}") unless (file_exists($files{split}->{$_}));
+    run_cmd ("perl -S countMethylation.pl --ref $reference --gff $files{split}->{$_} --output $files{freq}->{$_} --sort -d $di_nuc_freqs") unless file_exists($files{freq}->{$_});
 }
 
 # window methylation counts into non-overlapping windows
 for my $context (0 .. @contexts - 1) {
     for my $group (@groups) {
-        run_cmd ("split_gff.pl --feature all $files{freq}->{$group}") unless file_exists($files{cont}->[$context]{$group});
-        run_cmd ("window_gff.pl $files{cont}->[$context]{$group} --width 1 --output $files{cont}->[$context]{$group}.merged") unless file_exists("$files{cont}->[$context]{$group}.merged");
-        run_cmd ("window_gff.pl $files{cont}->[$context]{$group}.merged --width $window_size --output $files{wcont}->[$context]{$group} --no-skip") unless file_exists($files{wcont}->[$context]{$group});
+        run_cmd ("perl -S split_gff.pl --feature all $files{freq}->{$group}") unless file_exists($files{cont}->[$context]{$group});
+        run_cmd ("perl -S window_gff.pl $files{cont}->[$context]{$group} --width 1 --output $files{cont}->[$context]{$group}.merged") unless file_exists("$files{cont}->[$context]{$group}.merged");
+        run_cmd ("perl -S window_gff.pl $files{cont}->[$context]{$group}.merged --width $window_size --output $files{wcont}->[$context]{$group} --no-skip") unless file_exists($files{wcont}->[$context]{$group});
     }
 }
 
