@@ -25,6 +25,11 @@ my %scoring_dispatch = (
         ? q{.}
         : ($_[0] - $_[1])
     },
+    multiplication => sub {
+      (q{.} eq $_[0] or q{.} eq $_[1])
+        ? q{.}
+        : ($_[0] * $_[1])
+    },
 );
 
 my $gff_a_iterator = make_gff_iterator( parser => \&gff_read, file => $ARGV{'gff-a'} );
@@ -39,7 +44,7 @@ while (     defined( my $gff_a = $gff_a_iterator->() )
     die "GFF record mismatch: ", Dumper [$gff_a, $gff_b]
     unless @{$gff_a}{qw/seqname start end/} eq @{$gff_b}{qw/seqname start end/};
 
-    if ($ARGV{0}) {
+    if ($ARGV{'dot-as-zero'}) {
         $gff_a->{score} = 0 if $gff_a->{score} eq q{.};
         $gff_b->{score} = 0 if $gff_b->{score} eq q{.};
     }

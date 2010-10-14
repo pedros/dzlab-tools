@@ -22,7 +22,7 @@ my $result = GetOptions (
 
 # Check required command line parameters
 pod2usage ( -verbose => 1 )
-unless @ARGV and $result;
+unless $result;
 
 if ($output) {
     open my $USER_OUT, '>', $output or croak "Can't open $output for writing: $!";

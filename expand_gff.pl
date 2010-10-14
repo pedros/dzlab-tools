@@ -20,8 +20,8 @@ while ( <$INH> ) {
     next if /\s*#/;
     my @fields = split /\t/;
 
-    for my $bp ( @fields[3] .. @fields[4] ) {
-        print join ("\t", @fields[0,1,2], $bp, $bp, @fields[5,6,7,8]), "\n";
+    for my $bp ( $fields[3] .. $fields[4] ) {
+        print join ("\t", @fields[0,1,2], $bp, $bp, @fields[5,6,7,8]);
     }
 }
 
