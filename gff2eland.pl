@@ -92,22 +92,19 @@ sub _prepare_io {
     return ( $INH, $OUTH, *STDERR = $ERRH );
 }
 
-__DATA__
-
-
-__END__
-
 =head1 NAME
 
- APerlyName.pl - Short description
+ gff2eland.pl - Convert GFF v3 to Eland v3
 
 =head1 SYNOPSIS
 
- APerlyName.pl [OPTION]... [[-i] FILE]...
+ gff2eland.pl [OPTION]... [[-i] FILE]...
+
+ gff2ekabd,pl your.gff -o your.eland3
 
 =head1 DESCRIPTION
 
- Long description
+ Convert GFF v3 to Eland v3
 
 =head1 OPTIONS
 
