@@ -23,7 +23,7 @@ while ( <$INH> ) {
     my $mismatches = 'NM';
     my $target     = '';
 
-    if ($fields[5]) {
+    if ($fields[5] and $fields[7] ne q{.}) {
         my @mismatches = (0, 0, 0, 0); $mismatches[$fields[7]] = $fields[5];
         $mismatches = join ':', @mismatches;
         $target = "$fields[0]:$fields[3]" . ($fields[6] eq q{+} ? 'F' : 'R') . $fields[7];
