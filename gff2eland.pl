@@ -30,6 +30,8 @@ while ( <$INH> ) {
     }
     my ($readid, $sequence) = $fields[2] =~ m{^(.+#\d/[12]):(.*)}g;
 
+    die $fields[2] unless defined $readid and defined $sequence;
+
     print $OUTH join( "\t", $readid, $sequence, $mismatches, $target), "\n";
 }
 
