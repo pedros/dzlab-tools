@@ -127,9 +127,8 @@ sub build_common_commands {
         need_file( $reference . '.1.ebwt' )
         ? System::Wrapper->new(
             executable => 'bowtie-build',
-            arguments  => ['--quiet'],
-            input      => [$reference],
-            output     => [$reference])
+            arguments  => ['--quiet', $reference, $reference],
+        )
         : 0,
     
         need_file( $names->{bowtie} )
