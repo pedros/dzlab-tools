@@ -186,27 +186,65 @@ __END__
 
 =head1 NAME
 
- APerlyName.pl - Short description
+parent_imprinting.pl - Significance statistics for parent-of-origin expression data
 
 =head1 SYNOPSIS
 
- APerlyName.pl [OPTION]... [[-i] FILE]...
+parent_imprinting.pl [OPTION]... [[-i] FILE]...
+
+Sample data (Table.csv):
+
+ # gene  Col-WTxLer-WT_Endosperm_Col     Col-WTxLer-WT_Endosperm_Ler     Ler-WTxCol-WT_Endosperm_Ler     Ler-WTxCol-WT_Endosperm_Col
+ AT1G01010       611     565     96      86
+ AT1G01020       424     369     77      65
+ AT1G01030       453     426     96      92
+ AT1G01040       2181    2035    460     459
+ AT1G01046       82      74      27      21
+ AT1G01050       584     578     137     128
+ AT1G01060       1064    1008    211     209
+ AT1G01070       497     508     103     97
+ AT1G01080       382     343     65      71
+
+ parent_imprinting.pl --maternal-test 1 3 --paternal-test 2 4 -o Tables_w_fisher.csv Tables.csv
 
 =head1 DESCRIPTION
 
- Long description
+Significance statistics for parent-of-origin expression data
 
 =head1 OPTIONS
 
- -i, --input       <string>     input filename                           (STDIN)
- -o, --output      <string>     output filename                          (STDOUT)
- -e, --error       <string>     output error filename                    (STDERR)
-     --verbose     [integer]    print increasingly verbose error messages
-     --quiet                    print no diagnostic or warning messages
-     --version                  print current version
-     --license                  print author's contact and copyright information
-     --help                     print this information
-     --manual                   print the plain old documentation page
+ -i,  --input                              [string]     input filename         (STDIN)
+ -o,  --output                             [string]     output filename        (STDOUT)
+ -e,  --error                              [string]     output error filename  (STDERR)
+ -mt, --maternal-test                      <integer...> columns to sum in data
+ -mc, --maternal-control                   [integer...] columns to sum in data ( (maternal-test + paternal-test) / expected-maternal-imprinting-ratio )
+ -pt, --paternal-test                      <integer...> columns to sum in data
+ -pc, --paternal-control                   [integer...] columns to sum in data ( (maternal-test + paternal-test) / expected-paternal-imprinting-ratio )
+ -m,  --expected-maternal-imprinting-ratio <float>                             (2/3)
+ -p,  --expected-paternal-imprinting-ratio <float>                             (1/3)
+ -s,  --statistics                         <string>                            (Fisher::twotailed)
+
+                                 type of indendence/significance statistic to use
+                                 statistics options: (run 'perldoc Text::NSP' for more information)
+                                   CHI::phi             Phi coefficient measure
+                                   CHI::tscore          T-score measure of association
+    		                   CHI::x2              Pearson's chi squared measure of association
+    		                   Dice::dice           Dice coefficient
+    		                   Dice::jaccard        Jaccard coefficient
+    		                   Fisher::left         Left sided Fisher's exact test
+    		                   Fisher::right        Right sided Fisher's exact test
+    		                   Fisher::twotailed    Two-sided Fisher's exact test
+    		                   MI::ll               Loglikelihood measure of association
+    		                   MI::pmi              Pointwise Mutual Information
+    		                   MI::ps               Poisson-Stirling measure of association
+    		                   MI::tmi              True Mutual Information
+
+     --verbose                             [integer]    print increasingly verbose error messages
+     --quiet                                            print no diagnostic or warning messages
+     --version                                          print current version
+     --license                                          print author's contact and copyright information
+     --help                                             print this information
+     --manual                                           print the plain old documentation page
 
 =head1 VERSION
 
