@@ -12,11 +12,11 @@ GetOptions(
     \%ARGV,
     'input|i=s', 'output|o=s', 'error|e=s',
     _meta_options( \%ARGV ),
-) and (@ARGV or $ARGV{input}) or pod2usage( -verbose => 1 );
+) or pod2usage( -verbose => 1 );
 
 my ( $INH, $OUTH, $ERRH ) = _prepare_io( \%ARGV, \@ARGV );
 
-while ( <$INH> ) {
+while (<>) {
     next if /\s*#/;
     my @fields = split /\t/;
 
