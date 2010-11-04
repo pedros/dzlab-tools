@@ -57,7 +57,7 @@ sub is_adjacent_by {
     my ($buffer, $fields, $distance_range, $score_range) = @_;
 
     return ($fields->[0] eq $buffer->[-1][0])
-    and ( abs( $fields->[3] - 1 - $buffer->[-1][4] ) <= $distance )
+    and ( abs( $fields->[3] - 1 - $buffer->[-1][4] ) <= $distance_range )
     and ( abs( $fields->[5] - $buffer->[-1][5] )     <= $score_range );
 }
 
@@ -70,13 +70,13 @@ __END__
 
 =head1 SYNOPSIS
 
-=head1 DESCRIPTION
-
  # merge adjacent gff records with the same score
  perl collapse_gff.pl -o stuff_collapse.gff stuff_w1.gff
 
  # merge records separated by up to 10 bp and varying scores up to 2
  perl collapse_gff.pl -d 10 -s 2 -o stuff_collapse.gff stuff_w1.gff 
+
+=head1 DESCRIPTION
 
 =head1 OPTIONS
 
