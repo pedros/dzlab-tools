@@ -9,9 +9,13 @@ use Pod::Usage;
 
 my $DATA_HANDLE = 'ARGV';
 my $output;
+my $distance_range = 0;
+my $score_range    = 0;
 
 # Grabs and parses command line options
 my $result = GetOptions (
+    'distance-range|d=i', => \$distance_range,
+    'score-range|s=i', => \$score_range,
     'output|o=s'  => \$output,
     'verbose|v'   => sub { use diagnostics; },
     'quiet|q'     => sub { no warnings; },
@@ -33,46 +37,62 @@ while (<$DATA_HANDLE>) {
     next if /\s*#/;
     my @fields = split /\t/;
 
-    if ( !@buffer || ($fields[0] eq $buffer[-1]->[0] and $fields[3] - 1 == $buffer[-1]->[4] and $fields[5] == $buffer[-1]->[5]) ) {
-        push @buffer, [@fields[0,1,2], 1, @fields[4,5,6,7,8]] if !@buffer;
+    if ( !@buffer || is_adjacent_by( \@buffer, \@fields, $distance_range, $score_range ) ) {
+        push @buffer, [@fields[0..2], 1, @fields[4..8]] if !@buffer;
         push @buffer, \@fields;
     }
     else {
-        print join ("\t", @{$buffer[0]}[0,1,2,3], $buffer[-1]->[4], @{$buffer[0]}[5,6,7,8]);
-        print join ("\t", @{$buffer[0]}[0,1,2], $buffer[-1]->[4] + 1, $fields[4] - 1, 0, @{$buffer[0]}[6,7,8])
+        print join ("\t", @{$buffer[0]}[0..3], $buffer[-1]->[4], @{$buffer[0]}[5..8]);
+        print join ("\t", @{$buffer[0]}[0..2], $buffer[-1]->[4] + 1, $fields[4] - 1, 0, @{$buffer[0]}[6..8])
         unless $buffer[-1]->[4] + 1 == $fields[4] or $buffer[-1]->[0] ne $fields[0];
         @buffer = (\@fields);
     }
 }
 
-print join ("\t", @{$buffer[0]}[0,1,2,3], $buffer[-1]->[4], @{$buffer[0]}[5,6,7,8])
+print join ("\t", @{$buffer[0]}[0..3], $buffer[-1]->[4], @{$buffer[0]}[5..8])
 if @buffer;
 
+
+sub is_adjacent_by {
+    my ($buffer, $fields, $distance_range, $score_range) = @_;
+
+    return ($fields->[0] eq $buffer->[-1][0])
+    and ( abs( $fields->[3] - 1 - $buffer->[-1][4] ) <= $distance )
+    and ( abs( $fields->[5] - $buffer->[-1][5] )     <= $score_range );
+}
 
 __END__
 
 
 =head1 NAME
 
- name.pl - Short description
+ collapse_gff.pl - Collapse GFF records to a single one if within a given distance and score range
 
 =head1 SYNOPSIS
 
 =head1 DESCRIPTION
 
+ # merge adjacent gff records with the same score
+ perl collapse_gff.pl -o stuff_collapse.gff stuff_w1.gff
+
+ # merge records separated by up to 10 bp and varying scores up to 2
+ perl collapse_gff.pl -d 10 -s 2 -o stuff_collapse.gff stuff_w1.gff 
+
 =head1 OPTIONS
 
- name.pl [OPTION]... [FILE]...
+ collapse_gff.pl [OPTION]... [FILE]...
 
- -o, --output      filename to write results to (defaults to STDOUT)
- -v, --verbose     output perl's diagnostic and warning messages
- -q, --quiet       supress perl's diagnostic and warning messages
- -h, --help        print this information
- -m, --manual      print the plain old documentation page
+ -d, --distance-range max distance by which adjacent gff records can be separated for merging (default  0)
+ -s, --score-range    max score difference by which adjacent gff records can be separated for merging (default  0)
+ -o, --output         filename to write results to (defaults to STDOUT)
+ -v, --verbose        output perl's diagnostic and warning messages
+ -q, --quiet          supress perl's diagnostic and warning messages
+ -h, --help           print this information
+ -m, --manual         print the plain old documentation page
 
 =head1 REVISION
 
- Version 0.0.1
+ Version 0.0.2
 
  $Rev: $:
  $Author: $:
