@@ -453,11 +453,11 @@ __END__
 
 =head1 VERSION
 
- $Rev$:
- $Author$:
- $Date$:
- $HeadURL$:
- $Id$:
+ $Rev: 249 $:
+ $Author: psilva $:
+ $Date: 2010-01-11 21:24:34 -0800 (Mon, 11 Jan 2010) $:
+ $HeadURL: http://dzlab.pmb.berkeley.edu/svn/bisulfite/trunk/window_by_annotation.pl $:
+ $Id: window_by_annotation.pl 249 2010-01-12 05:24:34Z psilva $:
 
 =head1 USAGE
 

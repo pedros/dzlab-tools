@@ -197,11 +197,11 @@ __END__
 
  Version 0.0.1
 
- $Rev$:
- $Author$:
- $Date$:
- $HeadURL$:
- $Id$:
+ $Rev: 377 $:
+ $Author: psilva $:
+ $Date: 2010-07-08 13:50:33 -0700 (Thu, 08 Jul 2010) $:
+ $HeadURL: http://dzlab.pmb.berkeley.edu/svn/bisulfite/trunk/parse_eland.pl $:
+ $Id: parse_eland.pl 377 2010-07-08 20:50:33Z psilva $:
 
 =head1 AUTHOR
 

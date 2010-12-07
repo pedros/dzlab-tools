@@ -178,84 +178,17 @@ while (<$GFF>) { ### Indexing...
     my @unmethylated = split(//, (split "=", $record{'attribute'})[1]);
 
     # check for overlapping pairs of reads
-    my ($pair_id, $read_id) = $record{'feature'} =~ m/(^.*?)\/([12]):[ACGTN]+/;
-    my $overlap = 0; # array reference with overlap start coord, end coord
-
-    # if matching pair has not been seen, create a new entry for this pair in buffer
-    if (!exists $reads_buffer{$pair_id}) {
-        $reads_buffer{$pair_id} = [$record{'start'}, $record{'end'}, $read_id];
+    #my ($pair_id, $read_id) = $record{'feature'} =~ m/(^.*?)\/([12]):[ACGTN]+/;
+    my ($pair_id, $read_id) = $record{feature} =~ m{(^.+:.+:.+):(.+)?:\w+};
+ 
+    if ($read_id =~ m{/[12]$}) {
+        $read_id = $1
     }
-    else { # if matching pair on buffer
-        # existing end runs into pair - overlap is current pair's start to existing end's end
-        if ($record{'end'} > $reads_buffer{$pair_id}->[0] and $record{'start'} < $reads_buffer{$pair_id}->[1]) {
-            $overlap = [$record{'start'}, $reads_buffer{$pair_id}->[1]];
-        }
-        # current end runs into pair - overlap is existing end's start to current end's end
-        elsif ($reads_buffer{$pair_id}->[1] > $record{'start'} and $reads_buffer{$pair_id}->[0] < $record{'end'}) {
-            $overlap = [$reads_buffer{$pair_id}->[0], $record{'end'}];
-        }
-        delete $reads_buffer{$pair_id};
+    else {
+        $pair_id .= ":$read_id";
+        $read_id = 1;
     }
 
-    # loops through each character in current sequences
-    READ:
-    for ( my $i = $record{'start'}; $i < $record{'end'}; $i++ ) {
-
-	# sets $j to 0 for forward strand coordinates
-	my $j = $i - $record{'start'};
-
-	# Since the input coordinates are absolute (ie. from the forward strand)
-	# if a particular read maps to the reverse strand, the coordinates for any
-	# 'c's hit need to be reversed
-	my $coord = $i;
-	$coord = $reference{$record{'seqname'}} - $i + 1 if $record{'strand'} eq '-';
-
-        # checks that we're looking at a left/1 sequence AND current character is a 'C'
-	# this regex is adapted to the Solexa sequences we have, so it might change in the future
-	# we're looking 2 characters ahead in the scaffold because it has 2 extra chars in the beginning
- 	if ( $unmethylated[$j + 2] =~ m/[Cc]/
-             and $record{'feature'} =~ m/\/1:[ACGTN]+/) {
-
-	    # checks what happened in the methylated sequence
-	    # and updates the appropriate 'c' or 't' count
-	    if ( $methylated[$j] =~ m/[Cc]/ ) {
-		$HoH{$coord}[0]++; # c_count
-	    }
-	    elsif ($methylated[$j] =~ m/[Tt]/ ) {
-		$HoH{$coord}[1]++; # t_count
-	    }
-
-	    # checks the context by looking ahead +3 or +3..+4 bps
-	    # because the scaffold read is displaced by 2 bps
-	    if ( $unmethylated[$j+3] =~ m/[Gg]/ ) {
-                $HoH{$coord}[2]++; # cg_count
-	    }
-	    elsif ( join("", @unmethylated[ ($j + 3)..($j + 4) ] ) =~ m/[^Gg][Gg]/) {
-		$HoH{$coord}[3]++; # chg_count
-	    }
-	    elsif ( join("", @unmethylated[ ($j + 3)..($j + 4) ] ) =~ m/[^Gg][^Gg]/) {
-		$HoH{$coord}[4]++; # chh_count
-	    }
-
-            if ($di_nucleotide_count) {
-                # count di-nucleotide contexts
-                if ( $unmethylated[$j+3] =~ m/[Aa]/ ) {
-                    $HoH{$coord}[11]++; # ca_count
-                }
-                elsif ( $unmethylated[$j+3] =~ m/[Cc]/ ) {
-                    $HoH{$coord}[12]++; # cc_count
-                }
-                elsif ( $unmethylated[$j+3] =~ m/[Tt]/ ) {
-                    $HoH{$coord}[13]++; # ct_count
-                }
-            }
-
-	    # grab some necessary information into the data structure
-	    # we will print this information later
-	    $HoH{$coord}[5] = $coord; # coord
-	    $HoH{$coord}[6] = $record{'seqname'}; # chromosome
-	    $HoH{$coord}[7] = $record{'strand'}; # strand
-            $HoH{$coord}[9]++ if $record{'strand'} eq q{+};
             $HoH{$coord}[10]++ if $record{'strand'} eq q{-};
 	}
 
@@ -264,7 +197,7 @@ while (<$GFF>) { ### Indexing...
 	# we're looking 2 characters before in the scaffold because it has 2 extra chars in the beginning
 	# AND we're looking in the reverse strand, so the context goes right-to-left
 	elsif ( $unmethylated[$j + 2] =~ m/[Gg]/
-                and $record{'feature'} =~ m/\/2:[ACGTN]+/) {
+                and $read_id eq 2) {
 
             # checks what happened in the methylated sequence
 	    # and updates the appropriate 'c' or 't' count

@@ -32,7 +32,7 @@ my @groups        = ();
 my $aligner       = 'bowtie';
 my $max_hits      = 0;
 my $random_assign = 1;
-my $pthreads      = 2;
+my $pthreads      = 1;
 my $di_nuc_freqs  = 0;
 my @contexts;
 
@@ -171,12 +171,12 @@ elsif ($aligner eq 'bowtie') {
     my $r5trim = $right_splice[0] - 1;
 
     # align with bowtie
-    run_cmd ("bowtie $reference.c2t -f -B 1 -v $mismatches -5 $l5trim -3 $l3trim --best --strata -k 1 -p $pthreads --norc $files{lc2t} $files{lel3}" . ($max_hits ? " -m $max_hits" : q{}))   unless file_exists($files{lel3});
+    run_cmd ("bowtie $reference.c2t -f -B 1 -v $mismatches -5 $l5trim -3 $l3trim --best" . ($max_hits ? " --strata  -k $max_hits -m $max_hits" : q{}) . " --norc $files{lc2t} $files{lel3}" )   unless file_exists($files{lel3});
     unless ($single_ends) {
-        run_cmd ("bowtie $reference.g2a -f -B 1 -v $mismatches -5 $r5trim -3 $r3trim --best --strata -k 1 -p $pthreads --norc $files{rg2a} $files{rel3}" . ($max_hits ? " -m $max_hits" : q{})) unless file_exists($files{rel3});
+        run_cmd ("bowtie $reference.g2a -f -B 1 -v $mismatches -5 $r5trim -3 $r3trim --best" . ($max_hits ? "  --strata -k $max_hits -m $max_hits" : q{}) . " --norc $files{rg2a} $files{rel3}" ) unless file_exists($files{rel3});
     }
     else {
-        run_cmd ("bowtie $reference.c2t -f -B 1 -v $mismatches -5 $r5trim -3 $r3trim --best --strata -k 1 -p $pthreads --norc $files{lc2t} $files{rel3}" . ($max_hits ? " -m $max_hits" : q{})) unless file_exists($files{rel3});
+        run_cmd ("bowtie $reference.c2t -f -B 1 -v $mismatches -5 $r5trim -3 $r3trim --best" . ($max_hits ? "  --strata -k $max_hits -m $max_hits" : q{}) . " --norc $files{lc2t} $files{rel3}" ) unless file_exists($files{rel3});
     }
 
     # get back original non-converted reads and convert from bowtie to eland3
@@ -281,11 +281,11 @@ sub file_exists {
 
  Version 0.0.1
 
- $Rev$:
- $Author$:
- $Date$:
- $HeadURL$:
- $Id$:
+ $Rev: 440 $:
+ $Author: psilva $:
+ $Date: 2010-11-11 16:15:45 -0800 (Thu, 11 Nov 2010) $:
+ $HeadURL: http://dzlab.pmb.berkeley.edu/svn/bisulfite/trunk/bs-seq.pl $:
+ $Id: bs-seq.pl 440 2010-11-12 00:15:45Z psilva $:
 
 =head1 AUTHOR
 

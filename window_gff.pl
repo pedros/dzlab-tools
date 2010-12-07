@@ -670,11 +670,11 @@ sub make_gff_iterator {
 
  Version 0.0.1
 
- $Rev$:
- $Author$:
- $Date$:
- $HeadURL$:
- $Id$:
+ $Rev: 410 $:
+ $Author: psilva $:
+ $Date: 2010-10-06 10:52:04 -0700 (Wed, 06 Oct 2010) $:
+ $HeadURL: http://dzlab.pmb.berkeley.edu/svn/bisulfite/trunk/window_gff.pl $:
+ $Id: window_gff.pl 410 2010-10-06 17:52:04Z psilva $:
 
 =head1 AUTHOR
 

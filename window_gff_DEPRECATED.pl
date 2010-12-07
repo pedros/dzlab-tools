@@ -331,11 +331,11 @@ __END__
 
 =head1 VERSION
 
- $Rev$:
- $Author$:
- $Date$:
- $HeadURL$:
- $Id$:
+ $Rev: 339 $:
+ $Author: psilva $:
+ $Date: 2010-05-25 16:34:10 -0700 (Tue, 25 May 2010) $:
+ $HeadURL: http://dzlab.pmb.berkeley.edu/svn/bisulfite/trunk/window_gff_DEPRECATED.pl $:
+ $Id: window_gff_DEPRECATED.pl 339 2010-05-25 23:34:10Z psilva $:
 
 =head1 USAGE
 

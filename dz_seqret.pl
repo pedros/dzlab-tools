@@ -2,7 +2,7 @@
 
 eval 'exec /usr/bin/perl -w -S $0 ${1+"$@"}'
     if 0; # not running under some shell
-# $Id$
+# $Id: dz_seqret.pl 249 2010-01-12 05:24:34Z psilva $
 # -*-Perl-*- mode (for emacs)
 
 =head1 NAME

@@ -221,11 +221,11 @@ __END__
 
  Version 0.0.2
 
- $Rev$:
- $Author$:
- $Date$:
- $HeadURL$:
- $Id$:
+ $Rev: 261 $:
+ $Author: psilva $:
+ $Date: 2010-01-14 19:08:08 -0800 (Thu, 14 Jan 2010) $:
+ $HeadURL: http://dev.dzlab.pmb.berkeley.edu/svn/bisulfite/trunk/chi2gff.pl $:
+ $Id: chi2gff.pl 261 2010-01-15 03:08:08Z psilva $:
 
 =head1 AUTHOR
 

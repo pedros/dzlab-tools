@@ -234,11 +234,11 @@ __END__
 
  Version 0.0.2
 
- $Rev$:
- $Author$:
- $Date$:
- $HeadURL$:
- $Id$:
+ $Rev: 310 $:
+ $Author: psilva $:
+ $Date: 2010-04-21 16:06:50 -0700 (Wed, 21 Apr 2010) $:
+ $HeadURL: http://dzlab.pmb.berkeley.edu/svn/bisulfite/trunk/window_gff_by_frequency.pl $:
+ $Id: window_gff_by_frequency.pl 310 2010-04-21 23:06:50Z psilva $:
 
 =head1 AUTHOR
 

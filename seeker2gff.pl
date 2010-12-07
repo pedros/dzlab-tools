@@ -178,11 +178,11 @@ __END__
 
  Version 0.0.1
 
- $Rev$:
- $Author$:
- $Date$:
- $HeadURL$:
- $Id$:
+ $Rev: 262 $:
+ $Author: psilva $:
+ $Date: 2010-01-20 02:45:08 -0800 (Wed, 20 Jan 2010) $:
+ $HeadURL: http://dzlab.pmb.berkeley.edu/svn/bisulfite/trunk/seeker2gff.pl $:
+ $Id: seeker2gff.pl 262 2010-01-20 10:45:08Z psilva $:
 
 =head1 AUTHOR
 

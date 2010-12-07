@@ -159,11 +159,11 @@ __END__
 
  Version 0.0.1
 
- $Rev$:
- $Author$:
- $Date$:
- $HeadURL$:
- $Id$:
+ $Rev: 295 $:
+ $Author: psilva $:
+ $Date: 2010-04-05 16:39:12 -0700 (Mon, 05 Apr 2010) $:
+ $HeadURL: http://dzlab.pmb.berkeley.edu/svn/bisulfite/trunk/offset_coordinates.pl $:
+ $Id: offset_coordinates.pl 295 2010-04-05 23:39:12Z psilva $:
 
 =head1 AUTHOR
 

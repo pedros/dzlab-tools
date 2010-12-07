@@ -134,11 +134,11 @@ __END__
 
  Version 0.0.1
 
- $Rev$:
- $Author$:
- $Date$:
- $HeadURL$:
- $Id$:
+ $Rev: 363 $:
+ $Author: psilva $:
+ $Date: 2010-06-21 15:41:41 -0700 (Mon, 21 Jun 2010) $:
+ $HeadURL: http://dzlab.pmb.berkeley.edu/svn/bisulfite/trunk/partitioner.pl $:
+ $Id: partitioner.pl 363 2010-06-21 22:41:41Z psilva $:
 
 =head1 AUTHOR
 

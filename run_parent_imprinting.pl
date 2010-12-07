@@ -22,6 +22,7 @@ GetOptions(
     'ecotype-a|ea=s',   'ecotype-b|eb=s',   'genotype-a|ga=s', 'genotype-b|gb=s', 
     'tissue|t=s', 'loci-type|l=s',
     'reference-a|ra=s', 'reference-b|rb=s', 'annotation|a=s', 'debug',
+    'overwrite',
     _meta_options( \%ARGV ),
 )
 and (@ARGV or $ARGV{input})
@@ -30,6 +31,8 @@ and @ARGV{ qw/
                  reference-a reference-b annotation
              / }
 or pod2usage( -verbose => 1 );
+
+$ARGV{overwrite} //= 0;
 
 my ( $INH, $OUTH, $ERRH ) = _prepare_io( \%ARGV, \@ARGV );
 
@@ -71,8 +74,7 @@ sub build_output_directory {
     my $done_dir
     = File::Spec->catfile (File::Spec->catdir($out_dir, '.done'));
 
-    if (-d $out_dir
-        and print STDERR "Overwrite $out_dir (y/N)?: " and scalar <STDIN> =~ m/^y/i) {
+    if (-d $out_dir and $ARGV{overwrite}) {
         remove_tree ( $out_dir, {keep_root => 1} );
     }
     else {

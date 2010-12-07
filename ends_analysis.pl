@@ -449,11 +449,11 @@ __END__
 
  Version 0.0.1
 
- $Rev$:
- $Author$:
- $Date$:
- $HeadURL$:
- $Id$:
+ $Rev: 396 $:
+ $Author: psilva $:
+ $Date: 2010-08-13 12:34:16 -0700 (Fri, 13 Aug 2010) $:
+ $HeadURL: http://dzlab.pmb.berkeley.edu/svn/bisulfite/trunk/ends_analysis.pl $:
+ $Id: ends_analysis.pl 396 2010-08-13 19:34:16Z psilva $:
 
 =head1 AUTHOR
 

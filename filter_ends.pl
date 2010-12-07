@@ -131,11 +131,11 @@ __END__
 
  Version 0.0.1
 
- $Rev$:
- $Author$:
- $Date$:
- $HeadURL$:
- $Id$:
+ $Rev: 375 $:
+ $Author: psilva $:
+ $Date: 2010-07-02 16:37:53 -0700 (Fri, 02 Jul 2010) $:
+ $HeadURL: http://dzlab.pmb.berkeley.edu/svn/bisulfite/trunk/filter_ends.pl $:
+ $Id: filter_ends.pl 375 2010-07-02 23:37:53Z psilva $:
 
 =head1 AUTHOR
 

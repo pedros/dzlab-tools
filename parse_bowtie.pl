@@ -20,6 +20,7 @@ my $reference;
 my $output;
 my $unmatched;
 my @splice;
+my $no_normalize;
 
 # Grabs and parses command line options
 my $result = GetOptions(
@@ -31,6 +32,7 @@ my $result = GetOptions(
     'paired|p'      => \$paired,
     'id-regex|i=s'  => \$id_regex,
     'reference|r=s' => \$reference,
+    'no-normalize|n'=> \$no_normalize,
     'verbose|v'     => sub { use diagnostics; },
     'quiet|q'       => sub { no warnings; },
     'help|h'        => sub { pod2usage( -verbose => 1 ); },
@@ -248,7 +250,7 @@ sub read_bowtie {
 }
 
 sub count_reads {
-    my ( $reference, $counts_ref, $id_regex ) = @_;
+    my ( $reference, $counts_ref, $id_regex, $no_normalize ) = @_;
 
     return unless $reference;
 
@@ -274,22 +276,24 @@ sub count_reads {
             $id,
             sprintf(
                 "%g",
-                (   $counts_ref->{$target}{frequencies} /
-                        length $reference{$target}
-                    ) * 1000
+                $no_normalize
+                ? $counts_ref->{$target}{frequencies}
+                : (
+                    $counts_ref->{$target}{frequencies} /
+                    length $reference{$target}
+                ) * 1000
             ),
             sprintf(
                 "%g",
                 (     $counts_ref->{$target}{frequencies}
-                    ? $counts_ref->{$target}{alternatives}
-                        / $counts_ref->{$target}{frequencies}
-                    : 0
-                )
+                      ? $counts_ref->{$target}{alternatives}
+                      / $counts_ref->{$target}{frequencies}
+                      : 0
+                  )
             ),
-            ),
-            "\n";
+        ),
+        "\n";
     }
-
 }
 
 sub index_fasta {
@@ -346,29 +350,30 @@ __END__
 
  parse_bowtie.pl [OPTION]... [FILE]...
 
- -p, --paired      merge paired ends into gff fragments
- -s, --splice      splice original sequences when recovering (x y)
- -f, --frequencies output SEQID    FREQUENCY(reads/100bp)    ALTERNATIVES
- -t, --type        type of bowtie output file (verbose or concise -- only verbose supported for now)
- -i, --id-regex    perl-type regular expression to identify feature id (ie. gene) in fasta alignment header (must include capturing parenthesis)
- -r, --reference   genome/cDNA models file in fasta format (for calculating relative frequency scores, etc.)
- -u, --recover     given original alignment fasta file, recovers unmatched reads (which bowtie does not output)
- -p, --paired      convert bowtie's paired ends output to gff with concatenated library ends per region
- -o, --output      filename to write results to (defaults to STDOUT)
- -v, --verbose     output perl's diagnostic and warning messages
- -q, --quiet       supress perl's diagnostic and warning messages
- -h, --help        print this information
- -m, --manual      print the plain old documentation page
+ -p, --paired       merge paired ends into gff fragments
+ -s, --splice       splice original sequences when recovering (x y)
+ -f, --frequencies  output SEQID    FREQUENCY(reads/100bp)    ALTERNATIVES
+ -t, --type         type of bowtie output file (verbose or concise -- only verbose supported for now)
+ -i, --id-regex     perl-type regular expression to identify feature id (ie. gene) in fasta alignment header (must include capturing parenthesis)
+ -r, --reference    genome/cDNA models file in fasta format (for calculating relative frequency scores, etc.)
+ -u, --recover      given original alignment fasta file, recovers unmatched reads (which bowtie does not output)
+ -p, --paired       convert bowtie's paired ends output to gff with concatenated library ends per region
+ -n, --no-normalize do not normalize frequencies
+ -o, --output       filename to write results to (defaults to STDOUT)
+ -v, --verbose      output perl's diagnostic and warning messages
+ -q, --quiet        supress perl's diagnostic and warning messages
+ -h, --help         print this information
+ -m, --manual       print the plain old documentation page
 
 =head1 REVISION
 
  Version 0.0.2
 
- $Rev$:
- $Author$:
- $Date$:
- $HeadURL$:
- $Id$:
+ $Rev: 444 $:
+ $Author: psilva $:
+ $Date: 2010-12-01 17:28:38 -0800 (Wed, 01 Dec 2010) $:
+ $HeadURL: http://dzlab.pmb.berkeley.edu/svn/bisulfite/trunk/parse_bowtie.pl $:
+ $Id: parse_bowtie.pl 444 2010-12-02 01:28:38Z psilva $:
 
 =head1 AUTHOR
 

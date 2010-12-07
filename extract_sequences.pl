@@ -214,11 +214,11 @@ __END__
 
 =head1 VERSION
 
- $Rev$:
- $Author$:
- $Date$:
- $HeadURL$:
- $Id$:
+ $Rev: 395 $:
+ $Author: psilva $:
+ $Date: 2010-08-13 12:33:24 -0700 (Fri, 13 Aug 2010) $:
+ $HeadURL: http://dzlab.pmb.berkeley.edu/svn/bisulfite/trunk/extract_sequences.pl $:
+ $Id: extract_sequences.pl 395 2010-08-13 19:33:24Z psilva $:
 
 =head1 REVISION
 

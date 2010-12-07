@@ -151,11 +151,11 @@ __END__
 
  Version 0.0.1
 
- $Rev$:
- $Author$:
- $Date$:
- $HeadURL$:
- $Id$:
+ $Rev: 381 $:
+ $Author: psilva $:
+ $Date: 2010-07-08 15:53:27 -0700 (Thu, 08 Jul 2010) $:
+ $HeadURL: http://dzlab.pmb.berkeley.edu/svn/bisulfite/trunk/intersect_lists.pl $:
+ $Id: intersect_lists.pl 381 2010-07-08 22:53:27Z psilva $:
 
 =head1 AUTHOR
 

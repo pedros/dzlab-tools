@@ -132,11 +132,11 @@ __END__
 
  Version 0.0.1
 
- $Rev$:
- $Author$:
- $Date$:
- $HeadURL$:
- $Id$:
+ $Rev: 412 $:
+ $Author: psilva $:
+ $Date: 2010-10-08 11:28:40 -0700 (Fri, 08 Oct 2010) $:
+ $HeadURL: http://dzlab.pmb.berkeley.edu/svn/bisulfite/trunk/normalize.pl $:
+ $Id: normalize.pl 412 2010-10-08 18:28:40Z psilva $:
 
 =head1 AUTHOR
 

@@ -49,7 +49,7 @@ if ($sort) {
 }
 
 # one-step buffer
-my $previous = undef;
+my $previous;
 print STDERR 'Merging...';
 while (<$GFF_DATA>) {
 
@@ -266,11 +266,11 @@ __END__
 
  Version 0.0.1
 
- $Rev$:
- $Author$:
- $Date$:
- $HeadURL$:
- $Id$:
+ $Rev: 446 $:
+ $Author: psilva $:
+ $Date: 2010-12-03 14:57:39 -0800 (Fri, 03 Dec 2010) $:
+ $HeadURL: http://dzlab.pmb.berkeley.edu/svn/bisulfite/trunk/merge_gff.pl $:
+ $Id: merge_gff.pl 446 2010-12-03 22:57:39Z psilva $:
 
 =head1 AUTHOR
 

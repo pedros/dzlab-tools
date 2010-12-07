@@ -514,11 +514,11 @@ sub gff_read {
 
  Version 0.0.2
 
- $Rev$:
- $Author$:
- $Date$:
- $HeadURL$:
- $Id$:
+ $Rev: 296 $:
+ $Author: psilva $:
+ $Date: 2010-04-05 16:40:53 -0700 (Mon, 05 Apr 2010) $:
+ $HeadURL: http://dzlab.pmb.berkeley.edu/svn/bisulfite/trunk/cmp_gff.pl $:
+ $Id: cmp_gff.pl 296 2010-04-05 23:40:53Z psilva $:
 
 =head1 AUTHOR
 
