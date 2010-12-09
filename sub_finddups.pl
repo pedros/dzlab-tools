@@ -24,7 +24,10 @@ foreach my $subname (keys %subs){
     say "==================================================";
     say "==== $subname";
     foreach my $md5sum (keys %md5) {
-        say "# ", join ', ', @{$md5{$md5sum}};
+        for my $f (sort @{$md5{$md5sum}}) {
+            say "# $f";
+        }
+        
         say $subs{$subname}{$md5{$md5sum}->[0]};
         say "";
     }
