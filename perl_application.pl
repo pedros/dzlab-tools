@@ -8,57 +8,76 @@ use Getopt::Long;
 use Pod::Usage;
 use version; our $VERSION = qv('0.0.1');
 
-use FindBin;
-use lib "$FindBin::Bin/DZLab-Tools/lib";
-use DZLab::Tools::RunUtils;
-
 GetOptions(
     \%ARGV,
     'input|i=s', 'output|o=s', 'error|e=s',
-    'eland|e=s',
     _meta_options( \%ARGV ),
 ) and (@ARGV or $ARGV{input}) or pod2usage( -verbose => 1 );
 
 my ( $INH, $OUTH, $ERRH ) = _prepare_io( \%ARGV, \@ARGV );
 
+while ( <$INH> ) {
+    print $OUTH $_;
+}
 
-my $eland = index_eland( $ARGV{eland} );
 
-print $ERRH scalar( keys %$eland), "\n";
 
-my $n_reads;
 
-while (<$INH>) {
-    ++$n_reads and print $OUTH $_
-    if exists $eland->{ get_id( $_, 2, -4, -3, -2 ) };
-} 
+sub _meta_options {
+    my ($opt) = @_;
 
-print $ERRH $n_reads, "\n";
+    return (
+        'quiet'     => sub { $opt->{quiet}   = 1;          $opt->{verbose} = 0 },
+        'verbose:i' => sub { $opt->{verbose} = $_[1] // 1; $opt->{quiet}   = 0 },
+        'version'   => sub { pod2usage( -sections => ['VERSION', 'REVISION'],
+                                        -verbose  => 99 )                      },
+        'license'   => sub { pod2usage( -sections => ['AUTHOR', 'COPYRIGHT'],
+                                        -verbose  => 99 )                      },
+        'usage'     => sub { pod2usage( -sections => ['SYNOPSIS'],
+                                        -verbose  => 99 )                      },
+        'help'      => sub { pod2usage( -verbose  => 1  )                      },
+        'manual'    => sub { pod2usage( -verbose  => 2  )                      },
+    );
+}
 
-sub index_eland {
-    my ($eland_file, %ids) = @_;
+sub _prepare_io {
+    my ($opt, $argv) = @_;
 
-    open my $ELAND, '<', $eland_file or die "Can't open $eland_file: $!";
+    my ($INH, $OUTH, $ERRH);
+    
+    # If user explicitly sets -i, put the argument in @$argv
+    unshift @$argv, $opt->{input} if exists $opt->{input};
 
-    while (my $eland_line = <$ELAND>) {
-        my $id = get_id( $eland_line, 0, -3, -2, -1 );
-        next unless $id;
-        $ids{$id} = 1;
+    # Allow in-situ arguments (equal input and output filenames)
+    if (    exists $opt->{input} and exists $opt->{output}
+               and $opt->{input} eq $opt->{output} ) {
+        open $INH, q{<}, $opt->{input}
+            or croak "Can't read $opt->{input}: $!";
+        unlink $opt->{output};
     }
+    else { $INH = *ARGV }
 
-    return \%ids;
+    # Redirect STDOUT to a file if so specified
+    if ( exists $opt->{output} and q{-} ne $opt->{output} ) {
+        open $OUTH, q{>}, $opt->{output}
+            or croak "Can't write $opt->{output}: $!";
+    }
+    else { $OUTH = *STDOUT }
+
+    # Log STDERR if so specified
+    if ( exists $opt->{error} and q{-} ne $opt->{error} ) {
+        open $ERRH, q{>}, $opt->{error}
+            or croak "Can't write $opt->{error}: $!";
+    }
+    elsif ( exists $opt->{quiet} and $opt->{quiet} ) {
+        use File::Spec;
+        open $ERRH, q{>}, File::Spec->devnull
+            or croak "Can't write $opt->{error}: $!";
+    }
+    else { $ERRH = *STDERR }
+
+    return ( $INH, $OUTH, *STDERR = $ERRH );
 }
-
-
-sub get_id {
-    my ($eland_line, $col, @parts) = @_;
-
-    my $id = (split /\t/, $eland_line)[$col];
-    $id    = join( ':', (split /:/, $id)[@parts] );
-
-    return $id;
-}
-
 
 __DATA__
 
