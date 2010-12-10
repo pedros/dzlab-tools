@@ -1,0 +1,100 @@
+Chr1	TAIR8	gene	3631	5899	.	+	.	AT1G01010; ANAC001 (Arabidopsis NAC domain containing protein 1); transcription factor
+Chr1	TAIR8	gene	6790	8737	.	-	.	AT1G01020; ARV1
+Chr1	TAIR8	gene	11649	13714	.	-	.	AT1G01030; NGA3 (NGATHA3); transcription factor
+Chr1	TAIR8	gene	23146	31227	.	+	.	AT1G01040; DCL1 (DICER-LIKE1); ATP-dependent helicase/ ribonuclease III
+Chr1	TAIR8	gene	28500	28706	.	+	.	AT1G01046; MIR838a; miRNA
+Chr1	TAIR8	gene	31170	33153	.	-	.	AT1G01050; ATPPA1 (ARABIDOPSIS THALIANA PYROPHOSPHORYLASE 1); inorganic diphosphatase/ pyrophosphatase
+Chr1	TAIR8	gene	33379	37840	.	-	.	AT1G01060; LHY (LATE ELONGATED HYPOCOTYL); DNA binding / transcription factor
+Chr1	TAIR8	gene	38752	40944	.	-	.	AT1G01070; nodulin MtN21 family protein
+Chr1	TAIR8	gene	45296	47019	.	-	.	"AT1G01080; 33 kDa ribonucleoprotein, chloroplast, putative / RNA-binding protein cp33, putative"
+Chr1	TAIR8	gene	47485	49286	.	-	.	AT1G01090; PDH-E1 ALPHA (PYRUVATE DEHYDROGENASE E1 ALPHA); pyruvate dehydrogenase (acetyl-transferring)
+Chr1	TAIR8	gene	50075	51199	.	-	.	AT1G01100; 60S acidic ribosomal protein P1 (RPP1A)
+Chr1	TAIR8	gene	52239	54692	.	+	.	AT1G01110; IQD18 (IQ-domain 18)
+Chr1	TAIR8	gene	57269	59167	.	-	.	AT1G01120; KCS1 (3-KETOACYL-COA SYNTHASE 1); acyltransferase
+Chr1	TAIR8	gene	61963	63811	.	-	.	AT1G01130; 0
+Chr1	TAIR8	gene	64166	67625	.	-	.	AT1G01140; CIPK9 (CBL-INTERACTING PROTEIN KINASE 9); kinase
+Chr1	TAIR8	gene	70115	72138	.	-	.	AT1G01150; DNA binding / zinc ion binding
+Chr1	TAIR8	gene	72339	74096	.	+	.	AT1G01160; GIF2 (GRF1-INTERACTING FACTOR 2)
+Chr1	TAIR8	gene	73931	74737	.	-	.	"AT1G01170; ozone-responsive stress-related protein, putative"
+Chr1	TAIR8	gene	75633	77446	.	+	.	AT1G01180; 0
+Chr1	TAIR8	gene	78932	79032	.	-	.	AT1G01183; MIR165/MIR165A; miRNA
+Chr1	TAIR8	gene	83045	84864	.	-	.	"AT1G01190; CYP78A8 (cytochrome P450, family 78, subfamily A, polypeptide 8); oxygen binding"
+Chr1	TAIR8	gene	86515	88213	.	-	.	AT1G01200; AtRABA3 (Arabidopsis Rab GTPase homolog A3); GTP binding
+Chr1	TAIR8	gene	88898	89745	.	+	.	AT1G01210; DNA-directed RNA polymerase III family protein
+Chr1	TAIR8	gene	91750	95651	.	+	.	AT1G01220; GHMP kinase-related
+Chr1	TAIR8	gene	95987	97407	.	+	.	AT1G01225; NC domain-containing protein-related
+Chr1	TAIR8	gene	97456	99240	.	+	.	AT1G01230; ORMDL family protein
+Chr1	TAIR8	gene	99894	101834	.	+	.	AT1G01240; 0
+Chr1	TAIR8	gene	104491	105330	.	-	.	"AT1G01250; AP2 domain-containing transcription factor, putative"
+Chr1	TAIR8	gene	109032	111609	.	+	.	AT1G01260; basic helix-loop-helix (bHLH) family protein
+Chr1	TAIR8	gene	111890	111961	.	-	.	AT1G01270; pre-tRNA
+Chr1	TAIR8	gene	112263	113947	.	+	.	"AT1G01280; CYP703/CYP703A2 (CYTOCHROME P450, FAMILY 703, SUBFAMILY A, POLYPEPTIDE 2); oxidoreductase, acting on paired donors, with incorporation or reduction of molecular oxygen, NADH or NADPH as one donor, and incorporation of one atom of oxygen / oxygen binding"
+Chr1	TAIR8	gene	114286	115549	.	+	.	AT1G01290; CNX3 (COFACTOR OF NITRATE REDUCTASE AND XANTHINE DEHYDROGENASE 3); catalytic
+Chr1	TAIR8	gene	116943	118764	.	+	.	AT1G01300; aspartyl protease family protein
+Chr1	TAIR8	gene	119397	119997	.	+	.	AT1G01305; unknown protein
+Chr1	TAIR8	gene	120154	121130	.	+	.	AT1G01310; allergen V5/Tpx-1-related family protein
+Chr1	TAIR8	gene	121124	130099	.	-	.	AT1G01320; tetratricopeptide repeat (TPR)-containing protein
+Chr1	TAIR8	gene	132328	135322	.	-	.	AT1G01340; ATCNGC10 (CYCLIC NUCLEOTIDE GATED CHANNEL 10); calmodulin binding / cyclic nucleotide binding / ion channel
+Chr1	TAIR8	gene	136124	138162	.	+	.	AT1G01350; nucleic acid binding
+Chr1	TAIR8	gene	138513	139568	.	+	.	AT1G01355; nucleic acid binding / zinc ion binding
+Chr1	TAIR8	gene	141971	143183	.	+	.	AT1G01360; 0
+Chr1	TAIR8	gene	143564	145684	.	+	.	AT1G01370; HTR12 (CENTROMERIC HISTONE H3); DNA binding
+Chr1	TAIR8	gene	147153	147942	.	+	.	AT1G01380; ETC1 (ENHANCER OF TRY AND CPC 1); DNA binding / transcription factor
+Chr1	TAIR8	gene	148120	149806	.	-	.	AT1G01390; UDP-glucoronosyl/UDP-glucosyl transferase family protein
+Chr1	TAIR8	gene	150689	152210	.	-	.	AT1G01400; unknown protein
+Chr1	TAIR8	gene	153113	154198	.	+	.	AT1G01410; APUM22 (ARABIDOPSIS PUMILIO 22); RNA binding / binding
+Chr1	TAIR8	gene	154492	156011	.	-	.	AT1G01420; UDP-glucoronosyl/UDP-glucosyl transferase family protein
+Chr1	TAIR8	gene	156801	158655	.	-	.	AT1G01430; 0
+Chr1	TAIR8	gene	159856	162572	.	-	.	AT1G01440; extra-large G-protein-related
+Chr1	TAIR8	gene	163419	166239	.	+	.	AT1G01448; other RNA
+Chr1	TAIR8	gene	164105	165517	.	-	.	AT1G01450; protein kinase-related
+Chr1	TAIR8	gene	166589	167842	.	-	.	AT1G01453; 0
+Chr1	TAIR8	gene	168723	171165	.	+	.	AT1G01460; ATPIPK11; 1-phosphatidylinositol-4-phosphate 5-kinase
+Chr1	TAIR8	gene	172146	172948	.	-	.	AT1G01470; LEA14 (LATE EMBRYOGENESIS ABUNDANT 14)
+Chr1	TAIR8	gene	173251	173466	.	+	.	AT1G01471; unknown protein
+Chr1	TAIR8	gene	175782	178400	.	+	.	AT1G01480; ACS2 (1-Amino-cyclopropane-1-carboxylate synthase 2)
+Chr1	TAIR8	gene	180059	182358	.	-	.	AT1G01490; heavy-metal-associated domain-containing protein
+Chr1	TAIR8	gene	185133	186923	.	+	.	AT1G01500; 0
+Chr1	TAIR8	gene	187211	190056	.	+	.	AT1G01510; AN (ANGUSTIFOLIA)
+Chr1	TAIR8	gene	190596	192139	.	+	.	AT1G01520; myb family transcription factor
+Chr1	TAIR8	gene	192640	193670	.	-	.	AT1G01530; AGL28 (AGAMOUS-LIKE 28); DNA binding / transcription factor
+Chr1	TAIR8	gene	195780	198684	.	+	.	AT1G01540; protein kinase family protein
+Chr1	TAIR8	gene	199639	201775	.	+	.	AT1G01550; BPS1 (BYPASS 1)
+Chr1	TAIR8	gene	202136	204335	.	+	.	AT1G01560; ATMPK11 (Arabidopsis thaliana MAP kinase 11); MAP kinase/ kinase
+Chr1	TAIR8	gene	205176	207435	.	+	.	AT1G01570; fringe-related protein
+Chr1	TAIR8	gene	209395	213041	.	+	.	AT1G01580; FRO2 (FERRIC REDUCTION OXIDASE 2); ferric-chelate reductase
+Chr1	TAIR8	gene	214229	217304	.	+	.	AT1G01590; FRO1 (FERRIC REDUCTION OXIDASE 1); ferric-chelate reductase
+Chr1	TAIR8	gene	218994	221286	.	+	.	"AT1G01600; CYP86A4 (cytochrome P450, family 86, subfamily A, polypeptide 4); oxygen binding"
+Chr1	TAIR8	gene	221691	224340	.	-	.	AT1G01610; ATGPAT4/GPAT4 (GLYCEROL-3-PHOSPHATE ACYLTRANSFERASE 4); 1-acylglycerol-3-phosphate O-acyltransferase/ acyltransferase
+Chr1	TAIR8	gene	225665	227302	.	-	.	AT1G01620; PIP1C (PLASMA MEMBRANE INTRINSIC PROTEIN 1;3); water channel
+Chr1	TAIR8	gene	229013	230917	.	+	.	"AT1G01630; SEC14 cytosolic factor, putative / phosphoglyceride transfer protein, putative"
+Chr1	TAIR8	gene	230994	232508	.	-	.	AT1G01640; speckle-type POZ protein-related
+Chr1	TAIR8	gene	232841	237817	.	-	.	AT1G01650; peptidase
+Chr1	TAIR8	gene	240057	242608	.	-	.	AT1G01660; U-box domain-containing protein
+Chr1	TAIR8	gene	242843	245988	.	-	.	AT1G01670; U-box domain-containing protein
+Chr1	TAIR8	gene	246411	248367	.	-	.	AT1G01680; U-box domain-containing protein
+Chr1	TAIR8	gene	249141	252462	.	+	.	AT1G01690; 0
+Chr1	TAIR8	gene	252947	254495	.	+	.	AT1G01695; 0
+Chr1	TAIR8	gene	259495	261474	.	-	.	AT1G01700; ATROPGEF2/ROPGEF2 (KINASE PARTNER PROTEIN-LIKE); Rho guanyl-nucleotide exchange factor/ / protein binding
+Chr1	TAIR8	gene	262828	267771	.	+	.	AT1G01710; acyl-CoA thioesterase family protein
+Chr1	TAIR8	gene	268330	269819	.	+	.	AT1G01720; ATAF1 (Arabidopsis NAC domain containing protein 2); transcription factor
+Chr1	TAIR8	gene	269792	270775	.	-	.	AT1G01725; 0
+Chr1	TAIR8	gene	270956	272061	.	+	.	AT1G01730; 0
+Chr1	TAIR8	gene	272111	274239	.	-	.	AT1G01740; protein kinase family protein
+Chr1	TAIR8	gene	275366	276310	.	+	.	"AT1G01750; actin-depolymerizing factor, putative"
+Chr1	TAIR8	gene	276266	278448	.	-	.	AT1G01760; RNA binding / adenosine deaminase
+Chr1	TAIR8	gene	278615	282891	.	+	.	AT1G01770; 0
+Chr1	TAIR8	gene	282761	284245	.	+	.	AT1G01780; LIM domain-containing protein
+Chr1	TAIR8	gene	284781	291094	.	+	.	AT1G01790; KEA1 (K EFFLUX ANTIPORTER 1); potassium:hydrogen antiporter
+Chr1	TAIR8	gene	293342	295040	.	+	.	AT1G01800; short-chain dehydrogenase/reductase (SDR) family protein
+Chr1	TAIR8	gene	295221	295859	.	+	.	AT1G01810; unknown protein
+Chr1	TAIR8	gene	296001	298120	.	-	.	AT1G01820; PEX11C
+Chr1	TAIR8	gene	298535	302315	.	-	.	AT1G01830; armadillo/beta-catenin repeat family protein
+Chr1	TAIR8	gene	303537	304358	.	+	.	AT1G01840; 0
+Chr1	TAIR8	gene	304133	306287	.	-	.	AT1G01860; PFC1 (PALEFACE 1)
+Chr1	TAIR8	gene	306384	306456	.	+	.	AT1G01870; pre-tRNA
+Chr1	TAIR8	gene	306558	308991	.	-	.	"AT1G01880; DNA repair protein, putative"
+Chr1	TAIR8	gene	309275	309347	.	-	.	AT1G01890; pre-tRNA
+Chr1	TAIR8	gene	310316	313130	.	+	.	AT1G01900; ATSBT1.1; subtilase
+Chr1	TAIR8	gene	313101	315902	.	-	.	"AT1G01910; anion-transporting ATPase, putative"
+Chr1	TAIR8	gene	316128	319650	.	+	.	AT1G01920; SET domain-containing protein
