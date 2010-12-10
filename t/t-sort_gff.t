@@ -10,10 +10,12 @@ my $orig = 't/sorted.gff';
 my $dirty = 't/unsorted.gff';
 my $test = 't/test.gff';
 
-shuffle_file($orig,$dirty);
-system("./sort_gff.pl -i $dirty -o $test");
 
-ok(files_identical($test,$orig));
+for (1..10){
+    shuffle_file($orig,$dirty);
+    system("./sort_gff.pl -i $dirty -o $test");
+    ok(files_identical($test,$orig));
+}
 
 unlink $test;
 unlink $dirty;
