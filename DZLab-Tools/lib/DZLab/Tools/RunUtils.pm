@@ -9,15 +9,19 @@ our @ISA = qw(Exporter);
 our @EXPORT_OK = qw();
 our @EXPORT = qw(_meta_options _prepare_io);
 
-# average_gff.pl
-# build_gff_score_table.pl
-# check_methyl.pl
-# eland2gff.pl
-# ensure_all_genes_present.pl
-# expand_gff.pl
-# gff2eland.pl
-# gff2eland3.pl
-# normalize_gff.pl
+# use FindBin;
+# use lib "$FindBin::Bin/DZLab-Tools/lib";
+# use DZLab::Tools::RunUtils;
+
+# * average_gff.pl
+# * build_gff_score_table.pl
+# * check_methyl.pl
+# * eland2gff.pl
+# * ensure_all_genes_present.pl
+# * expand_gff.pl
+# * gff2eland.pl
+# * gff2eland3.pl
+# * normalize_gff.pl
 # * sort_gff.pl
 sub _meta_options {
     my ($opt) = @_;
@@ -36,15 +40,15 @@ sub _meta_options {
     );
 }
 
-# average_gff.pl
-# build_gff_score_table.pl
-# check_methyl.pl
-# eland2gff.pl
-# ensure_all_genes_present.pl
-# expand_gff.pl
-# gff2eland.pl
-# gff2eland3.pl
-# normalize_gff.pl
+# * average_gff.pl
+# * build_gff_score_table.pl
+# * check_methyl.pl
+# * eland2gff.pl
+# * ensure_all_genes_present.pl
+# * expand_gff.pl
+# * gff2eland.pl
+# * gff2eland3.pl
+# * normalize_gff.pl
 # parent_imprinting.pl
 # * sort_gff.pl
 sub _prepare_io {

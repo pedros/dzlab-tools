@@ -21,8 +21,8 @@ foreach my $subname (keys %subs){
     # for each md5sum (ie, identical subroutine definition),
     # print the sharing filenames and the actual duplicated subroutine
     # contents.
-    say "==================================================";
-    say "==== $subname";
+    say "#######################################################";
+    say "#### $subname";
     foreach my $md5sum (keys %md5) {
         for my $f (sort @{$md5{$md5sum}}) {
             say "# $f";
