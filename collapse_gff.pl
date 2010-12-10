@@ -6,16 +6,17 @@ use Data::Dumper;
 use Carp;
 use Getopt::Long;
 use Pod::Usage;
+use List::Util qw/sum/;
 
 my $DATA_HANDLE = 'ARGV';
 my $output;
-my $distance_range = 0;
-my $score_range    = 0;
+my $distance = 0;
+my $score = 0;
 
 # Grabs and parses command line options
 my $result = GetOptions (
-    'distance-range|d=i', => \$distance_range,
-    'score-range|s=i', => \$score_range,
+    'distance|d=f'=> \$distance,
+    'score|s=f'   => \$score,
     'output|o=s'  => \$output,
     'verbose|v'   => sub { use diagnostics; },
     'quiet|q'     => sub { no warnings; },
@@ -33,18 +34,27 @@ if ($output) {
 }
 
 my @buffer = ();
+
 while (<$DATA_HANDLE>) {
     next if /\s*#/;
     my @fields = split /\t/;
 
-    if ( !@buffer || is_adjacent_by( \@buffer, \@fields, $distance_range, $score_range ) ) {
-        push @buffer, [@fields[0..2], 1, @fields[4..8]] if !@buffer;
+    if ( !@buffer || is_adjacent_by( \@buffer, \@fields, $distance, $score) ) {
+
+        print join "\t", @fields[0..2], 1, $fields[3] - 1, 0, @fields[6..8]
+        if !@buffer and $fields[3] > 1;
+    
         push @buffer, \@fields;
+
     }
+
     else {
-        print join ("\t", @{$buffer[0]}[0..3], $buffer[-1]->[4], @{$buffer[0]}[5..8]);
-        print join ("\t", @{$buffer[0]}[0..2], $buffer[-1]->[4] + 1, $fields[4] - 1, 0, @{$buffer[0]}[6..8])
-        unless $buffer[-1]->[4] + 1 == $fields[4] or $buffer[-1]->[0] ne $fields[0];
+        flush_buffer( \@buffer );
+
+        if ($buffer[-1][4] + 1 != $fields[4] and $fields[0] eq $buffer[-1][0]) {
+            print join ("\t", @{$buffer[0]}[0..2], $buffer[-1][4] + 1, $fields[4] - 1, 0, @{$buffer[0]}[6..8])
+        }
+
         @buffer = (\@fields);
     }
 }
@@ -56,9 +66,19 @@ if @buffer;
 sub is_adjacent_by {
     my ($buffer, $fields, $distance_range, $score_range) = @_;
 
-    return ($fields->[0] eq $buffer->[-1][0])
-    and ( abs( $fields->[3] - 1 - $buffer->[-1][4] ) <= $distance_range )
-    and ( abs( $fields->[5] - $buffer->[-1][5] )     <= $score_range );
+    return
+    (
+        $fields->[0] eq $buffer->[-1][0]
+        and abs( $fields->[3] - 1 - $buffer->[-1][4]) <= $distance_range
+        and abs( $fields->[5] - 0 - $buffer->[-1][5]) <= $score_range
+    );
+}
+
+sub flush_buffer {
+    my ($buffer) = @_ or return;
+    my @scores = map { $_->[5] } @$buffer;
+    my $score = (sum @scores) / @scores;
+    print join "\t", @{$buffer->[0]}[0..3], $buffer->[-1][4], sprintf( "%g", $score), @{$buffer->[0]}[6..8];
 }
 
 __END__
@@ -92,7 +112,7 @@ __END__
 
 =head1 REVISION
 
- Version 0.0.2
+ Version 0.0.1
 
  $Rev: $:
  $Author: $:
