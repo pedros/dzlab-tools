@@ -1,20 +1,38 @@
 package DZLab::Tools::GFF;
 
 use strict; use warnings;
+use version; our $VERSION = '0.0.1';
 
+require Exporter;
+our @ISA = qw(Exporter);
+our @EXPORT_OK = qw();
+our @EXPORT = qw(gff_read gff_make_iterator);
+
+use Carp;
 
 
 sub gff_read {
-    return [] if $_[0] =~ m/^
-                            \s*
-                            \#+
-                           /mx;
+    my ($gff_line) = @_;
+
+    # get pragmas of the form: '##gff-version 3' and '##sequence-region ctg123 1 1497228'
+    return [split /\s+/, $1] if $gff_line =~ m/^
+                                               \s*
+                                               \#{2}
+                                               \s*
+                                               (.*)
+                                               $/mx;
+
+    # ignore blank lines and lines starting with '#'
+    return [] if $gff_line =~ m/^ \s* (?:\#+ .*)? $/mx;
 
     my ($seqname, $source, $feature, $start, $end,
         $score,   $strand, $frame,   $attribute
-    ) = split m/\t/xm, shift || return;
+    ) = split m/\t/xm, $gff_line || return;
 
     $attribute =~ s/[\r\n]//mxg;
+
+    my %attributes = map { split /=/, $_ } split /;/, $attribute;
+    @attributes{keys %attributes} = map { /,/ ? [split /,/] : $_ } values %attributes;
 
     return {
         seqname   => lc $seqname,
@@ -25,7 +43,8 @@ sub gff_read {
         score     => $score,
         strand    => $strand,
         frame     => $frame,
-        attribute => $attribute
+        attribute => $attribute,
+        attributes=> \%attributes
     };
 }
 
