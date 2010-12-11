@@ -7,7 +7,7 @@ use Carp;
 require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT_OK = qw();
-our @EXPORT = qw(slurp_fasta);
+our @EXPORT = qw(slurp_fasta format_fasta);
 
 
 =head1 slurp_fasta
@@ -38,11 +38,32 @@ sub slurp_fasta {
             push @buffer, $opts->{-l} ? lc $line : $line;
         }
     }
+
     $accum{$current} = join q{}, @buffer if ($current) ; # last seq
+    $accum{$current} =~ s/\s*//g;
 
     close $fh;
 
     return \%accum;
+}
+
+
+=head1 format_fasta
+format a header and seq for printing as a fasta.
+=cut 
+sub format_fasta{
+    my ($header, $seq) = @_;
+    carp unless ($header and $seq);
+
+    my @buffer = (">$header");
+
+    my $width = 80;
+    my $length = length $seq;
+
+    for (my $position = 0; $position < $length; $position += $width){
+        push @buffer, substr $seq, $position, $width;
+    }
+    return (join "\n", @buffer) . "\n";
 }
 1;
 
