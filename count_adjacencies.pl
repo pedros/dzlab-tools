@@ -8,6 +8,10 @@ use Getopt::Long;
 use Pod::Usage;
 use List::Util qw/sum/;
 
+use FindBin;
+use lib "$FindBin::Bin/DZLab-Tools/lib";
+use DZLab::Tools::Fasta;
+
 my $GFF_DATA  = 'ARGV';
 my $min_score = 0.10;
 my $min_total = 10;
@@ -45,7 +49,7 @@ if ($sort) {
     open $GFF_DATA, '<', $sorted_filename;
 }
 
-my $reference = index_fasta ($normalize);
+my $reference = slurp_fasta ($normalize, {-l => 1});
 
 my %buffer = ();
 my %counts = ();
@@ -189,43 +193,6 @@ sub sort_gff {
 }
 
 
-sub index_fasta {
-    my $reference_file = shift;
-
-    my %reference = ();
-
-    return \%reference unless $reference_file;
-
-    # reads in the reference genome file into @fastaseq
-    open my $REF, '<', "$reference_file" or croak "Can't open $reference_file for reading: $!";
-    my @fastaseq = <$REF>;
-    close $REF;
-
-    # find and store indices for each chromosome change and corresponding descriptions
-    my ( @idx, @dsc ) = ();
-    for my $i ( 0 .. @fastaseq - 1 ) {
-        if ( $fastaseq[$i] =~ m/^>/ ) {
-            $fastaseq[$i] =~ s/>//g;
-            $fastaseq[$i] = ( split /\s/, "$fastaseq[$i]" )[0];
-            $fastaseq[$i] =~ tr/A-Z/a-z/;
-            push @idx, $i;
-            push @dsc, $fastaseq[$i];
-        }
-    }
-
-    for my $j ( 0 .. @idx - 1 ) {
-        my $line;
-        if ( $j == scalar @idx - 1 ) {
-            $line = join( q{}, @fastaseq[ $idx[$j] + 1 .. @fastaseq - 1]);
-        }
-        else {
-            $line = join( q{}, @fastaseq[ $idx[$j] + 1 .. $idx[$j + 1] - 1]);
-        }
-        $line =~ s/[\n\r]//g;
-        $reference{$dsc[$j]} = lc $line;
-    }
-    return \%reference;
-}
 
 __END__
 
