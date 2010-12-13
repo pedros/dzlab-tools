@@ -110,7 +110,7 @@ sub overlap {
     my ($range_a, $range_b) = @_;
 
     my $bin_low  = max( $range_a->[0], $range_b->[0] );
-    my $bin_high = min( $range_b->[1],   $range_b->[1]   );
+    my $bin_high = min( $range_a->[1],   $range_b->[1]   );
     my $overlap  = abs($bin_high - $bin_low) + 1;
     return $overlap / ( $range_b->[1] - $range_b->[0] + 1 );
 }
