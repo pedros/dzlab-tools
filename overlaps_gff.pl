@@ -39,15 +39,19 @@ if ($output) {
     select $USER_OUT;
 }
 
+# slurp up GFF's given as arguments.  these will serve as source's.
+
 my $gff_iterator
 = make_gff_iterator( parser => \&gff_read, handle => 'ARGV' );
 
-my %gff_records = ();
+my %gff_records = (); # { sequence => [$gff_hashes] }
 LOAD:
 while ( my $gff_line = $gff_iterator->() ) {
     next LOAD unless ref $gff_line eq 'HASH';
     push @{ $gff_records{ $gff_line->{seqname} } }, $gff_line;
 }
+
+# $gff file will serve as target's
 
 my $annotation_iterator = sub { };
 if ($gff) {
@@ -60,23 +64,30 @@ if ($gff) {
 SEQUENCE:
 for my $sequence ( sort keys %gff_records ) {
 
+    # sort gff records by start (maybe)
     unless ($no_sort) {
         @{ $gff_records{$sequence} }
             = sort { $a->{start} <=> $b->{start} }
             @{ $gff_records{$sequence} };
     }
 
+    # for each range/locus for the sequence...
   WINDOW:
     while ( my ( $ranges, $locus ) = $annotation_iterator->($sequence) ) {
 
+
         my $brs_iterator = binary_range_search(
+            # $ranges specific for a particular $locus
             range  => $ranges,
+            # all $ranges for the sequence, sorted by start
             ranges => $gff_records{$sequence},
         );
 
+        # what is $_ here???
         next WINDOW unless
         $overlap <= overlap ($ranges->[0], [$_->{start}, $_->{end}]);
 
+        # print if overlap meets a cutoff.
         if ($full) {
             $overlap <= overlap ($ranges->[0], [$_->{start}, $_->{end}])
             && print join ("\t",
@@ -106,14 +117,37 @@ for my $sequence ( sort keys %gff_records ) {
     }
 }
 
+##########################################################
+# overlap
+#
+# a: |--------------|
+# b:    |----------------------------|
+#       |-----------| <- overlap region
+# 
+# return ratio of overlap region length / range_b length
+
 sub overlap {
+    
     my ($range_a, $range_b) = @_;
 
+    # the higher start range
     my $bin_low  = max( $range_a->[0], $range_b->[0] );
+
+    # the lower end range 
     my $bin_high = min( $range_a->[1],   $range_b->[1]   );
+
+    # length of overlap
     my $overlap  = abs($bin_high - $bin_low) + 1;
+
+    # overlap ratio = overlap / length of range_b;
     return $overlap / ( $range_b->[1] - $range_b->[0] + 1 );
 }
+
+##########################################################
+# make_annotation_iterator
+#
+# return an iterator which, given a sequence, will return 
+# ( [ ranges ], $locus ), on every call, until loci runs out
 
 sub make_annotation_iterator {
     my (%options) = @_;
@@ -132,21 +166,27 @@ sub make_annotation_iterator {
 
     close $GFFH or croak "Can't close $annotation_file: $!";
 
+    # closure
     my %annotation_keys = ();
     return sub {
         my ($sequence) = @_;
         return unless $sequence;
 
-        unless ( exists $annotation_keys{$sequence} ) {
+        # first time, make %annotation_keys a { sequence => [locus_ids] }
+        if ( ! exists $annotation_keys{$sequence} ) {
             @{ $annotation_keys{$sequence} }
                 = sort keys %{ $annotation->{$sequence} };
         }
 
+        # grab a locus
         my $locus = shift @{ $annotation_keys{$sequence} };
         return unless $locus;
+
+        # grab the locus's [ranges]
         my $ranges = $annotation->{$sequence}{$locus};
         delete $annotation->{$sequence}{$locus};
 
+        # return [ unique_ranges of seq ], and a locus
         if ( $locus and @$ranges ) {
             return [ uniq_ranges($ranges) ], $locus;
         }
@@ -156,6 +196,13 @@ sub make_annotation_iterator {
     };
 }
 
+##########################################################
+# index annotations
+# 
+# accept a gff iterator, a locus tag ('ID') and a feature (column 3) to merge
+# on.
+#
+# return { sequence_names => { locus_id => [ranges]} }
 
 sub index_annotation {
     my (%options) = @_;
@@ -168,23 +215,32 @@ sub index_annotation {
     my %annotation = ();
 
 LOCUS:
+    # fore each line in gff
     while ( my $locus = $gff_iterator->() ) {
 
         next LOCUS unless ref $locus eq 'HASH';
 
+        # see if there's an 'ID'. 
         my ($locus_id) = $locus->{attribute} =~ m/$locus_tag[=\s]?([^;,]+)/;
 
+        # if there is no ID, use the first attribute 
         if ( !defined $locus_id ) {
             ( $locus_id, undef ) = split /;/, $locus->{attribute};
             $locus_id ||= q{.};
         }
+        # if there is...
         else {
+
+            # clean whitespace/quotes
             $locus_id =~ s/["\t\r\n]//g;
+
+            # kill after period if merging
             $locus_id
                 =~ s/\.\w+$// # this fetches the parent ID in GFF gene models (eg. exon is Parent=ATG101010.n)
                 if $merge_feature and $locus->{feature} eq $merge_feature;
         }
 
+        # so annotation is a { sequence_names => { locus_id => [ranges]} }
         push @{ $annotation{ $locus->{seqname} }{$locus_id} },
             [ $locus->{start}, $locus->{end} ]
             unless ( $merge_feature and $locus->{feature} ne $merge_feature );
@@ -193,6 +249,12 @@ LOCUS:
 
     return \%annotation;
 }
+
+##########################################################
+# remove duplicate ranges
+# 
+# $ranges is an array ref of ranges
+# [[$start_a, $end_a], [$start_b, $end_b], ... ]
 
 sub uniq_ranges {
     my ($ranges) = @_;
@@ -207,12 +269,22 @@ sub uniq_ranges {
     return wantarray ? @uniq : [@uniq];
 }
 
+##########################################################
+# binary_range_search
+# 
+# given a list of target ranges, and a list of source ranges,
+#
+
 sub binary_range_search {
     my %options = @_;
 
+    # list of ranges for a particular locus and sequence
     my $targets = $options{range}  || croak 'Need a range parameter';
+
+    # sorted (by range-starts) of all ranges for sequence
     my $ranges  = $options{ranges} || croak 'Need a ranges parameter';
 
+    # lowest and highest indicies of $ranges
     my ( $low, $high ) = ( 0, $#{$ranges} );
     my @iterators = ();
 
@@ -222,18 +294,34 @@ TARGET:
     RANGE_CHECK:
         while ( $low <= $high ) {
 
+            # middle
             my $try = int( ( $low + $high ) / 2 );
 
+            # try higher $try if:
+            # $range: |------------| 
+            # $try:                  |---------------|
             $low = $try + 1, next RANGE_CHECK
                 if $ranges->[$try]{end} < $range->[0];
+
+            # try lower $try if:
+            # $range:                   |------------| 
+            # $try:   |---------------|
+            # try lower half if range's end < middle's start
             $high = $try - 1, next RANGE_CHECK
                 if $ranges->[$try]{start} > $range->[1];
 
+            # if we make it here, we've found a source $try which overlaps with the  
+            # target $range
+            
             my ( $down, $up ) = ($try) x 2;
             my %seen = ();
 
+            # create an iterator which, on every call, returns an overlapping
+            # source range, starting with $range and then going down or up the
+            # list.
             my $brs_iterator = sub {
-
+                
+                # if $range overlaps with $up + 1, and it's new, return it
                 if (    $ranges->[ $up + 1 ]{end} >= $range->[0]
                     and $ranges->[ $up + 1 ]{start} <= $range->[1]
                     and !exists $seen{ $up + 1 } )
@@ -241,6 +329,7 @@ TARGET:
                     $seen{ $up + 1 } = undef;
                     return $ranges->[ ++$up ];
                 }
+                # if $range overlaps with $down - 1, and it's new, return it
                 elsif ( $ranges->[ $down - 1 ]{end} >= $range->[0]
                     and $ranges->[ $down - 1 ]{start} <= $range->[1]
                     and !exists $seen{ $down - 1 }
@@ -249,6 +338,7 @@ TARGET:
                     $seen{ $down - 1 } = undef;
                     return $ranges->[ --$down ];
                 }
+                # we already know $try overlaps, so return it too.
                 elsif ( !exists $seen{$try} ) {
                     $seen{$try} = undef;
                     return $ranges->[$try];
@@ -262,8 +352,8 @@ TARGET:
         }
     }
 
-# In scalar context return master iterator that iterates over the list of range iterators.
-# In list context returns a list of range iterators.
+    # In scalar context return master iterator that iterates over the list of range iterators.
+    # In list context returns a list of range iterators.
     return wantarray
         ? @iterators
         : sub {
@@ -276,6 +366,9 @@ TARGET:
         return;
         };
 }
+
+##########################################################
+# Gff reading, to be moved out
 
 sub gff_read {
     return [] if $_[0] =~ m/^
