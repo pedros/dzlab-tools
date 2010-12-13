@@ -83,12 +83,15 @@ if ( $absolute and $no_skip ) {
 
 my $window_iterator = sub { };
 if ($gff) {
-    $window_iterator = make_annotation_iterator(
+    $window_iterator = make_annotation_iterator( # really? annonation?
         file  => $gff,
         tag   => $tag,
         merge => $merge
     );
 }
+
+##########################################################
+# get chromosome names from data file
 
 open my $GFF, '<', $ARGV[0] or croak "Can't open $ARGV[0]:$!";
 my $gff_iterator = make_gff_iterator( parser => \&gff_read, handle => $GFF );
@@ -114,6 +117,9 @@ for my $sequence ( sort keys %chromosomes ) {
     
     my %gff_records = ();
 
+    ##########################################################
+    # slurp GFF into % gff_records. should be factored out
+    
     print STDERR "Loading $sequence...";
   LOAD:
     while ( my $gff_line = $gff_iterator->() ) {
@@ -129,6 +135,9 @@ for my $sequence ( sort keys %chromosomes ) {
 
     #printf STDERR "gff_records occupies %g MiB of memory\n",
     #total_size( \%gff_records ) / 1024 / 1024;
+
+    ##########################################################
+    # sort each gff_record by start
 
     print STDERR 'Sorting ', scalar @{ $gff_records{$sequence} }, ' records...';
     unless ($no_sort) {
@@ -150,6 +159,8 @@ for my $sequence ( sort keys %chromosomes ) {
                     and exists $fasta_lengths->{$absolute}{$sequence}
                 )
             ? $fasta_lengths->{$absolute}{$sequence}
+            # this doesn't seem right... even if sorted, gff_records is sorted
+            # by sequence start, not end. should we find the max end manually?
             : $gff_records{$sequence}[-1]->{end},
         );
     }
@@ -205,6 +216,11 @@ for my $sequence ( sort keys %chromosomes ) {
     delete $gff_records{$sequence};    
 }
 
+##########################################################
+# index_fasta_lengths (from __DATA__ below)
+#
+# return {species => {sequence => length}}
+
 sub index_fasta_lengths {
     my %options = @_;
 
@@ -235,6 +251,10 @@ sub index_fasta_lengths {
     return \%fasta_lengths;
 }
 
+##########################################################
+# make_window_iterator
+# iterate from lower to upper by step.
+
 sub make_window_iterator {
     my (%options) = @_;
 
@@ -259,6 +279,11 @@ sub make_window_iterator {
     }
 }
 
+##########################################################
+# make_annotation_iterator
+#
+# return an iterator which, given a sequence, will return 
+# ( [ ranges ], $locus ), on every call, until loci runs out
 sub make_annotation_iterator {
     my (%options) = @_;
 
@@ -300,6 +325,13 @@ sub make_annotation_iterator {
     };
 }
 
+##########################################################
+# index annotations
+# 
+# accept a gff iterator, a locus tag ('ID') and a feature (column 3) to merge
+# on.
+#
+# return { sequence_names => { locus_id => [ranges]} }
 sub index_annotation {
     my (%options) = @_;
 
@@ -337,6 +369,11 @@ LOCUS:
     return \%annotation;
 }
 
+##########################################################
+# remove duplicate ranges
+# 
+# $ranges is an array ref of ranges
+# [[$start_a, $end_a], [$start_b, $end_b], ... ]
 sub uniq_ranges {
     my ($ranges) = @_;
 
@@ -349,6 +386,9 @@ sub uniq_ranges {
 
     return wantarray ? @uniq : [@uniq];
 }
+
+##########################################################
+# for the ranges from brs, count the c's and the t's in the attributes field
 
 sub fractional_methylation {
     my ($brs_iterator) = @_;
@@ -381,6 +421,8 @@ sub fractional_methylation {
     }
 }
 
+##########################################################
+# return sum of scores of ranges returned by brs
 
 sub sum_scores {
     my ($brs_iterator, $reverse) = @_;
@@ -409,6 +451,11 @@ COORD:
     }
 }
 
+##########################################################
+# seq_freq 
+# from the ranges from brs_iterator, calculate the
+# frequency of each base at each position. (?)
+
 sub seq_freq {
     my ($brs_iterator) = @_;
 
@@ -425,6 +472,7 @@ sub seq_freq {
         my ($sequence) = $gff_line->{attribute} =~ m/seq=(\w+)/;
         my @sequence   = split //, $sequence;
 
+        # for each position, tally the base
         for my $i (0 .. @sequence - 1) {
 
             for (qw/a c g t/) {
@@ -436,6 +484,7 @@ sub seq_freq {
         $seq_count++;
     }
 
+    # attribute = { position_id => {a => a_ratio, c => c_ratio, ...}}
     my $i = 1;
     my %attribute;
     for my $position (@$seq_freq) {
@@ -456,6 +505,10 @@ sub seq_freq {
         };
     }
 }
+
+##########################################################
+# average_scores
+# for ranges returned by brs_iterator, calculate average/stddev
 
 sub average_scores {
     my ($brs_iterator) = @_;
@@ -491,6 +544,10 @@ COORD:
         };
     }
 }
+
+##########################################################
+# binary_range_search, make_gff_iterator, read_gff 
+# same as overlap_gff.pl
 
 sub binary_range_search {
     my %options = @_;

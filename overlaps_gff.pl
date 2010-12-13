@@ -273,6 +273,8 @@ sub uniq_ranges {
 # binary_range_search
 # 
 # given a list of target ranges, and a list of source ranges,
+# return an iterator which iterates over source ranges that overlaps with
+# a target range
 #
 
 sub binary_range_search {
