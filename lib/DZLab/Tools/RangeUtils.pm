@@ -16,7 +16,9 @@ range_before range_after
 );
 
 =head1 uniq_ranges [[$start_a, $end_a], [$start_b, $end_b], ... ]
+
 Gets rid of duplicates from range list.
+
 =cut 
 sub uniq_ranges {
     my ($ranges) = @_;
@@ -31,8 +33,10 @@ sub uniq_ranges {
     return wantarray ? @uniq : [@uniq];
 }
 
-=head1 range_before [[$start_a, $end_a], [$start_b, $end_b]]
+=head1 range_before [$start_a, $end_a], [$start_b, $end_b]
+
 Return true if first range completley before second range
+
 =cut 
 sub range_before{
     my ($range_a, $range_b) = @_;
@@ -40,8 +44,10 @@ sub range_before{
     return $range_a->[1] < $range_b->[0];
 }
 
-=head1 range_after [[$start_a, $end_a], [$start_b, $end_b]]
+=head1 range_after [$start_a, $end_a], [$start_b, $end_b]
+
 Return true if first range completley after second range
+
 =cut 
 sub range_after{
     my ($range_a, $range_b) = @_;
@@ -49,8 +55,10 @@ sub range_after{
     return $range_a->[0] > $range_b->[1];
 }
 
-=head1 range_overlap [[$start_a, $end_a], [$start_b, $end_b]]
+=head1 range_overlap [$start_a, $end_a], [$start_b, $end_b]
+
 Return true if range_overlap shares even a single position.
+
 =cut
 sub range_overlap{
     my ($range_a, $range_b) = @_;
@@ -60,11 +68,14 @@ sub range_overlap{
         range_after($range_a, $range_b));
 }
 
-=head1 overlap_ratio [[$start_a, $end_a], [$start_b, $end_b]]
+=head1 overlap_ratio [$start_a, $end_a], [$start_b, $end_b]
+
     a: |--------------|
     b:    |----------------------------|
           |-----------| <- overlap region
+
 return ratio of overlap region length / range_b length, or 0 if no overlap
+
 =cut 
 sub overlap_ratio {
     
