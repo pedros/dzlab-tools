@@ -35,6 +35,9 @@ for (1 .. $numiter){
         [[$w,$y],[$x,$z]], # >=1 overlap
         [[$w,$z],[$x,$y]], # containment
         [[$w,$x],[$x,$z]], # single base overlap
+        [[$w,$x],[$w,$z]], # left side is same
+        [[$w,$y],[$x,$y]], # right side is same
+        [[$w,$z],[$w,$z]], # same
     );
     for (@overlappers){
         ok( ! range_before($_->[0],$_->[1]) && 
