@@ -2,6 +2,7 @@ package DZLab::Tools;
 
 use warnings;
 use strict;
+use version; our $VERSION = '0.0.1';
 
 =head1 NAME
 
@@ -9,7 +10,7 @@ DZLab::Tools - The great new DZLab::Tools!
 
 =head1 VERSION
 
-Version 0.01
+Version 0.0.1
 
 =cut
 
@@ -51,6 +52,7 @@ sub function2 {
 =head1 AUTHOR
 
 Pedro Silva, C<< <pedros at berkeley.edu> >>
+Toshiro Nishimura C<< <tnish at berkeley.edu> >>
 
 =head1 BUGS
 
@@ -96,7 +98,7 @@ L<http://search.cpan.org/dist/DZLab-Tools/>
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright 2010 Pedro Silva.
+Copyright 2010 Pedro Silva and Toshiro Nishimura.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
