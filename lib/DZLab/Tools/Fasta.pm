@@ -9,9 +9,12 @@ our @ISA = qw(Exporter);
 our @EXPORT_OK = qw();
 our @EXPORT = qw(slurp_fasta format_fasta);
 
+=head1 EXPORTED FUNCTIONS
 
-=head1 slurp_fasta
+=head2 slurp_fasta
+
 return hash of seqid (the first word after the '>') to the sequence.
+
 =cut
 sub slurp_fasta {
     my ($file, $opts) = @_;
@@ -48,8 +51,10 @@ sub slurp_fasta {
 }
 
 
-=head1 format_fasta
+=head2 format_fasta
+
 format a header and seq for printing as a fasta.
+
 =cut 
 sub format_fasta{
     my ($header, $seq) = @_;

@@ -14,9 +14,6 @@ Version 0.0.1
 
 =cut
 
-our $VERSION = '0.01';
-
-
 =head1 SYNOPSIS
 
 Quick summary of what the module does.

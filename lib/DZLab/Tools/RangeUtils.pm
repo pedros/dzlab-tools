@@ -15,7 +15,9 @@ overlap_ratio range_overlap uniq_ranges
 range_before range_after
 );
 
-=head1 uniq_ranges [[$start_a, $end_a], [$start_b, $end_b], ... ]
+=head1 EXPORTED FUNCTIONS
+
+=head2 uniq_ranges [[$start_a, $end_a], [$start_b, $end_b], ... ]
 
 Gets rid of duplicates from range list.
 
@@ -33,7 +35,7 @@ sub uniq_ranges {
     return wantarray ? @uniq : [@uniq];
 }
 
-=head1 range_before [$start_a, $end_a], [$start_b, $end_b]
+=head2 range_before [$start_a, $end_a], [$start_b, $end_b]
 
 Return true if first range completley before second range
 
@@ -44,7 +46,7 @@ sub range_before{
     return $range_a->[1] < $range_b->[0];
 }
 
-=head1 range_after [$start_a, $end_a], [$start_b, $end_b]
+=head2 range_after [$start_a, $end_a], [$start_b, $end_b]
 
 Return true if first range completley after second range
 
@@ -55,7 +57,7 @@ sub range_after{
     return $range_a->[0] > $range_b->[1];
 }
 
-=head1 range_overlap [$start_a, $end_a], [$start_b, $end_b]
+=head2 range_overlap [$start_a, $end_a], [$start_b, $end_b]
 
 Return true if range_overlap shares even a single position.
 
@@ -68,7 +70,7 @@ sub range_overlap{
         range_after($range_a, $range_b));
 }
 
-=head1 overlap_ratio [$start_a, $end_a], [$start_b, $end_b]
+=head2 overlap_ratio [$start_a, $end_a], [$start_b, $end_b]
 
     a: |--------------|
     b:    |----------------------------|
