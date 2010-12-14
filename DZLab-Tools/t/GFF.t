@@ -2,7 +2,7 @@
 
 use FindBin;
 use lib "$FindBin::Bin/../lib";
-use DZLab::Tools::GFF qw/gff_read gff_make_iterator/;
+use DZLab::Tools::GFF;
 
 use Test::Exception;
 use Test::More;
@@ -20,9 +20,9 @@ my @gff_read_tests = qw/
              /;
 
 my %gff_read_common_struct = (
-    source => '.',
-    frame => '.',
-    score => '.',
+    source => q{.}, # TODO: substitute undef for q{.} once GFF.pm returns undefs,
+    frame => q{.},
+    score => q{.},
     end => 9000,
     feature => 'mRNA',
     seqname => 'ctg123',
