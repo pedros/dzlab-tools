@@ -107,11 +107,11 @@ sub gff_read {
         feature   => d2u( $feature    ),
         start     => d2u( $start      ),
         end       => d2u( $end        ),
+        range     => [$start,$end],
         score     => d2u( $score      ),
         strand    => d2u( $strand     ),
         frame     => d2u( $frame      ),
         attribute => d2u( $attribute  ),
-        attributes=> \%attributes
     };
 }
 
@@ -145,7 +145,16 @@ sub gff_make_iterator {
     }
 
     return sub {
-        $parser->( scalar <$handle> );
+        my $gff_line = scalar <$handle>;
+        if (defined($gff_line)){
+            return $parser->($gff_line);
+        }
+        else {
+            if (defined $file and -e $file) {
+                close $handle;
+            }
+            return;
+        }
     };
 }
 

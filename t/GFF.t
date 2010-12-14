@@ -27,7 +27,8 @@ my %gff_read_common_struct = (
     feature => 'mRNA',
     seqname => 'ctg123',
     strand => '+',
-    start => '1050'
+    start => 1050,
+    range => [1050,9000],
 );
 
 my @gff_read_structs = (
