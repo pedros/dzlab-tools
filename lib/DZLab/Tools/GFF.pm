@@ -112,7 +112,7 @@ sub gff_read {
         strand    => d2u( $strand     ),
         frame     => d2u( $frame      ),
         attribute => d2u( $attribute  ),
-        attributes=> \&attributes,
+        attributes=> \%attributes,
     };
 }
 
