@@ -34,8 +34,8 @@ use Carp;
 require Exporter;
 
 our @ISA       = qw/Exporter/;
-our @EXPORT    = qw//;
-our @EXPORT_OK = qw/gff_read gff_make_iterator/;
+our @EXPORT    = qw/gff_read gff_make_iterator gff_validate/;
+our @EXPORT_OK = qw//;
 
 =head1 EXPORTED FUNCTIONS
 
@@ -51,21 +51,22 @@ Returns [pragma, value, ...] on comments of form '##pragma value value ...'
 
 Returns reference to hash with keys otherwise:
 
-    seqname       => string | .
-    source        => string | .
-    feature       => string | .
+    seqname       => string | undef
+    source        => string | undef
+    feature       => string | undef
     start         => int
     end           => int
-    score         => float  | .
-    strand        => + | - | .
-    frame         => 0 | 1 | 2 | .
-    attribute     => string
-    attributes    => {key => string | [string, ...], ...}
+    score         => float  | undef
+    strand        => + | -  | undef
+    frame         => 0 | 1 | 2 | undef
+    attribute     => string | undef
+    attributes    => {key => string | [string, ...] | undef, ...}
 
 =cut
 sub gff_read {
     my ($gff_line) = @_;
     return unless defined $gff_line;
+    chomp $gff_line;
 
     # get pragmas of the form: '##gff-version 3' and '##sequence-region ctg123 1 1497228'
     return [split /\s+/, $1] if $gff_line =~ m/^
@@ -82,21 +83,34 @@ sub gff_read {
         $score,   $strand, $frame,   $attribute
     ) = split m/\t/xm, $gff_line || return;
 
-    $attribute =~ s/[\r\n]//mxg;
+    # locally convert dots to undefs
+    local *d2u = sub { return $_[0]; # TODO: remove once it won't break everything
+        $_[0] eq q{.} ? undef : $_[0]
+    };
 
-    my %attributes = map { /=/ ? split /=/ : (Note => $_) } split /;/, $attribute;
-    @attributes{keys %attributes} = map { /,/ ? [split /,/] : $_ } values %attributes;
+    my %attributes = map {
+        /=/
+        ? (split /=/ )
+        : (Note => $_)
+    } split /;/, $attribute;
+
+    @attributes{keys %attributes} = map {
+        my $v = $_;
+        /,/
+        ? [map { d2u( $_ ) } split /,/]
+        : d2u( $_ )
+    } values %attributes;
 
     return {
-        seqname   => lc $seqname,
-        source    => $source,
-        feature   => $feature,
-        start     => $start,
-        end       => $end,
-        score     => $score,
-        strand    => $strand,
-        frame     => $frame,
-        attribute => $attribute,
+        seqname   => d2u( lc $seqname ),
+        source    => d2u( $source     ),
+        feature   => d2u( $feature    ),
+        start     => d2u( $start      ),
+        end       => d2u( $end        ),
+        score     => d2u( $score      ),
+        strand    => d2u( $strand     ),
+        frame     => d2u( $frame      ),
+        attribute => d2u( $attribute  ),
         attributes=> \%attributes
     };
 }
@@ -134,7 +148,6 @@ sub gff_make_iterator {
         $parser->( scalar <$handle> );
     };
 }
-
 
 1;
 
