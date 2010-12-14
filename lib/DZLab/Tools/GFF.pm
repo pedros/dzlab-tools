@@ -34,7 +34,7 @@ use Carp;
 require Exporter;
 
 our @ISA       = qw/Exporter/;
-our @EXPORT    = qw/gff_read gff_make_iterator gff_validate/;
+our @EXPORT    = qw/gff_read gff_make_iterator gff_validate gff_slurp_by_seq/;
 our @EXPORT_OK = qw//;
 
 =head1 EXPORTED FUNCTIONS
@@ -159,6 +159,42 @@ sub gff_make_iterator {
     };
 }
 
+=head2 gff_slurp_by_seq 
+
+Returns hash of sequences to gff-records { sequence => [$gff_hashes] }. 
+
+=cut
+
+sub gff_slurp_by_seq {
+    my $opt = shift;
+    
+    ($opt->{file} xor $opt->{handle}) 
+        or (carp "slurp_gff: need filename xor filehandle" and return {});
+
+    my %gff_records = ();
+    my $it = gff_make_iterator( 
+        parser => \&gff_read, 
+        $opt->{file} ? (file => $opt->{file}) : (handle => $opt->{handle}),
+    );
+
+    print STDERR "Loading groups...\n" if $opt->{debug};
+    while (my $gff = $it->()){
+        next unless ref $gff eq 'HASH';
+        my $seq = $gff->{seqname} ;
+        if (! exists($gff_records{ $seq } )){
+            print STDERR "Reading $seq ...\n" if $opt->{debug};
+        }
+        push @{ $gff_records{ $seq } }, $gff;
+    }
+
+    if ($opt->{sort}){
+        foreach my $seq (keys %gff_records) {
+            @{ $gff_records{$seq} }
+            = sort { $a->{start} <=> $b->{start} } @{ $gff_records{$seq} };
+        }
+    }
+    return \%gff_records;
+}
 1;
 
 =head1 INSTALLATION
