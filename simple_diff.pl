@@ -7,6 +7,9 @@ use Carp;
 use Getopt::Long;
 use Pod::Usage;
 use List::Util qw /max/;
+use FindBin;
+use lib "$FindBin::Bin/DZLab-Tools/lib";
+use DZLab::Tools::Fasta;
 
 my $output;
 my $html = 0;
@@ -25,8 +28,8 @@ my $result = GetOptions (
 pod2usage ( -verbose => 1 )
 unless @ARGV and $result;
 
-my $a_fasta   = index_fasta ($ARGV[0]);
-my $b_fasta   = index_fasta ($ARGV[1]);
+my $a_fasta   = slurp_fasta ($ARGV[0], {-l => 1});
+my $b_fasta   = slurp_fasta ($ARGV[1], {-l => 1});
 my @a_headers = sort keys %$a_fasta;
 my @b_headers = sort keys %$b_fasta;
 
@@ -91,44 +94,6 @@ sub vector_difference {
     return \@positions;
 }
 
-
-sub index_fasta {
-    my $reference_file = shift;
-
-    my %reference = ();
-
-    return \%reference unless $reference_file;
-
-    # reads in the reference genome file into @fastaseq
-    open my $REF, '<', "$reference_file" or croak "Can't open $reference_file for reading: $!";
-    my @fastaseq = <$REF>;
-    close $REF;
-
-    # find and store indices for each chromosome change and corresponding descriptions
-    my ( @idx, @dsc ) = ();
-    for my $i ( 0 .. @fastaseq - 1 ) {
-        if ( $fastaseq[$i] =~ m/^>/ ) {
-            $fastaseq[$i] =~ s/>//g;
-            $fastaseq[$i] = ( split /\s/, "$fastaseq[$i]" )[0];
-            $fastaseq[$i] =~ tr/A-Z/a-z/;
-            push @idx, $i;
-            push @dsc, $fastaseq[$i];
-        }
-    }
-
-    for my $j ( 0 .. @idx - 1 ) {
-        my $line;
-        if ( $j == scalar @idx - 1 ) {
-            $line = join( q{}, @fastaseq[ $idx[$j] + 1 .. @fastaseq - 1]);
-        }
-        else {
-            $line = join( q{}, @fastaseq[ $idx[$j] + 1 .. $idx[$j + 1] - 1]);
-        }
-        $line =~ s/[\n\r]//g;
-        $reference{$dsc[$j]} = lc $line;
-    }
-    return \%reference;
-}
 
 
 sub string_to_fasta {

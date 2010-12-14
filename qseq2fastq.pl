@@ -66,25 +66,21 @@ sub _meta_options {
 
     return (
         'quiet' => sub { $opt->{quiet} = 1; $opt->{verbose} = 0 },
-        'verbose:i' =>
-            sub { $opt->{verbose} = $_[1] // 1; $opt->{quiet} = 0 },
-        'version' => sub {
-            pod2usage(
-                -sections => [ 'VERSION', 'REVISION' ],
-                -verbose  => 99
-            );
+        'verbose:i' => sub { $opt->{verbose} = $_[1] // 1; $opt->{quiet} = 0 },
+        'version' => sub { pod2usage( -sections => [ 'VERSION', 'REVISION' ],
+                -verbose  => 99)
         },
         'license' => sub {
             pod2usage(
                 -sections => [ 'AUTHOR', 'COPYRIGHT' ],
                 -verbose  => 99
-            );
+            )
         },
         'usage' => sub {
             pod2usage(
                 -sections => ['SYNOPSIS'],
                 -verbose  => 99
-            );
+            )
         },
         'help'   => sub { pod2usage( -verbose => 1 ) },
         'manual' => sub { pod2usage( -verbose => 2 ) },

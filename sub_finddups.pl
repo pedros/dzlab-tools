@@ -5,32 +5,56 @@ use Data::Dumper;
 use feature 'say';
 use PPI;
 use autodie;
-use Digest::MD5 qw/md5_base64/;
 
 my %subs = find_shared_subs(2,@ARGV);
 
 foreach my $subname (keys %subs){
-    my %md5;
+
     my @filenames = keys %{$subs{$subname}};
 
-    # populate a hash of md5sums of content to [filenames]
-    foreach my $filename (@filenames) {
-        push @{$md5{$subs{$subname}{$filename}}}, $filename;
+    # {file1 => content1, file2 => content2, ... }
+    my %content = %{$subs{$subname}};
+
+    # {file1 => normalized1, file2 => normalized2, ... }
+    my %normalized = map { 
+        $_ => PPI::Document->new(\$content{$_})->normalized 
+    } @filenames;
+
+
+    # group files into identical normalized forms.  We have to do this because
+    # apparently normalized form only allows direct comparison with '=='...?
+    my @groups;
+    F:
+    for my $i (0 .. $#filenames) {
+        my $fi = $filenames[$i];
+
+        # if the file is already found in one of the groups
+        next F if (0 < grep { $_ eq $fi} 
+            (map {@$_} @groups)); # flatten list
+
+        my @g = ($fi);
+        for my $j ($i + 1  .. $#filenames) {
+            my $fj = $filenames[$j];
+
+            # if normalized form equal, consider the two sub defs equal.
+            if ($normalized{$fi} == $normalized{$fj}){
+                push @g,$fj;
+            }
+        }
+        push @groups, \@g;
     }
 
-    # for each md5sum (ie, identical subroutine definition),
-    # print the sharing filenames and the actual duplicated subroutine
-    # contents.
-    say "#######################################################";
-    say "#### $subname";
-    foreach my $md5sum (keys %md5) {
-        for my $f (sort @{$md5{$md5sum}}) {
-            say "# $f";
+    say "##########################################################";
+    say "### $subname";
+    say "";
+
+    for my $g (@groups) {
+        for my $file (@$g) {
+            say "# $file";
         }
-        
-        say $subs{$subname}{$md5{$md5sum}->[0]};
-        say "";
+        say $content{$g->[0]};
     }
+    say "";
 }
 
 # find_shared_subs($min_num_repeats, $file1, $file2, ...)

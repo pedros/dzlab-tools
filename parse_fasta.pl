@@ -8,6 +8,10 @@ use Getopt::Long;
 use Pod::Usage;
 use File::Basename;
 
+use FindBin;
+use lib "$FindBin::Bin/DZLab-Tools/lib";
+use DZLab::Tools::Fasta;
+
 my @range;
 my $seqid;
 my $output;
@@ -37,7 +41,8 @@ if ($output) {
 }
 
 my $reference = $ARGV[0];
-my %reference = %{ index_fasta ($reference) };
+my %reference = %{ slurp_fasta ($reference) };
+
 
 my $total_bp     = 0;
 my $total_non_bp = 0;
@@ -111,7 +116,7 @@ if ($seqid) {
 
         my $file_name = fileparse ($reference);
 
-        print &string_to_fasta ($sequence, "lcl|$file_name|$seqid|$range[0]-$range[1]"), "\n";
+        print string_to_fasta ($sequence, "lcl|$file_name|$seqid|$range[0]-$range[1]"), "\n";
 
         exit 0;
     }
@@ -153,45 +158,6 @@ sub _sequence {
     else {
         return $reference{$seqid};
     }
-}
-
-
-sub index_fasta {
-    my $reference_file = shift;
-
-    my %reference = ();
-
-    return \%reference unless $reference_file;
-
-    # reads in the reference genome file into @fastaseq
-    open my $REF, '<', "$reference_file" or croak "Can't open $reference for reading: $!";
-    my @fastaseq = <$REF>;
-    close $REF;
-
-    # find and store indices for each chromosome change and corresponding descriptions
-    my ( @idx, @dsc ) = ();
-    for my $i ( 0 .. @fastaseq - 1 ) {
-        if ( $fastaseq[$i] =~ m/^>/ ) {
-            $fastaseq[$i] =~ s/>//g;
-            $fastaseq[$i] = ( split /\s/, "$fastaseq[$i]" )[0];
-            $fastaseq[$i] =~ tr/A-Z/a-z/;
-            push @idx, $i;
-            push @dsc, $fastaseq[$i];
-        }
-    }
-
-    for my $j ( 0 .. @idx - 1 ) {
-        my $line;
-        if ( $j == scalar @idx - 1 ) {
-            $line = join( q{}, @fastaseq[ $idx[$j] + 1 .. @fastaseq - 1]);
-        }
-        else {
-            $line = join( q{}, @fastaseq[ $idx[$j] + 1 .. $idx[$j + 1] - 1]);
-        }
-        $line =~ s/[\n\r]//g;
-        $reference{$dsc[$j]} = $line;
-    }
-    return \%reference;
 }
 
 

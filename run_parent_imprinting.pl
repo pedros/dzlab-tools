@@ -285,7 +285,7 @@ sub _meta_options {
 
     return (
         'quiet'     => sub { $opt->{quiet}   = 1;          $opt->{verbose} = 0 },
-        'verbose:i' => sub { $opt->{verbose} = $_[1] || 1; $opt->{quiet}   = 0 },
+        'verbose:i' => sub { $opt->{verbose} = $_[1] // 1; $opt->{quiet}   = 0 },
         'version'   => sub { pod2usage( -sections => ['VERSION', 'REVISION'],
                                         -verbose  => 99 )                      },
         'license'   => sub { pod2usage( -sections => ['AUTHOR', 'COPYRIGHT'],
