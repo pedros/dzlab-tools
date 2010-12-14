@@ -890,10 +890,3 @@ GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
 along with this program. If not, see L<http://www.gnu.org/licenses/>.
-880:	final indentation level: 1
-
-Final nesting depth of '('s is 1
-The most recent un-matched '(' is on line 409
-409: _err(  "%s: $spec", _this_sub_name(2), @args;
-         ^
-880:	To save a full .LOG file rerun with -g
