@@ -1,5 +1,33 @@
 package DZLab::Tools::GFF;
 
+=head1 NAME
+
+DZLab::Tools::GFF - IO and parsing utilities for GFFv3
+
+=head1 VERSION
+
+This document describes DZLab::Tools::GFF version 0.0.1
+
+=head1 SYNOPSIS
+
+    use DZLab::Tools::GFF qw/gff_read gff_make_iterator/;
+
+    my $iterator = gff_make_iterator( parser => \&gff_read, handle => \*STDIN );
+
+    # or your own parser:
+    $iterator = gff_make_iterator( sub { split /\t/ }, file => 'file.gff');
+
+    while (my $gff = iterator->()) {
+        # do stuff with $gff
+    }
+
+=head1 DESCRIPTION
+
+Using BioPerl for simple parsing of GFF3 files can be overkill, given its dependencies. 
+This module offers a functional approach to the problem.
+
+=cut
+
 use strict; use warnings;
 use version; our $VERSION = '0.0.1';
 use Carp;
@@ -9,7 +37,32 @@ our @ISA       = qw/Exporter/;
 our @EXPORT    = qw//;
 our @EXPORT_OK = qw/gff_read gff_make_iterator/;
 
+=head1 EXPORTED FUNCTIONS
 
+=head2 gff_read $string
+
+Parses a single GFF3 line.
+
+Returns undef or empty list on undefined $string (EOF).
+
+Returns [] on blank lines and comments.
+
+Returns [pragma, value, ...] on comments of form '##pragma value value ...'
+
+Returns reference to hash with keys otherwise:
+
+    seqname       => string | .
+    source        => string | .
+    feature       => string | .
+    start         => int
+    end           => int
+    score         => float  | .
+    strand        => + | - | .
+    frame         => 0 | 1 | 2 | .
+    attribute     => string
+    attributes    => {key => string | [string, ...], ...}
+
+=cut
 sub gff_read {
     my ($gff_line) = @_;
     return unless defined $gff_line;
@@ -48,6 +101,13 @@ sub gff_read {
     };
 }
 
+=head2 gff_make_iterator %options
+
+Returns an anonymous function that on, each call, reads one gff line from a $file or $handle, and returns a parsed structure as delivered by $parser.
+
+Returns undef or empty list on EOF.
+
+=cut
 sub gff_make_iterator {
     my %options = @_;
 
@@ -77,32 +137,6 @@ sub gff_make_iterator {
 
 
 1;
-
-=head1 NAME
-
-DZLab::Tools::GFF - IO and parsing utilities for GFFv3
-
-=head1 VERSION
-
-This document describes DZLab::Tools::GFF version 0.0.1
-
-=head1 SYNOPSIS
-
-    use DZLab::Tools::GFF qw/gff_read gff_make_iterator/;
-
-    my $iterator = gff_make_iterator( parser => \&gff_read, handle => \*STDIN );
-
-    # or your own parser:
-    $iterator = gff_make_iterator( sub { split /\t/ }, file => 'file.gff');
-
-    while (my $gff = iterator->()) {
-        # do stuff with $gff
-    }
-
-=head1 DESCRIPTION
-
-Using BioPerl for simple parsing of GFF3 files can be overkill, given its dependencies. 
-This module offers a functional approach to the problem.
 
 =head1 INSTALLATION
 
