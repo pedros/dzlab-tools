@@ -23,6 +23,16 @@ our @EXPORT = qw(_meta_options _prepare_io);
 # * gff2eland3.pl
 # * normalize_gff.pl
 # * sort_gff.pl
+
+=head1 EXPORTED FUNCTIONS
+
+=head2 _meta_options $options
+
+Takes a reference to a hash of boolean options with keys: quiet and verbose.
+
+Returns a hash of commonly-used options for feeding into Getopt::Long.
+
+=cut
 sub _meta_options {
     my ($opt) = @_;
 
@@ -51,6 +61,14 @@ sub _meta_options {
 # * normalize_gff.pl
 # parent_imprinting.pl
 # * sort_gff.pl
+
+=head2 _prepare_io $opt $argv
+
+Takes a reference to a hash of options with keys: input, output, error, quiet; and a reference to an array of command line arguments.
+
+Returns input, output and error file handles.
+
+=cut
 sub _prepare_io {
     my ($opt, $argv) = @_;
 
