@@ -9,6 +9,7 @@ my $builder = Module::Build->new(
     dist_version_from   => 'lib/DZLab/Tools.pm',
     build_requires => {
         'Test::More' => 0,
+        'Test::Exception' => 0,
     },
     add_to_cleanup      => [ 'DZLab-Tools-*' ],
     create_makefile_pl => 'traditional',
