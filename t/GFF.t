@@ -2,7 +2,7 @@
 
 use FindBin;
 use lib "$FindBin::Bin/../lib";
-use DZLab::Tools::GFF;
+use DZLab::Tools::GFF qw/gff_read gff_make_iterator/;
 
 use Test::Exception;
 use Test::More;
