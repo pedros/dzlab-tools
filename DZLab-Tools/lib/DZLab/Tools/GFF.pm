@@ -93,6 +93,7 @@ sub gff_read {
         feature   => $feature,
         start     => $start,
         end       => $end,
+        range     => [$start,$end],
         score     => $score,
         strand    => $strand,
         frame     => $frame,
@@ -131,7 +132,16 @@ sub gff_make_iterator {
     }
 
     return sub {
-        $parser->( scalar <$handle> );
+        my $gff_line = scalar <$handle>;
+        if (defined($gff_line)){
+            return $parser->($gff_line);
+        }
+        else {
+            if (defined $file and -e $file) {
+                close $handle;
+            }
+            return;
+        }
     };
 }
 
