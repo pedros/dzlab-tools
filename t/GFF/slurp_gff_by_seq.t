@@ -103,7 +103,9 @@ is_deeply($read,$expected);
 __DATA__
 ctg123	.	mRNA	1050	9000	.	+	.	ID=mRNA00001;Parent=gene00001;Name=EDEN.1
 ctg123	.	mRNA	1051	9000	.	+	.	ID=mRNA00001;Parent=gene00001;Name=EDEN.1,123
+
 ctg123	.	mRNA	1052	9000	.	+	.	mRNA00001
 foobar	.	codon	1251	9000	.	+	.	ID=mRNA00002
+
 foobar	.	codon	1123	9000	.	+	.	ID=mRNA00002
 foobar	.	codon	1459	9000	.	+	.	mRNA00002
