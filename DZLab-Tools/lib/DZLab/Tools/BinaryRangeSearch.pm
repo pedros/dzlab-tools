@@ -13,7 +13,7 @@ our @EXPORT = qw(binary_range_search);
 
 use DZLab::Tools::RangeUtils;
 
-=head1 binary_range_search {queries => [...ranges...], database =>
+=head2 binary_range_search {queries => [...ranges...], database =>
 [...gff_records...]}
 
 given a list of query ranges, and a list of database gff_records, each with
@@ -23,10 +23,10 @@ that overlaps with a query range
 =cut
 
 sub binary_range_search {
-    my %options = @_;
+    my $options = shift;
 
-    my $queries  = $options{queries}  || croak 'Need a queries parameter';
-    my $database = $options{database} || croak 'Need a database parameter';
+    my $queries  = $options->{queries}  || croak 'Need a queries parameter';
+    my $database = $options->{database} || croak 'Need a database parameter';
 
     my ( $low, $high ) = ( 0, $#{$database} );
     my @iterators = ();
@@ -61,20 +61,15 @@ TARGET:
             my $brs_iterator = sub {
                 
                 # if $query overlaps with $up + 1, and it's new, return it
-                if ( range_overlap($database->[ $up + 1 ]{range}, $query)
-                    # $database->[ $up + 1 ]{end} >= $query->[0]
-                    # and $database->[ $up + 1 ]{start} <= $query->[1]
-                    and !exists $seen{ $up + 1 } )
+                if ( $up + 1 <= $high and !exists $seen{ $up + 1 } 
+                     and range_overlap($database->[ $up + 1 ]{range}, $query))
                 {
                     $seen{ $up + 1 } = undef;
                     return $database->[ ++$up ];
                 }
                 # if $query overlaps with $down - 1, and it's new, return it
-                elsif ( range_overlap($database->[$down-1]{range},$query)
-                    #$database->[ $down - 1 ]{end} >= $query->[0]
-                    #and $database->[ $down - 1 ]{start} <= $query->[1]
-                    and !exists $seen{ $down - 1 }
-                    and $down > 0 )
+                elsif ( $down - 1 >= $low and !exists $seen{ $down - 1 }
+                        and range_overlap($database->[$down-1]{range},$query))
                 {
                     $seen{ $down - 1 } = undef;
                     return $database->[ --$down ];

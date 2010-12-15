@@ -34,7 +34,8 @@ use Carp;
 require Exporter;
 
 our @ISA       = qw/Exporter/;
-our @EXPORT    = qw/gff_read gff_make_iterator gff_validate gff_slurp_by_seq/;
+our @EXPORT    = qw/gff_read gff_make_iterator gff_validate gff_slurp_by_seq
+                    gff_to_string/;
 our @EXPORT_OK = qw//;
 
 =head1 EXPORTED FUNCTIONS
@@ -179,7 +180,7 @@ sub gff_slurp_by_seq {
 
     print STDERR "Loading groups...\n" if $opt->{debug};
     while (my $gff = $it->()){
-        next unless ref $gff eq 'HASH';
+        next unless ref $gff eq 'HASH' && keys %$gff;
         my $seq = $gff->{seqname} ;
         if (! exists($gff_records{ $seq } )){
             print STDERR "Reading $seq ...\n" if $opt->{debug};
@@ -195,6 +196,20 @@ sub gff_slurp_by_seq {
     }
     return \%gff_records;
 }
+
+=head2 gff_to_string $gffrec
+
+return a gffrec back in original text format
+
+=cut
+
+
+sub gff_to_string{
+    my $gff = shift || return; 
+    return join "\t",@{$gff}{'seqname', 'source', 'feature', 'start', 'end',
+        'score',   'strand', 'frame',   'attribute'};
+}
+
 1;
 
 =head1 INSTALLATION
