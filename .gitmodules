@@ -1,0 +1,3 @@
+[submodule "DZLab-Tools"]
+	path = DZLab-Tools
+	url = ssh://git@dzlab.pmb.berkeley.edu/DZLab-Tools.git
