@@ -57,12 +57,12 @@ format a header and seq for printing as a fasta.
 
 =cut 
 sub format_fasta{
-    my ($header, $seq) = @_;
+    my ($header, $seq, $width) = @_;
     carp unless ($header and $seq);
 
     my @buffer = (">$header");
 
-    my $width = 80;
+    $width ||= 80;
     my $length = length $seq;
 
     for (my $position = 0; $position < $length; $position += $width){
