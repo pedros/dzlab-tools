@@ -34,7 +34,6 @@ sub new {
     }
 
     $self->{numcol}      = scalar @{$self->{columns}};
-    #say $self->{numcol};
 
     my $blessed = bless $self, $class;
 
@@ -68,8 +67,15 @@ sub create_index_statements{
     } @{$self->{indices}};
 }
 
+=head2 _get_attr "Attributes=Strings;Go=Here" desired_attribute1 desired_attribute2 ...
+
+return an array with the values of the attributes in the same order as listed in the arguments
+
+=cut
+
 sub _get_attr{
     my $attr = shift;
+    # preallocate hash
     my %accum = map {$_ => undef} @_;
 
     my $key;
@@ -81,7 +87,7 @@ sub _get_attr{
             \s*?([^=;]+)\s*?  # value
             /xmsg){
         $key = $1 ? $1 : 'Note';
-        if (exists $accum{$key}){
+        if (exists $accum{$key}){ # ignore attributes which aren't desired
             $accum{$key} = $2;
         }
     }
@@ -117,7 +123,12 @@ sub slurp{
     while (my $line = <$fh>){
         chomp $line;
         $line =~ s/[\n\r]//g;
+
         my @arr = split /\t/, $line;
+
+        # map missing columns "." to undef
+        my @arr = map { $_ eq q{.} ? undef : $_} @arr; # 
+
         next unless @arr == 9;
         my @attrvals = _get_attr($arr[8],@{$self->{attributes}});
 
@@ -132,7 +143,7 @@ sub slurp{
 
     say "creating indices (if any)" if $self->{verbose};
     for my $index_statement ($self->create_index_statements()){
-        say $index_statement;
+        say $index_statement if $self->{verbose};
         $dbh->do($index_statement);
     }
     
@@ -170,6 +181,13 @@ sub make_iterator{
         return $select->fetchrow_hashref();
     };
 }
+
+=head2 make_iterator_overlappers [[$start1, $end1], [start2, $end2], ...]
+
+returns and iterator which, on every call, returns a element overlapping with the ranges.
+may return same thing twice....
+
+=cut
 
 sub make_iterator_overlappers{
     my $self = shift;
