@@ -35,10 +35,40 @@ require Exporter;
 
 our @ISA       = qw/Exporter/;
 our @EXPORT    = qw/gff_read gff_make_iterator gff_validate gff_slurp_by_seq
-                    gff_to_string/;
+                    gff_to_string parse_attributes/;
 our @EXPORT_OK = qw//;
 
+
+
 =head1 EXPORTED FUNCTIONS
+
+=head2 parse_attributes "Attributes=Strings;Go=Here" desired_attribute1 desired_attribute2 ...
+
+return an array with the values of the attributes in the same order as listed in the arguments
+
+=cut
+
+sub parse_attributes{
+    my $attr = shift;
+    # preallocate hash
+    my %accum = map {$_ => undef} @_;
+
+    my $key;
+    while($attr =~ m/
+            (?:
+            \s*?([^=;]+)\s*?  # key, which may not be there
+            =
+            )?
+            \s*?([^=;]+)\s*?  # value
+            /xmsg){
+        $key = $1 ? $1 : 'Note';
+        if (exists $accum{$key}){ # ignore attributes which aren't desired
+            $accum{$key} = $2;
+        }
+    }
+    return @accum{@_};
+}
+
 
 =head2 gff_read $string
 
