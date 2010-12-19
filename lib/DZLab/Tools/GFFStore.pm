@@ -8,8 +8,8 @@ use Carp;
 use DBI;
 use DZLab::Tools::GFF qw/parse_attributes/;
 
-my @default_cols     = qw/seqname source feature start   end     score strand frame   attribute/;
-my @default_coltypes = qw/text    text   text    numeric numeric real  text   numeric text/;
+my @default_cols     = qw/sequence source feature start   end     score strand frame   attribute/;
+my @default_coltypes = qw/text     text   text    numeric numeric real  text   numeric text/;
 
 sub new {
     my $class = shift;
@@ -146,14 +146,54 @@ sub make_iterator_arrayref{
     };
 }
 
+#sub make_iterator{
+#    my $self = shift;
+#    my $dbh = $self->{dbh};
+#    my $select = $dbh->prepare("select * from gff");
+#    $select->execute();
+#    return sub{
+#        return $select->fetchrow_hashref();
+#    };
+#}
+
 sub make_iterator{
     my $self = shift;
+    my $constraints = shift;
+    my @values;
+
+    my @where;
+    while (my ($col,$val) = each %$constraints) {
+        if (defined($val)){
+            push @where, "$col = ?";
+            # keep track of @values in same order as added to where
+            push @values, $val;
+        } else{
+            push @where, "$col is null";
+            # $val is not pushed here since does not require a placeholder
+        }
+    }
+    my $where_clause = @where ? ("where " . join " and ", @where) : "";
+
+    my $select_stmt = "select * from gff $where_clause";
+    say $select_stmt;
+
     my $dbh = $self->{dbh};
-    my $select = $dbh->prepare("select * from gff");
-    $select->execute();
+    my $sth = $dbh->prepare($select_stmt);
+    $sth->execute(@values);
     return sub{
-        return $select->fetchrow_hashref();
+        return $sth->fetchrow_hashref();
     };
+}
+
+sub query{
+    my $self = shift;
+    my $constraints = shift;
+    my $iter = $self->make_iterator($constraints);
+    my @accum;
+    while (my $row = $iter->()){
+        push @accum,$row;
+    }
+    return \@accum;
 }
 
 =head2 make_iterator_overlappers [[$start1, $end1], [start2, $end2], ...]

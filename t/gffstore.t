@@ -10,7 +10,7 @@ use DZLab::Tools::GFFStore;
 my $gffstore = DZLab::Tools::GFFStore->new({
         attributes => {ID => 'text', Note => 'text'}, 
         verbose => 1, 
-        debug => 1,
+        debug => 0,
         indices => [['start','end']],
         handle => \*DATA,
         #filename => 'work2.gff'
@@ -18,11 +18,32 @@ my $gffstore = DZLab::Tools::GFFStore->new({
 
 is($gffstore->count(),100,"Correct count");
 
-#my $it = $gffstore->make_iterator_overlappers([[6000,7000],[10000,20000]]);
-#while (my $row = $it->()){
-#    say Dumper $row;
-#}
+# contraints testing
 
+my $results;
+$results = $gffstore->query({sequence => 'Chr1'});
+is(scalar @$results, 50, 'make iterator with contraints');
+
+$results = $gffstore->query({sequence => 'Chr2'});
+is(scalar @$results, 50, 'make iterator with contraints');
+
+$results = $gffstore->query({start => 3631});
+is(scalar @$results, 1, 'make iterator with contraints');
+
+$results = $gffstore->query({end => 13714});
+is(scalar @$results, 1, 'make iterator with contraints');
+
+$results = $gffstore->query({start => 23146, end => 31227});
+is(scalar @$results, 1, 'make iterator with contraints');
+
+$results = $gffstore->query({start => 23146, end => 31227, frame => ''});
+is(scalar @$results, 0, 'make iterator with contraints');
+
+$results = $gffstore->query({frame => undef});
+is(scalar @$results, 100, 'make iterator with contraints');
+
+$results = $gffstore->query({start => 31170, frame => undef});
+is(scalar @$results, 1, 'make iterator with contraints');
 
 __DATA__
 Chr1	TAIR8	gene	3631	5899	.	+	.	ID=AT1G01010;Name=AT1G01010;Note=ANAC001 (Arabidopsis NAC domain containing protein 1),transcription factor
@@ -75,53 +96,53 @@ Chr1	TAIR8	gene	156801	158655	.	-	.	ID=AT1G01430;Name=AT1G01430
 Chr1	TAIR8	gene	159856	162572	.	-	.	ID=AT1G01440;Name=AT1G01440;Note=extra-large G-protein-related
 Chr1	TAIR8	gene	163419	166239	.	+	.	ID=AT1G01448;Name=AT1G01448;Note=other RNA
 Chr1	TAIR8	gene	164105	165517	.	-	.	ID=AT1G01450;Name=AT1G01450;Note=protein kinase-related
-Chr1	TAIR8	gene	166589	167842	.	-	.	ID=AT1G01453;Name=AT1G01453
-Chr1	TAIR8	gene	168723	171165	.	+	.	ID=AT1G01460;Name=AT1G01460;Note=ATPIPK11,1-phosphatidylinositol-4-phosphate 5-kinase
-Chr1	TAIR8	gene	172146	172948	.	-	.	ID=AT1G01470;Name=AT1G01470;Note=LEA14 (LATE EMBRYOGENESIS ABUNDANT 14)
-Chr1	TAIR8	gene	173251	173466	.	+	.	ID=AT1G01471;Name=AT1G01471;Note=unknown protein
-Chr1	TAIR8	gene	175782	178400	.	+	.	ID=AT1G01480;Name=AT1G01480;Note=ACS2 (1-Amino-cyclopropane-1-carboxylate synthase 2)
-Chr1	TAIR8	gene	180059	182358	.	-	.	ID=AT1G01490;Name=AT1G01490;Note=heavy-metal-associated domain-containing protein
-Chr1	TAIR8	gene	185133	186923	.	+	.	ID=AT1G01500;Name=AT1G01500
-Chr1	TAIR8	gene	187211	190056	.	+	.	ID=AT1G01510;Name=AT1G01510;Note=AN (ANGUSTIFOLIA)
-Chr1	TAIR8	gene	190596	192139	.	+	.	ID=AT1G01520;Name=AT1G01520;Note=myb family transcription factor
-Chr1	TAIR8	gene	192640	193670	.	-	.	ID=AT1G01530;Name=AT1G01530;Note=AGL28 (AGAMOUS-LIKE 28),DNA binding,transcription factor
-Chr1	TAIR8	gene	195780	198684	.	+	.	ID=AT1G01540;Name=AT1G01540;Note=protein kinase family protein
-Chr1	TAIR8	gene	199639	201775	.	+	.	ID=AT1G01550;Name=AT1G01550;Note=BPS1 (BYPASS 1)
-Chr1	TAIR8	gene	202136	204335	.	+	.	ID=AT1G01560;Name=AT1G01560;Note=ATMPK11 (Arabidopsis thaliana MAP kinase 11),MAP kinase,kinase
-Chr1	TAIR8	gene	205176	207435	.	+	.	ID=AT1G01570;Name=AT1G01570;Note=fringe-related protein
-Chr1	TAIR8	gene	209395	213041	.	+	.	ID=AT1G01580;Name=AT1G01580;Note=FRO2 (FERRIC REDUCTION OXIDASE 2),ferric-chelate reductase
-Chr1	TAIR8	gene	214229	217304	.	+	.	ID=AT1G01590;Name=AT1G01590;Note=FRO1 (FERRIC REDUCTION OXIDASE 1),ferric-chelate reductase
-Chr1	TAIR8	gene	218994	221286	.	+	.	ID=AT1G01600;Name=AT1G01600;Note=CYP86A4 (cytochrome P450,family 86,subfamily A,polypeptide 4),oxygen binding
-Chr1	TAIR8	gene	221691	224340	.	-	.	ID=AT1G01610;Name=AT1G01610;Note=ATGPAT4/GPAT4 (GLYCEROL-3-PHOSPHATE ACYLTRANSFERASE 4),1-acylglycerol-3-phosphate O-acyltransferase,acyltransferase
-Chr1	TAIR8	gene	225665	227302	.	-	.	ID=AT1G01620;Name=AT1G01620;Note=PIP1C (PLASMA MEMBRANE INTRINSIC PROTEIN 1/3),water channel
-Chr1	TAIR8	gene	229013	230917	.	+	.	ID=AT1G01630;Name=AT1G01630;Note=SEC14 cytosolic factor,putative,phosphoglyceride transfer protein,putative
-Chr1	TAIR8	gene	230994	232508	.	-	.	ID=AT1G01640;Name=AT1G01640;Note=speckle-type POZ protein-related
-Chr1	TAIR8	gene	232841	237817	.	-	.	ID=AT1G01650;Name=AT1G01650;Note=peptidase
-Chr1	TAIR8	gene	240057	242608	.	-	.	ID=AT1G01660;Name=AT1G01660;Note=U-box domain-containing protein
-Chr1	TAIR8	gene	242843	245988	.	-	.	ID=AT1G01670;Name=AT1G01670;Note=U-box domain-containing protein
-Chr1	TAIR8	gene	246411	248367	.	-	.	ID=AT1G01680;Name=AT1G01680;Note=U-box domain-containing protein
-Chr1	TAIR8	gene	249141	252462	.	+	.	ID=AT1G01690;Name=AT1G01690
-Chr1	TAIR8	gene	252947	254495	.	+	.	ID=AT1G01695;Name=AT1G01695
-Chr1	TAIR8	gene	259495	261474	.	-	.	ID=AT1G01700;Name=AT1G01700;Note=ATROPGEF2/ROPGEF2 (KINASE PARTNER PROTEIN-LIKE),Rho guanyl-nucleotide exchange factor/,protein binding
-Chr1	TAIR8	gene	262828	267771	.	+	.	ID=AT1G01710;Name=AT1G01710;Note=acyl-CoA thioesterase family protein
-Chr1	TAIR8	gene	268330	269819	.	+	.	ID=AT1G01720;Name=AT1G01720;Note=ATAF1 (Arabidopsis NAC domain containing protein 2),transcription factor
-Chr1	TAIR8	gene	269792	270775	.	-	.	ID=AT1G01725;Name=AT1G01725
-Chr1	TAIR8	gene	270956	272061	.	+	.	ID=AT1G01730;Name=AT1G01730
-Chr1	TAIR8	gene	272111	274239	.	-	.	ID=AT1G01740;Name=AT1G01740;Note=protein kinase family protein
-Chr1	TAIR8	gene	275366	276310	.	+	.	ID=AT1G01750;Name=AT1G01750;Note=actin-depolymerizing factor,putative
-Chr1	TAIR8	gene	276266	278448	.	-	.	ID=AT1G01760;Name=AT1G01760;Note=RNA binding,adenosine deaminase
-Chr1	TAIR8	gene	278615	282891	.	+	.	ID=AT1G01770;Name=AT1G01770
-Chr1	TAIR8	gene	282761	284245	.	+	.	ID=AT1G01780;Name=AT1G01780;Note=LIM domain-containing protein
-Chr1	TAIR8	gene	284781	291094	.	+	.	ID=AT1G01790;Name=AT1G01790;Note=KEA1 (K EFFLUX ANTIPORTER 1),potassium:hydrogen antiporter
-Chr1	TAIR8	gene	293342	295040	.	+	.	ID=AT1G01800;Name=AT1G01800;Note=short-chain dehydrogenase/reductase (SDR) family protein
-Chr1	TAIR8	gene	295221	295859	.	+	.	ID=AT1G01810;Name=AT1G01810;Note=unknown protein
-Chr1	TAIR8	gene	296001	298120	.	-	.	ID=AT1G01820;Name=AT1G01820;Note=PEX11C
-Chr1	TAIR8	gene	298535	302315	.	-	.	ID=AT1G01830;Name=AT1G01830;Note=armadillo/beta-catenin repeat family protein
-Chr1	TAIR8	gene	303537	304358	.	+	.	ID=AT1G01840;Name=AT1G01840
-Chr1	TAIR8	gene	304133	306287	.	-	.	ID=AT1G01860;Name=AT1G01860;Note=PFC1 (PALEFACE 1)
-Chr1	TAIR8	gene	306384	306456	.	+	.	ID=AT1G01870;Name=AT1G01870;Note=pre-tRNA
-Chr1	TAIR8	gene	306558	308991	.	-	.	ID=AT1G01880;Name=AT1G01880;Note=DNA repair protein,putative
-Chr1	TAIR8	gene	309275	309347	.	-	.	ID=AT1G01890;Name=AT1G01890;Note=pre-tRNA
-Chr1	TAIR8	gene	310316	313130	.	+	.	ID=AT1G01900;Name=AT1G01900;Note=ATSBT1.1,subtilase
-Chr1	TAIR8	gene	313101	315902	.	-	.	ID=AT1G01910;Name=AT1G01910;Note=anion-transporting ATPase,putative
-Chr1	TAIR8	gene	316128	319650	.	+	.	ID=AT1G01920;Name=AT1G01920;Note=SET domain-containing protein
+Chr2	TAIR8	gene	166589	167842	.	-	.	ID=AT1G01453;Name=AT1G01453
+Chr2	TAIR8	gene	168723	171165	.	+	.	ID=AT1G01460;Name=AT1G01460;Note=ATPIPK11,1-phosphatidylinositol-4-phosphate 5-kinase
+Chr2	TAIR8	gene	172146	172948	.	-	.	ID=AT1G01470;Name=AT1G01470;Note=LEA14 (LATE EMBRYOGENESIS ABUNDANT 14)
+Chr2	TAIR8	gene	173251	173466	.	+	.	ID=AT1G01471;Name=AT1G01471;Note=unknown protein
+Chr2	TAIR8	gene	175782	178400	.	+	.	ID=AT1G01480;Name=AT1G01480;Note=ACS2 (1-Amino-cyclopropane-1-carboxylate synthase 2)
+Chr2	TAIR8	gene	180059	182358	.	-	.	ID=AT1G01490;Name=AT1G01490;Note=heavy-metal-associated domain-containing protein
+Chr2	TAIR8	gene	185133	186923	.	+	.	ID=AT1G01500;Name=AT1G01500
+Chr2	TAIR8	gene	187211	190056	.	+	.	ID=AT1G01510;Name=AT1G01510;Note=AN (ANGUSTIFOLIA)
+Chr2	TAIR8	gene	190596	192139	.	+	.	ID=AT1G01520;Name=AT1G01520;Note=myb family transcription factor
+Chr2	TAIR8	gene	192640	193670	.	-	.	ID=AT1G01530;Name=AT1G01530;Note=AGL28 (AGAMOUS-LIKE 28),DNA binding,transcription factor
+Chr2	TAIR8	gene	195780	198684	.	+	.	ID=AT1G01540;Name=AT1G01540;Note=protein kinase family protein
+Chr2	TAIR8	gene	199639	201775	.	+	.	ID=AT1G01550;Name=AT1G01550;Note=BPS1 (BYPASS 1)
+Chr2	TAIR8	gene	202136	204335	.	+	.	ID=AT1G01560;Name=AT1G01560;Note=ATMPK11 (Arabidopsis thaliana MAP kinase 11),MAP kinase,kinase
+Chr2	TAIR8	gene	205176	207435	.	+	.	ID=AT1G01570;Name=AT1G01570;Note=fringe-related protein
+Chr2	TAIR8	gene	209395	213041	.	+	.	ID=AT1G01580;Name=AT1G01580;Note=FRO2 (FERRIC REDUCTION OXIDASE 2),ferric-chelate reductase
+Chr2	TAIR8	gene	214229	217304	.	+	.	ID=AT1G01590;Name=AT1G01590;Note=FRO1 (FERRIC REDUCTION OXIDASE 1),ferric-chelate reductase
+Chr2	TAIR8	gene	218994	221286	.	+	.	ID=AT1G01600;Name=AT1G01600;Note=CYP86A4 (cytochrome P450,family 86,subfamily A,polypeptide 4),oxygen binding
+Chr2	TAIR8	gene	221691	224340	.	-	.	ID=AT1G01610;Name=AT1G01610;Note=ATGPAT4/GPAT4 (GLYCEROL-3-PHOSPHATE ACYLTRANSFERASE 4),1-acylglycerol-3-phosphate O-acyltransferase,acyltransferase
+Chr2	TAIR8	gene	225665	227302	.	-	.	ID=AT1G01620;Name=AT1G01620;Note=PIP1C (PLASMA MEMBRANE INTRINSIC PROTEIN 1/3),water channel
+Chr2	TAIR8	gene	229013	230917	.	+	.	ID=AT1G01630;Name=AT1G01630;Note=SEC14 cytosolic factor,putative,phosphoglyceride transfer protein,putative
+Chr2	TAIR8	gene	230994	232508	.	-	.	ID=AT1G01640;Name=AT1G01640;Note=speckle-type POZ protein-related
+Chr2	TAIR8	gene	232841	237817	.	-	.	ID=AT1G01650;Name=AT1G01650;Note=peptidase
+Chr2	TAIR8	gene	240057	242608	.	-	.	ID=AT1G01660;Name=AT1G01660;Note=U-box domain-containing protein
+Chr2	TAIR8	gene	242843	245988	.	-	.	ID=AT1G01670;Name=AT1G01670;Note=U-box domain-containing protein
+Chr2	TAIR8	gene	246411	248367	.	-	.	ID=AT1G01680;Name=AT1G01680;Note=U-box domain-containing protein
+Chr2	TAIR8	gene	249141	252462	.	+	.	ID=AT1G01690;Name=AT1G01690
+Chr2	TAIR8	gene	252947	254495	.	+	.	ID=AT1G01695;Name=AT1G01695
+Chr2	TAIR8	gene	259495	261474	.	-	.	ID=AT1G01700;Name=AT1G01700;Note=ATROPGEF2/ROPGEF2 (KINASE PARTNER PROTEIN-LIKE),Rho guanyl-nucleotide exchange factor/,protein binding
+Chr2	TAIR8	gene	262828	267771	.	+	.	ID=AT1G01710;Name=AT1G01710;Note=acyl-CoA thioesterase family protein
+Chr2	TAIR8	gene	268330	269819	.	+	.	ID=AT1G01720;Name=AT1G01720;Note=ATAF1 (Arabidopsis NAC domain containing protein 2),transcription factor
+Chr2	TAIR8	gene	269792	270775	.	-	.	ID=AT1G01725;Name=AT1G01725
+Chr2	TAIR8	gene	270956	272061	.	+	.	ID=AT1G01730;Name=AT1G01730
+Chr2	TAIR8	gene	272111	274239	.	-	.	ID=AT1G01740;Name=AT1G01740;Note=protein kinase family protein
+Chr2	TAIR8	gene	275366	276310	.	+	.	ID=AT1G01750;Name=AT1G01750;Note=actin-depolymerizing factor,putative
+Chr2	TAIR8	gene	276266	278448	.	-	.	ID=AT1G01760;Name=AT1G01760;Note=RNA binding,adenosine deaminase
+Chr2	TAIR8	gene	278615	282891	.	+	.	ID=AT1G01770;Name=AT1G01770
+Chr2	TAIR8	gene	282761	284245	.	+	.	ID=AT1G01780;Name=AT1G01780;Note=LIM domain-containing protein
+Chr2	TAIR8	gene	284781	291094	.	+	.	ID=AT1G01790;Name=AT1G01790;Note=KEA1 (K EFFLUX ANTIPORTER 1),potassium:hydrogen antiporter
+Chr2	TAIR8	gene	293342	295040	.	+	.	ID=AT1G01800;Name=AT1G01800;Note=short-chain dehydrogenase/reductase (SDR) family protein
+Chr2	TAIR8	gene	295221	295859	.	+	.	ID=AT1G01810;Name=AT1G01810;Note=unknown protein
+Chr2	TAIR8	gene	296001	298120	.	-	.	ID=AT1G01820;Name=AT1G01820;Note=PEX11C
+Chr2	TAIR8	gene	298535	302315	.	-	.	ID=AT1G01830;Name=AT1G01830;Note=armadillo/beta-catenin repeat family protein
+Chr2	TAIR8	gene	303537	304358	.	+	.	ID=AT1G01840;Name=AT1G01840
+Chr2	TAIR8	gene	304133	306287	.	-	.	ID=AT1G01860;Name=AT1G01860;Note=PFC1 (PALEFACE 1)
+Chr2	TAIR8	gene	306384	306456	.	+	.	ID=AT1G01870;Name=AT1G01870;Note=pre-tRNA
+Chr2	TAIR8	gene	306558	308991	.	-	.	ID=AT1G01880;Name=AT1G01880;Note=DNA repair protein,putative
+Chr2	TAIR8	gene	309275	309347	.	-	.	ID=AT1G01890;Name=AT1G01890;Note=pre-tRNA
+Chr2	TAIR8	gene	310316	313130	.	+	.	ID=AT1G01900;Name=AT1G01900;Note=ATSBT1.1,subtilase
+Chr2	TAIR8	gene	313101	315902	.	-	.	ID=AT1G01910;Name=AT1G01910;Note=anion-transporting ATPase,putative
+Chr2	TAIR8	gene	316128	319650	.	+	.	ID=AT1G01920;Name=AT1G01920;Note=SET domain-containing protein
