@@ -6,7 +6,7 @@ use Data::Dumper;
 use feature 'say';
 use Carp;
 use DBI;
-use DZLab::Tools::GFF qw/parse_attributes/;
+use DZLab::Tools::GFF qw/parse_gff parse_attributes/;
 
 my @default_cols     = qw/sequence source feature start   end     score strand frame   attribute/;
 my @default_coltypes = qw/text     text   text    numeric numeric real  text   numeric text/;
@@ -96,17 +96,10 @@ sub slurp{
     my $counter = 0;
     while (my $line = <$fh>){
         chomp $line;
-        $line =~ s/[\n\r]//g;
+        my $parsed = parse_gff($line,@{$self->{attributes}});
+        next unless $parsed;
 
-        my @arr = split /\t/, $line;
-
-        # map missing columns "." to undef
-        @arr = map { $_ eq q{.} ? undef : $_} @arr; # 
-
-        next unless @arr == 9;
-        my @attrvals = parse_attributes($arr[8],@{$self->{attributes}});
-
-        $insert_sth->execute(@arr,@attrvals) ;
+        $insert_sth->execute(@$parsed);
         if ($counter++ % $self->{counter} == 0){
             say "Read " . ($counter-1) if $self->{verbose};
             $dbh->commit;
@@ -145,16 +138,6 @@ sub make_iterator_arrayref{
         return $select->fetchrow_arrayref();
     };
 }
-
-#sub make_iterator{
-#    my $self = shift;
-#    my $dbh = $self->{dbh};
-#    my $select = $dbh->prepare("select * from gff");
-#    $select->execute();
-#    return sub{
-#        return $select->fetchrow_hashref();
-#    };
-#}
 
 sub make_iterator{
     my $self = shift;

@@ -35,7 +35,7 @@ require Exporter;
 
 our @ISA       = qw/Exporter/;
 our @EXPORT    = qw/gff_read gff_make_iterator gff_validate gff_slurp_by_seq
-                    gff_to_string parse_attributes/;
+                    gff_to_string parse_gff parse_attributes/;
 our @EXPORT_OK = qw//;
 
 
@@ -69,6 +69,30 @@ sub parse_attributes{
     return @accum{@_};
 }
 
+=head2 parse_gff $gffline $attribute1 $attribute2 ...
+
+returns arrayref [col1, .. col9, attr1, attr2, ...]
+
+maps '.' dot columns and non-existenct attributes to undef
+
+=cut
+
+sub parse_gff{
+    my $line = shift || croak "need a line" ;
+
+    $line =~ s/[\n\r]//g;
+
+    my @arr = split /\t/, $line;
+
+    # map missing columns "." to undef
+    @arr = map { $_ eq q{.} ? undef : $_} @arr; 
+
+    return unless @arr == 9;
+
+    my @attrvals = parse_attributes($arr[8],@_);
+
+    return [@arr,@attrvals];
+}
 
 =head2 gff_read $string
 
