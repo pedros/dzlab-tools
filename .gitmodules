@@ -1,6 +1,6 @@
 [submodule "DZLab-Tools"]
 	path = DZLab-Tools
-	url = ssh://git@dzlab.pmb.berkeley.edu/DZLab-Tools.git
+	url = git://dzlab.pmb.berkeley.edu/DZLab-Tools.git
 [submodule "System-Wrapper"]
 	path = System-Wrapper
-	url = ssh://git@dzlab.pmb.berkeley.edu/System-Wrapper.git
+	url = git://dzlab.pmb.berkeley.edu/System-Wrapper.git
