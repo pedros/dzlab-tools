@@ -225,7 +225,7 @@ sub dump{
 
 sub DESTROY{
     my $self = shift;
-    close $self->{dbh};
+    $self->{dbh}->disconnect;
 }
 
 1;
