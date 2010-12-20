@@ -213,10 +213,25 @@ for my $context (0 .. @contexts - 1) {
 ### DONE
 
 
+sub _error {
+    my ($e) = @_;
+
+    if ($e == -1) {
+        return "failed to execute: $!\n";
+    }
+    elsif ($e & 127) {
+        return sprintf "child died with signal %d, %s coredump\n",
+        ($e & 127),  ($e & 128) ? 'with' : 'without';
+    }
+    else {
+        return sprintf "child exited with value %d\n", $e >> 8;
+    }
+}
+
 sub run_cmd {
     my ($cmd) = @_;
     warn "-- CMD: $cmd\n";
-    eval {system ("$cmd")};
+    eval {system ("$cmd") == 0 or croak _error( $? )};
     croak "** failed to run command '$cmd': $@" if $@;
 }
 
