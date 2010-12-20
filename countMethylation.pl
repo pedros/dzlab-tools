@@ -177,21 +177,8 @@ while (<$GFF>) { ### Indexing...
     # assumes sequence is in the 'attribute' field, separated from extraneous information by a '='
     my @unmethylated = split(//, (split "=", $record{'attribute'})[1]);
 
-    #HWI-EAS105:2:1:8:808#0/1        +       chr5    10541462        GTTTTGATATTTAAAGTGAGTGGTGTNATATTAAGAAGAAGNATA   IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII   0       26:A>N,41:G>N
-    #chr5    U/U     HWI-EAS105:2:1:8:808#0/1:GTTTTGATATTTAAAGTGAGTGGTGTNATATTAAGAAGAAGNATA  10541462        10541506        1       +       2       target=CAGTCTCGATACCCAAAGTGAGTGGCGCAACATCAAGAAGAAGGATATC
-    #chr3    U/NM    HWI-EAS172_628AB:4:1:1039:4511:CTTTATTCTTTTTTCTTATGTTGGTTTTGTCGTTTTTAAATGTTT  13719468        13719512        1       -       2       target=AAATCTATTCTTCTTCCTTATGTTGGTTTTGCCGTCTTCAAATGTACTC
-
     # check for overlapping pairs of reads
-    my ($pair_id, $read_id) = $record{feature} =~ m{(^.+:.+:.+):(.+)?:\w+}; 
-
-    if ($read_id =~ m{/[12]$}) { 
- 	    $read_id = $1 
- 	} 
- 	else { 
- 	    $pair_id .= ":$read_id"; 
-        $read_id = 1; 
-    } 
-
+    my ($pair_id, $read_id) = $record{'feature'} =~ m/(^.*?)\/([12]):[ACGTN]+/;
     my $overlap = 0; # array reference with overlap start coord, end coord
 
     # if matching pair has not been seen, create a new entry for this pair in buffer
@@ -277,15 +264,15 @@ while (<$GFF>) { ### Indexing...
 	# we're looking 2 characters before in the scaffold because it has 2 extra chars in the beginning
 	# AND we're looking in the reverse strand, so the context goes right-to-left
 	elsif ( $unmethylated[$j + 2] =~ m/[Gg]/
-            and $read_id == 2) {
-            
-        # checks what happened in the methylated sequence
+                and $record{'feature'} =~ m/\/2:[ACGTN]+/) {
+
+            # checks what happened in the methylated sequence
 	    # and updates the appropriate 'c' or 't' count
 	    if ( $methylated[$j] =~ m/[Gg]/ ) {
-    		$HoH{$coord}[0]++; # c_count
+		$HoH{$coord}[0]++; # c_count
 	    }
 	    elsif ( $methylated[$j] =~ m/[Aa]/ ) {
-    		$HoH{$coord}[1]++; # t_count
+		$HoH{$coord}[1]++; # t_count
 	    }
 
 	    # checks the context by looking behind +1 or +0..+1 bps
@@ -294,10 +281,10 @@ while (<$GFF>) { ### Indexing...
                 $HoH{$coord}[2]++; # cg_count
 	    }
 	    elsif ( join("", @unmethylated[ $j..($j + 1) ] ) =~ m/[Cc][^Cc]/ ) {
-    		$HoH{$coord}[3]++; # chg_count
+		$HoH{$coord}[3]++; # chg_count
 	    }
 	    elsif ( join("", @unmethylated[ $j..($j + 1) ] ) =~ m/[^Cc][^Cc]/ ) {
-    		$HoH{$coord}[4]++; # chh_count
+		$HoH{$coord}[4]++; # chh_count
 	    }
 
             if ($di_nucleotide_count) {
