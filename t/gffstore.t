@@ -5,12 +5,15 @@ use Data::Dumper;
 use feature 'say';
 
 use Test::More qw(no_plan);
+
+use FindBin;
+use lib "$FindBin::Bin/../lib";
 use DZLab::Tools::GFFStore;
 
 my $gffstore = DZLab::Tools::GFFStore->new({
         attributes => {ID => 'text', Note => 'text'}, 
         verbose => 1, 
-        debug => 0,
+        debug => 1,
         indices => [['start','end']],
         handle => \*DATA,
         #filename => 'work2.gff'
@@ -21,10 +24,10 @@ is($gffstore->count(),100,"Correct count");
 # contraints testing
 
 my $results;
-$results = $gffstore->query({sequence => 'Chr1'});
+$results = $gffstore->query({seqname => 'chr1'});
 is(scalar @$results, 50, 'make iterator with contraints');
 
-$results = $gffstore->query({sequence => 'Chr2'});
+$results = $gffstore->query({seqname => 'chr2'});
 is(scalar @$results, 50, 'make iterator with contraints');
 
 $results = $gffstore->query({start => 3631});

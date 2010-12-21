@@ -6,10 +6,10 @@ use Data::Dumper;
 use feature 'say';
 use Carp;
 use DBI;
-use DZLab::Tools::GFF qw/parse_gff parse_attributes/;
+use DZLab::Tools::GFF qw/parse_gff_arrayref/;
 
-my @default_cols     = qw/sequence source feature start   end     score strand frame   attribute/;
-my @default_coltypes = qw/text     text   text    numeric numeric real  text   numeric text/;
+my @default_cols     = qw/seqname source feature start   end     score strand frame   attribute/;
+my @default_coltypes = qw/text    text   text    numeric numeric real  text   numeric text/;
 
 sub new {
     my $class = shift;
@@ -96,7 +96,7 @@ sub slurp{
     my $counter = 0;
     while (my $line = <$fh>){
         chomp $line;
-        my $parsed = parse_gff($line,@{$self->{attributes}});
+        my $parsed = parse_gff_arrayref($line,@{$self->{attributes}});
         next unless $parsed;
 
         $insert_sth->execute(@$parsed);
@@ -158,7 +158,7 @@ sub make_iterator{
     my $where_clause = @where ? ("where " . join " and ", @where) : "";
 
     my $select_stmt = "select * from gff $where_clause";
-    say $select_stmt;
+    say $select_stmt if $self->{debug};
 
     my $dbh = $self->{dbh};
     my $sth = $dbh->prepare($select_stmt);
