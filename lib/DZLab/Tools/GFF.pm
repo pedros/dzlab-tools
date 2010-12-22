@@ -53,21 +53,22 @@ my $attributes_regex = qr/
 
 returns arrayref [col1, .. col9, attr1, attr2, ...] 
 maps '.' dot columns and non-existenct attributes to undef.
-returns undef on comment/pragma lines and unparsable lines.
+returns false on comment/pragma lines and unparsable lines.
+Check that ref $result eq 'ARRAY'
 
 =cut
 
 sub parse_gff_arrayref{
-    my $line = shift || return;
+    my $line = shift || return 0;
     $line =~ s/[\n\r]//g;
 
-    return if $line =~ /^\s*#/; # comments/pragmas ignored in this version
+    return 0 if $line =~ /^\s*#/; # comments/pragmas ignored in this version
 
     # split, map missing columns "." to undef
     my @arr = map { $_ eq q{.} ? undef : $_} split /\t/, $line;
     $arr[0] = lc $arr[0];
 
-    return unless @arr == 9;
+    (carp "unparseable GFF line" && return 0) unless @arr == 9;
 
     my %accum = map { defined $_ ? $_ : 'Note' } ($arr[8] =~ m/$attributes_regex/g);
 
@@ -78,23 +79,24 @@ sub parse_gff_arrayref{
 
 parse gff into a hashref with all attributes. attributes are returned the same level,
 not in a sub hash.  maps '.' dot columns and non-existenct attributes to undef
-returns undef on non-parseable lines or comments. *Returns pragmas as strings*.
+returns 0 on non-parseable lines or comments. *Returns pragmas as strings*.
+Check that ref $result eq 'HASH'
 
 =cut
 
 sub parse_gff_hashref{
-    my $line = shift || return;
+    my $line = shift || return 0;
     $line =~ s/[\n\r]//g;
 
     if ($line =~ m/^\s*##(.*)/){
         return $1;
     }
-    return if $line =~ m/^\s*#/;
+    return 0 if $line =~ m/^\s*#/;
 
     # split, map missing columns "." to undef
     my @arr = map { $_ eq q{.} ? undef : $_} split /\t/, $line;
 
-    return unless @arr == 9;
+    (carp "unparseable GFF line" && return 0) unless @arr == 9;
 
     my %accum = map { defined $_ ? $_ : 'Note' } ($arr[8] =~ m/$attributes_regex/g);
 
@@ -191,7 +193,8 @@ sub gff_read {
 
 =head2 gff_make_iterator %options
 
-Returns an anonymous function that on, each call, reads one gff line from a $file or $handle, and returns a parsed structure as delivered by $parser.
+Returns an anonymous function that on, each call, reads one gff line from a $file or $handle, and returns a parsed
+structure as delivered by $parser.
 
 Returns undef or empty list on EOF.
 
