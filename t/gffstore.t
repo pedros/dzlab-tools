@@ -48,6 +48,10 @@ is(scalar @$results, 100, 'make iterator with contraints');
 $results = $gffstore->query({start => 31170, frame => undef});
 is(scalar @$results, 1, 'make iterator with contraints');
 
+# count 
+
+is_deeply([$gffstore->sequences],['chr1','chr2'],"correct number of distinct sequences");
+
 __DATA__
 Chr1	TAIR8	gene	3631	5899	.	+	.	ID=AT1G01010;Name=AT1G01010;Note=ANAC001 (Arabidopsis NAC domain containing protein 1),transcription factor
 Chr1	TAIR8	gene	6790	8737	.	-	.	ID=AT1G01020;Name=AT1G01020;Note=ARV1

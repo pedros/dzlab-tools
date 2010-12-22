@@ -213,6 +213,20 @@ sub make_iterator_overlappers{
     };
 }
 
+=head2 $gffstore->sequences
+
+return distinct elements from the seqname column
+
+=cut
+
+sub sequences{
+    my $self = shift;
+    my $dbh = $self->{dbh};
+    my $results = $dbh->selectall_arrayref("select distinct seqname from gff");
+
+    return map { $_->[0] } @$results;
+}
+
 sub dump{
     my $self = shift;
     my $dbh = $self->{dbh};
