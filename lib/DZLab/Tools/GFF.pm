@@ -280,9 +280,17 @@ return a gffrec back in original text format
 
 
 sub gff_to_string{
-    my $gff = shift || return; 
-    return join "\t",@{$gff}{'seqname', 'source', 'feature', 'start', 'end',
-        'score',   'strand', 'frame',   'attribute'};
+    my $gff = shift || (croak "gff_to_string needs an argument??"); 
+    if (ref $gff eq 'HASH'){
+        return join "\t",@{$gff}{'seqname', 'source', 'feature', 'start', 'end',
+            'score',   'strand', 'frame',   'attribute'};
+    } 
+    elsif (ref $gff eq 'ARRAY'){
+        return join "\t",@{$gff}[0..8];
+    }
+    else {
+        croak "non-gff record given to gff_to_string";
+    }
 }
 
 1;
