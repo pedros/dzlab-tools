@@ -41,7 +41,7 @@ our @EXPORT_OK = qw//;
 # regular expression for "Attributes=Strings;Like=this"
 my $attributes_regex = qr/
             (?:
-            \s*?([^=;]+)\s*?  # key, which may not be there
+            \s*([^=;]+)\s*  # key, which may not be there
             =
             )?
             \s*?([^=;]+)\s*?  # value
