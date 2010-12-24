@@ -16,9 +16,8 @@ sub new {
     my $opt = shift;
     my $self = {};
 
+    $self->{dbname}      = $opt->{dbname}     || ':memory:';
     $self->{attributes}  = [];
-    $self->{filename}    = $opt->{filename}   || undef;
-    $self->{handle}      = $opt->{handle}   || undef;
     $self->{indices}     = $opt->{indices}    || [];
     $self->{debug}       = $opt->{debug}      || 0;
     $self->{verbose}     = $opt->{verbose}    || 0;
@@ -26,7 +25,6 @@ sub new {
     $self->{columntypes} = [@default_coltypes];
     $self->{counter}     = 10000;
 
-    unless ($self->{handle} xor $self->{filename}) {croak "Need handle or a filename"};
 
     while (my ($col,$coltype) = each %{$opt->{attributes}}) {
         push @{$self->{attributes}}, $col;
@@ -38,7 +36,7 @@ sub new {
 
     my $blessed = bless $self, $class;
 
-    $blessed->slurp();
+    #$blessed->slurp();
 
     return $blessed;
 }
@@ -48,6 +46,7 @@ sub insert_statement{
     my $placeholders = join (q{,}, map {'?'} (0 .. $self->{numcol} - 1));
     return "insert into gff ($colcomma) values ($placeholders)";
 }
+
 sub create_table_statement{
     my $self = shift;
     return "create table gff (" . 
@@ -70,13 +69,19 @@ sub create_index_statements{
 
 sub slurp{
     my $self = shift;
+    my $opt = shift;
 
-    my $dbname = $self->{debug} ? 'debug.db' : ':memory:';
-    unlink 'debug.db' if $self->{debug};
+    my $filename = $opt->{filename}  || undef;
+    my $handle   = $opt->{handle}    || undef;
+    my $append   = $opt->{append} || undef;
+    unless ($filename xor $handle) {croak "Need handle or a filename"};
+
+    my $dbname = $self->{dbname};
+    unlink $dbname if (!$self->{append} && $dbname ne ':memory:');
 
     # create database
-    my $dbh = $self->{dbh} = DBI->connect("dbi:SQLite:dbname=$dbname","","");
-    $dbh->{RaiseError} = 1;
+    my $dbh = $self->{dbh} = DBI->connect("dbi:SQLite:dbname=$dbname","","",
+        {RaiseError => 1, AutoCommit => 1});
     $dbh->do("PRAGMA automatic_index = OFF");
     $dbh->do("PRAGMA journal_mode = OFF");
     $dbh->do($self->create_table_statement());
@@ -87,11 +92,11 @@ sub slurp{
     $dbh->{AutoCommit} = 0;
 
     my $fh;
-    if ($self->{filename}){
-        say "opening $self->{filename}" if $self->{verbose};
-        open $fh, '<', $self->{filename} or croak "can't open $self->{filename}";
+    if ($filename){
+        say "opening $filename" if $self->{verbose};
+        open $fh, '<', $filename or croak "can't open $filename";
     } else{
-        $fh = $self->{handle};
+        $fh = $handle;
     }
     my $counter = 0;
     while (my $line = <$fh>){
@@ -107,17 +112,21 @@ sub slurp{
     }
     $dbh->commit;
     $dbh->{AutoCommit} = 1;
+    if ($filename){
+        close $fh;
+    }
+}
 
+sub create_indices{
+    my $self = shift;
+    my $dbh  = $self->{dbh};
     say "creating indices (if any)" if $self->{verbose};
     for my $index_statement ($self->create_index_statements()){
         say $index_statement if $self->{verbose};
         $dbh->do($index_statement);
     }
-    
-    if ($self->{filename}){
-        close $fh;
-    }
 }
+    
 
 ##########################################################
 # Accessors
@@ -129,15 +138,32 @@ sub count{
     return $r[0];
 }
 
-sub make_iterator_arrayref{
-    my $self = shift;
-    my $dbh = $self->{dbh};
-    my $select = $dbh->prepare("select * from gff");
-    $select->execute();
-    return sub{
-        return $select->fetchrow_arrayref();
-    };
+=head2 select_iter
+
+Run raw select statement against db, return an arrayref iterator
+
+=cut
+
+sub select_iter{
+    croak("not yet implemented");
 }
+
+=head2 select
+
+Run raw select statement against db, return an arrayref of arrayrefs
+
+=cut
+
+sub select{
+    croak("not yet implemented");
+}
+
+=head2 make_iterator {column1 => value1, column2 => value2, ...}
+
+return an iterator which, for every call, returns a hashref of a row matching the given 
+equality constraints.
+
+=cut
 
 sub make_iterator{
     my $self = shift;
@@ -168,6 +194,12 @@ sub make_iterator{
     };
 }
 
+=head2 query {column1 => value1, column2 => value2, ...}
+
+like make_iterator, except slurps up entire row set and returns arrayref
+
+=cut
+
 sub query{
     my $self = shift;
     my $constraints = shift;
@@ -177,6 +209,21 @@ sub query{
         push @accum,$row;
     }
     return \@accum;
+}
+
+=head2 exists {column1 => value1, column2 => value2, ...}
+
+=cut
+
+sub exists{
+    my $self = shift;
+    my $constraints = shift;
+    my $iter = $self->make_iterator($constraints);
+    my @accum;
+    if (my $row = $iter->()){
+        return 1;
+    }
+    return 0;
 }
 
 =head2 make_iterator_overlappers [[$start1, $end1], [start2, $end2], ...]

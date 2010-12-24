@@ -15,9 +15,11 @@ my $gffstore = DZLab::Tools::GFFStore->new({
         verbose => 1, 
         debug => 1,
         indices => [['start','end']],
-        handle => \*DATA,
+        #handle => \*DATA,
         #filename => 'work2.gff'
     });
+
+$gffstore->slurp({handle => \*DATA});
 
 is($gffstore->count(),100,"Correct count");
 
