@@ -140,22 +140,37 @@ sub count{
 
 =head2 select_iter
 
-Run raw select statement against db, return an arrayref iterator
+Run raw select statement against db, return an hashref iterator
 
 =cut
 
 sub select_iter{
-    croak("not yet implemented");
+    my $self = shift;
+    my $stmt = shift;
+    my $dbh = $self->{dbh};
+    my $sth = $dbh->prepare($stmt);
+    $sth->execute() or die "can't execute statement";
+    
+    return sub {
+        return $sth->fetchrow_hashref();
+    };
 }
 
 =head2 select
 
-Run raw select statement against db, return an arrayref of arrayrefs
+Run raw select statement against db, return an arrayref of hashrefs
 
 =cut
 
 sub select{
-    croak("not yet implemented");
+    my $self = shift;
+    my $stmt = shift;
+    my $iter = $self->select_iter($stmt);
+    my @accum;
+    while (my $row = $iter->()){
+        push @accum,$row;
+    }
+    return \@accum;
 }
 
 =head2 make_iterator {column1 => value1, column2 => value2, ...}

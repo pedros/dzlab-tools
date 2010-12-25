@@ -54,6 +54,18 @@ is(scalar @$results, 1, 'make iterator with contraints');
 
 is_deeply([$gffstore->sequences],['chr1','chr2'],"correct number of distinct sequences");
 
+# select
+
+is_deeply([ {
+    'count' => '53',
+    'strand' => '+'
+}, {
+    'count' => '47',
+    'strand' => '-'
+} ], 
+$gffstore->select('select count(strand) as count, strand from gff group by strand'), "\$gffstore->select");
+
+
 __DATA__
 Chr1	TAIR8	gene	3631	5899	.	+	.	ID=AT1G01010;Name=AT1G01010;Note=ANAC001 (Arabidopsis NAC domain containing protein 1),transcription factor
 Chr1	TAIR8	gene	6790	8737	.	-	.	ID=AT1G01020;Name=AT1G01020;Note=ARV1
