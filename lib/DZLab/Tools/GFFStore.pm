@@ -6,6 +6,7 @@ use Data::Dumper;
 use feature 'say';
 use Carp;
 use DBI;
+use File::Temp qw/tempfile unlink0/;
 use DZLab::Tools::GFF qw/parse_gff_arrayref gff_to_string/;
 
 my @default_cols     = qw/seqname source feature start   end     score strand frame   attribute/;
@@ -14,31 +15,71 @@ my @default_coltypes = qw/text    text   text    numeric numeric real  text   nu
 sub new {
     my $class = shift;
     my $opt = shift;
-    my $self = {};
+    #my $self = {};
+    #my $blessed = bless $self, $class;
+    my $self = bless {}, $class;
 
-    $self->{dbname}      = $opt->{dbname}     || ':memory:';
+    # the three possible sqlite storage options. default to temp file since the 
+    # operations seem to be cpu bound more than IO bound. may change after benchmarking.
+    $self->{dbname}      = $opt->{dbname}     || 0;
+    $self->{memory}      = $opt->{memory}     || 0;
+    $self->{tmp}         = $opt->{tmp}        || 0;
+    if (!$self->{dbname} && ! $self->{memory} && ! $self->{tmp}){
+        $self->{tmp} = 1;
+    }
+
+    # only for dbname option: if existing db should be overwritten.
+    # default to yes since can't imagine reusing db's (yet)
+    $self->{overwrite}   = $opt->{overwrite}     || 1;
+
+    # attributes and indices
     $self->{attributes}  = [];
     $self->{indices}     = $opt->{indices}    || [];
-    $self->{debug}       = $opt->{debug}      || 0;
-    $self->{verbose}     = $opt->{verbose}    || 0;
     $self->{columns}     = [@default_cols];
     $self->{columntypes} = [@default_coltypes];
+
+    # other 
+    $self->{debug}       = $opt->{debug}      || 0;
+    $self->{verbose}     = $opt->{verbose}    || 0;
     $self->{counter}     = 10000;
 
+    croak "dbname, memory, temp options are mutually exclusive"
+    unless ( $self->{dbname} xor $self->{memory} xor $self->{tmp});
 
+    # use the dbname attribute even for memory and tmp
+    if ($self->{dbname} && -e $self->{dbname} && $self->{overwrite}){ # overwrite?
+        unlink $self->{dbname};
+    }
+    elsif ($self->{memory}) {
+        $self->{dbname} = ':memory:';
+    } 
+    elsif ($self->{tmp}) {
+        ($self->{tmpfh}, $self->{dbname}) = tempfile();
+        if($self->{debug}){
+            say STDERR "tmpfile = $self->{dbname}";
+        }
+    }
+
+    # go through attributes and add them to @columns and @columntypes. 
+    # keeping their order is important b/c when inserting via param bind, 
+    # doesn't accepting hashes
     while (my ($col,$coltype) = each %{$opt->{attributes}}) {
         push @{$self->{attributes}}, $col;
         push @{$self->{columns}}, $col;
         push @{$self->{columntypes}}, $coltype;
     }
-
     $self->{numcol}      = scalar @{$self->{columns}};
 
-    my $blessed = bless $self, $class;
+    my $dbname = $self->{dbname};
 
-    #$blessed->slurp();
+    # create database
+    my $dbh = $self->{dbh} = DBI->connect("dbi:SQLite:dbname=$dbname","","",
+        {RaiseError => 1, AutoCommit => 1});
+    $dbh->do("PRAGMA automatic_index = OFF");
+    $dbh->do("PRAGMA journal_mode = OFF");
+    $dbh->do($self->create_table_statement());
 
-    return $blessed;
+    return $self;
 }
 sub insert_statement{
     my $self = shift;
@@ -49,7 +90,7 @@ sub insert_statement{
 
 sub create_table_statement{
     my $self = shift;
-    return "create table gff (" . 
+    return "create table if not exists gff (" . 
     join(',',
         map { $self->{columns}[$_] . " " .  $self->{columntypes}[$_]} (0 .. $self->{numcol}-1)
     ) 
@@ -73,20 +114,11 @@ sub slurp{
 
     my $filename = $opt->{filename}  || undef;
     my $handle   = $opt->{handle}    || undef;
-    my $append   = $opt->{append} || undef;
     unless ($filename xor $handle) {croak "Need handle or a filename"};
 
-    my $dbname = $self->{dbname};
-    unlink $dbname if (!$self->{append} && $dbname ne ':memory:');
+    my $dbh = $self->{dbh};
 
-    # create database
-    my $dbh = $self->{dbh} = DBI->connect("dbi:SQLite:dbname=$dbname","","",
-        {RaiseError => 1, AutoCommit => 1});
-    $dbh->do("PRAGMA automatic_index = OFF");
-    $dbh->do("PRAGMA journal_mode = OFF");
-    $dbh->do($self->create_table_statement());
-
-    #say $self->insert_statement();
+    say STDERR $self->insert_statement() if $self->{debug};
     my $insert_sth = $dbh->prepare($self->insert_statement());
 
     $dbh->{AutoCommit} = 0;
@@ -302,7 +334,46 @@ sub dump{
 sub DESTROY{
     my $self = shift;
     $self->{dbh}->disconnect;
+    
+    if ($self->{tmp}) {
+        unlink0($self->{tmpfh}, $self->{dbname});
+    }
 }
 
 1;
 
+
+=head1 NAME
+ 
+DZLab::Tools::GFFStore - DBI/DBD::SQLite backend for gff data
+ 
+=head1 VERSION
+ 
+This documentation refers to DZLab::Tools::GFFStore version 0.0.1
+ 
+=head1 SYNOPSIS
+ 
+    use DZLab::Tools::GFFStore;
+  
+=head1 DESCRIPTION
+ 
+<description>
+
+=head1 SUBROUTINES/METHODS 
+
+<exports>
+
+=over
+
+=item <func1>
+
+=back
+ 
+ 
+=head1 BUGS AND LIMITATIONS
+ 
+There are no known bugs in this module. 
+Please report problems to <Maintainer name(s)>  (<contact address>)
+Patches are welcome.
+
+=cut

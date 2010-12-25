@@ -12,11 +12,9 @@ use DZLab::Tools::GFFStore;
 
 my $gffstore = DZLab::Tools::GFFStore->new({
         attributes => {ID => 'text', Note => 'text'}, 
-        verbose => 1, 
-        debug => 1,
+        #verbose => 1, 
+        #debug => 1,
         indices => [['start','end']],
-        #handle => \*DATA,
-        #filename => 'work2.gff'
     });
 
 $gffstore->slurp({handle => \*DATA});
