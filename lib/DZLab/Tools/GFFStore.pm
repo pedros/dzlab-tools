@@ -106,7 +106,7 @@ sub slurp{
 
         $insert_sth->execute(@$parsed);
         if ($counter++ % $self->{counter} == 0){
-            say "Read " . ($counter-1) if $self->{verbose};
+            say STDERR "Reading "  . ($filename ? $filename : q{}) . ' ' . ($counter-1) if $self->{verbose};
             $dbh->commit;
         }
     }
@@ -120,9 +120,9 @@ sub slurp{
 sub create_indices{
     my $self = shift;
     my $dbh  = $self->{dbh};
-    say "creating indices (if any)" if $self->{verbose};
+    say STDERR "creating indices (if any)" if $self->{verbose};
     for my $index_statement ($self->create_index_statements()){
-        say $index_statement if $self->{verbose};
+        say STDERR $index_statement if $self->{verbose};
         $dbh->do($index_statement);
     }
 }
@@ -199,7 +199,7 @@ sub make_iterator{
     my $where_clause = @where ? ("where " . join " and ", @where) : "";
 
     my $select_stmt = "select * from gff $where_clause";
-    say $select_stmt if $self->{debug};
+    say STDERR $select_stmt if $self->{debug};
 
     my $dbh = $self->{dbh};
     my $sth = $dbh->prepare($select_stmt);
