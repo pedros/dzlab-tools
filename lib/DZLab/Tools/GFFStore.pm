@@ -93,7 +93,7 @@ sub slurp{
 
     my $fh;
     if ($filename){
-        say "opening $filename" if $self->{verbose};
+        say STDERR "opening $filename" if $self->{verbose};
         open $fh, '<', $filename or croak "can't open $filename";
     } else{
         $fh = $handle;
