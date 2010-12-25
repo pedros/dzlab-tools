@@ -6,7 +6,7 @@ use Data::Dumper;
 use feature 'say';
 use Carp;
 use DBI;
-use DZLab::Tools::GFF qw/parse_gff_arrayref/;
+use DZLab::Tools::GFF qw/parse_gff_arrayref gff_to_string/;
 
 my @default_cols     = qw/seqname source feature start   end     score strand frame   attribute/;
 my @default_coltypes = qw/text    text   text    numeric numeric real  text   numeric text/;
@@ -295,7 +295,7 @@ sub dump{
     my $select = $dbh->prepare("select * from gff");
     $select->execute();
     while (my $row = $select->fetchrow_arrayref()){
-        say Dumper $row;
+        say gff_to_string $row;
     }
 }
 
