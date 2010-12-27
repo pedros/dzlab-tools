@@ -70,7 +70,9 @@ sub parse_gff_arrayref{
 
     (carp "unparseable GFF line" && return 0) unless @arr == 9;
 
-    my %accum = map { defined $_ ? $_ : 'Note' } ($arr[8] =~ m/$attributes_regex/g);
+    my %accum = defined($arr[8]) 
+    ?  map { defined $_ ? $_ : 'Note' } ($arr[8] =~ m/$attributes_regex/g)
+    :  ();
 
     return [@arr,@accum{@_}];
 }
@@ -98,7 +100,9 @@ sub parse_gff_hashref{
 
     (carp "unparseable GFF line" && return 0) unless @arr == 9;
 
-    my %accum = map { defined $_ ? $_ : 'Note' } ($arr[8] =~ m/$attributes_regex/g);
+    my %accum = defined($arr[8]) 
+    ?  map { defined $_ ? $_ : 'Note' } ($arr[8] =~ m/$attributes_regex/g)
+    :  ();
 
     return {
         seqname   => lc $arr[0],
