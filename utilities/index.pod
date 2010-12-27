@@ -1,0 +1,40 @@
+
+=head1 dzlab.pmb.berkeley.edu/tools README
+
+=head2 Installing Perl
+
+There are two ways to install perl on windows: ActivePerl and Strawberry Perl.  ActivePerl is what the lab has been
+using.  Strawberry perl is a newer, entirely opensource/free distribution with stronger 3rd party module support.  Both
+versions should work for now, but future development and testing (ie, after Pedro leaves) will take place against
+Strawberry perl.  
+
+Both installers are found below. Though you can have both installed at the same time, make sure that you only have one
+in your PATH environment variable at any time-- otherwise you are asking for trouble.
+
+Strawberry perl:
+    L<http://dzlab.pmb.berkeley.edu/tools/strawberry-perl-5.12.1.0.msi>
+
+ActivePerl (32-bit):
+    L<http://dzlab.pmb.berkeley.edu/tools/ActivePerl-5.12.2.1203-MSWin32-x86-294165.msi>
+
+ActivePerl (64-bit):
+    L<http://dzlab.pmb.berkeley.edu/tools/ActivePerl-5.12.2.1203-MSWin32-x64-294165.msi>
+
+=head2 Installing 3rd party modules
+
+After installing perl, run the following batch file to install the necessary 3rd party modules:
+    L<http://dzlab.pmb.berkeley.edu/tools/install_3rd_party_modules.bat>
+
+=head2 Grab DZLab-tools
+
+Finally, grab the version of most recent version of dzlab-tools below, and enjoy:
+
+=over 1
+
+=item * 
+
+L<http://dzlab.pmb.berkeley.edu/tools/dzlab-tools-v0.01.zip>
+
+=back
+
+=cut
