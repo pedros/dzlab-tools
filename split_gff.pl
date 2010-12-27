@@ -39,11 +39,11 @@ RECORD:
 while (defined(my $gff = $iter->())){
     next unless ref $gff eq 'HASH';
 
-    my $current = $sequence ? $gff->{sequence} : $gff->{feature};
+    my $current = $sequence ? $gff->{seqname} : $gff->{feature};
 
     if (($feature && ($feature eq 'all' || $feature eq $gff->{feature}))
         ||
-        ($sequence && ($sequence eq 'all' || $sequence eq $gff->{sequence})))
+        ($sequence && ($sequence eq 'all' || $sequence eq $gff->{seqname})))
     {
         my $out = $path . $name . "-$current" . $suffix;
 

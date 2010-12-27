@@ -25,15 +25,17 @@ ActivePerl (64-bit):
 After installing perl, run the following batch file to install the necessary 3rd party modules:
     L<http://dzlab.pmb.berkeley.edu/tools/install_3rd_party_modules.bat>
 
-=head2 Grab DZLab-tools
+=head2 Get DZLab-tools
 
-Finally, grab the version of most recent version of dzlab-tools below, and enjoy:
+We have not yet figured out how to get the new versioning system working properly on windows (so that the users can
+checkout and update changes to the source tree.  For now, please grab the most recent version of dzlab-tools in zip
+format below, and enjoy:
 
 =over 1
 
 =item * 
 
-L<http://dzlab.pmb.berkeley.edu/tools/dzlab-tools-v0.01.zip>
+L<http://dzlab.pmb.berkeley.edu/tools/dzlab-tools-v0.01.zip> (12-26-2010)
 
 =back
 
