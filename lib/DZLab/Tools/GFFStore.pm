@@ -33,7 +33,7 @@ sub new {
     $self->{overwrite}   = $opt->{overwrite}     || 1;
 
     # attributes and indices
-    $self->{attributes}  = [];
+    $self->{attributes}  = []; # not an error, this should be array. see line 67
     $self->{indices}     = $opt->{indices}    || [];
     $self->{columns}     = [@default_cols];
     $self->{columntypes} = [@default_coltypes];
@@ -63,10 +63,12 @@ sub new {
     # go through attributes and add them to @columns and @columntypes. 
     # keeping their order is important b/c when inserting via param bind, 
     # doesn't accepting hashes
-    while (my ($col,$coltype) = each %{$opt->{attributes}}) {
-        push @{$self->{attributes}}, $col;
-        push @{$self->{columns}}, $col;
-        push @{$self->{columntypes}}, $coltype;
+    if (ref $opt->{attributes} eq 'HASH'){ # but only if we were actually given attr hash
+        while (my ($col,$coltype) = each %{$opt->{attributes}}) {
+            push @{$self->{attributes}}, $col;
+            push @{$self->{columns}}, $col;
+            push @{$self->{columntypes}}, $coltype;
+        }
     }
     $self->{numcol}      = scalar @{$self->{columns}};
 
