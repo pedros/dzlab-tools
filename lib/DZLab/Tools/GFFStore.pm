@@ -207,7 +207,7 @@ sub select_aggregate {
 
     my $it = $self->select_iter(<<"SELECT");
 select aggregate($on),$by from gff a
-where exists (select count(*) from gff b where a.ID=b.ID)
+where exists (select count(*) from gff b where a.$by=b.$by)
 and a.feature='$feature' group by $by
 SELECT
 
