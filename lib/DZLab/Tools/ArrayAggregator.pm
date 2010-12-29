@@ -15,7 +15,7 @@ sub finalize {
 }
 
 sub post_process {
-    my ($self, $aggregate, $cols) = @_;
+    my ($self, $aggregate, $by, $cols) = @_;
 
     my @ranges = split /\t/, $aggregate->{"aggregate($cols)"};
     @ranges = map { [split / /, $_] } @ranges;
