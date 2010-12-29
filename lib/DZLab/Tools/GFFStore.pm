@@ -213,7 +213,7 @@ SELECT
 
     return sub {
         my $aggregate = $it->() or return;
-        return ArrayAggregator->post_process($aggregate, $on);
+        return ArrayAggregator->post_process($aggregate, $by, $on);
     };
 }
 
