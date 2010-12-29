@@ -12,6 +12,9 @@ use DZLab::Tools::GFF qw/parse_gff_arrayref gff_to_string/;
 my @default_cols     = qw/seqname source feature start   end     score strand frame   attribute/;
 my @default_coltypes = qw/text    text   text    numeric numeric real  text   numeric text/;
 
+=head2 new
+
+=cut
 sub new {
     my $class = shift;
     my $opt = shift;
@@ -83,6 +86,10 @@ sub new {
 
     return $self;
 }
+
+=head2 insert_statement
+
+=cut
 sub insert_statement{
     my $self = shift;
     my $colcomma = join ",", @{$self->{columns}};
@@ -90,6 +97,9 @@ sub insert_statement{
     return "insert into gff ($colcomma) values ($placeholders)";
 }
 
+=head2 create_table_statement
+
+=cut
 sub create_table_statement{
     my $self = shift;
     return "create table if not exists gff (" . 
@@ -99,6 +109,9 @@ sub create_table_statement{
     .  ")";
 }
 
+=head2 create_index_statements
+
+=cut
 sub create_index_statements{
     my $self = shift;
     
@@ -110,6 +123,9 @@ sub create_index_statements{
     } @{$self->{indices}};
 }
 
+=head2 slurp
+
+=cut
 sub slurp{
     my $self = shift;
     my $opt = shift;
@@ -151,6 +167,9 @@ sub slurp{
     }
 }
 
+=head2 create_indices
+
+=cut
 sub create_indices{
     my $self = shift;
     my $dbh  = $self->{dbh};
@@ -165,6 +184,9 @@ sub create_indices{
 ##########################################################
 # Accessors
 
+=head2 count
+
+=cut
 sub count{
     my $self = shift;
     my $dbh = $self->{dbh};
@@ -177,7 +199,6 @@ sub count{
 Run raw select statement against db, return an hashref iterator
 
 =cut
-
 sub select_iter{
     my $self = shift;
     my $stmt = shift;
@@ -223,7 +244,6 @@ SELECT
 Run raw select statement against db, return an arrayref of hashrefs
 
 =cut
-
 sub select{
     my $self = shift;
     my $stmt = shift;
@@ -241,7 +261,6 @@ return an iterator which, for every call, returns a hashref of a row matching th
 equality constraints.
 
 =cut
-
 sub make_iterator{
     my $self = shift;
     my $constraints = shift;
@@ -276,7 +295,6 @@ sub make_iterator{
 like make_iterator, except slurps up entire row set and returns arrayref
 
 =cut
-
 sub query{
     my $self = shift;
     my $constraints = shift;
@@ -291,7 +309,6 @@ sub query{
 =head2 exists {column1 => value1, column2 => value2, ...}
 
 =cut
-
 sub exists{
     my $self = shift;
     my $constraints = shift;
@@ -309,7 +326,6 @@ returns and iterator which, on every call, returns a element overlapping with th
 may return same thing twice....
 
 =cut
-
 sub make_iterator_overlappers{
     my $self = shift;
     my $ranges = shift;
@@ -342,7 +358,6 @@ sub make_iterator_overlappers{
 return distinct elements from the seqname column
 
 =cut
-
 sub sequences{
     my $self = shift;
     my $dbh = $self->{dbh};
@@ -351,6 +366,9 @@ sub sequences{
     return map { $_->[0] } @$results;
 }
 
+=head2 dump
+
+=cut
 sub dump{
     my $self = shift;
     my $dbh = $self->{dbh};
@@ -361,6 +379,9 @@ sub dump{
     }
 }
 
+=head2 DESTROY
+
+=cut
 sub DESTROY{
     my $self = shift;
     $self->{dbh}->disconnect;
