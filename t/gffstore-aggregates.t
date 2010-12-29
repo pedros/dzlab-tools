@@ -31,12 +31,11 @@ my %counts = (
 
 my @ids = sort keys %counts;
 
-while (my $locus = $s->()) {
-    my ($ranges, $id) = @$locus;
+while (my ($ranges, $locus) = $s->()) {
 
-    ok( exists $counts{$id},               'Exists aggregate ID'          );
-    is( $id,                 shift @ids,   'Correct aggregate ID'         );
-    is( scalar @$ranges,     $counts{$id}, 'Correct aggregated instances' );
+    ok( exists $counts{$locus},               'Exists aggregate ID'          );
+    is( $locus,                 shift @ids,   'Correct aggregate ID'         );
+    is( scalar @$ranges,     $counts{$locus}, 'Correct aggregated instances' );
 };
 
 done_testing();
