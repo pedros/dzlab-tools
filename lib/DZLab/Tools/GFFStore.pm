@@ -190,6 +190,34 @@ sub select_iter{
     };
 }
 
+
+=head2 select_aggregate $feature, $by, @on
+
+Run aggregating select over rows of type $feature grouped by $by on cols @on
+
+Return an arrayref iterator of [[aggregate-cols], group-by-col]
+
+=cut
+sub select_aggregate {
+    my ($self, $feature, $by, @on) = @_;
+    my $on = join ',', @on;
+
+    require DZLab::Tools::ArrayAggregator;
+    $self->{dbh}->sqlite_create_aggregate( 'aggregate', -1, 'ArrayAggregator' );
+
+    my $it = $self->select_iter(<<"SELECT");
+select aggregate($on),$by from gff a
+where exists (select count(*) from gff b where a.ID=b.ID)
+and a.feature='$feature' group by $by
+SELECT
+
+    return sub {
+        my $aggregate = $it->() or return;
+        return ArrayAggregator->post_process($aggregate, $on);
+    };
+}
+
+
 =head2 select
 
 Run raw select statement against db, return an arrayref of hashrefs
