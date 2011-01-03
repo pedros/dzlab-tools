@@ -15,6 +15,7 @@ pod2usage( -verbose => 1 )
 my $type = 'verbose';
 my $frequencies;
 my $paired;
+my $gff;
 my $id_regex;
 my $reference;
 my $output;
@@ -30,6 +31,7 @@ my $result = GetOptions(
     'type|t=s'      => \$type,
     'frequencies|f' => \$frequencies,
     'paired|p'      => \$paired,
+    'gff|g'         => \$gff,
     'id-regex|i=s'  => \$id_regex,
     'reference|r=s' => \$reference,
     'no-normalize|n'=> \$no_normalize,
@@ -71,6 +73,9 @@ while (<>) {
             += $current->{alternatives};
         $counts->{ $current->{target}->[0] }{frequencies}++;
     }
+    elsif ($gff) {
+        print_gff( $current );
+    }
     elsif ($paired) {
 
         my $next = <>;
@@ -80,7 +85,7 @@ while (<>) {
 
         $next->{snps}{ $next->{snp}->[0] }++;
 
-        print_gff( $current, $next );
+        print_paired_gff( $current, $next );
     }
     else {
         unless ( defined $previous ) {
@@ -173,7 +178,23 @@ catch_up( $previous, $unmatched, @splice )
     }
 }
 
+
 sub print_gff {
+    my ($eland) = @_;
+
+    print join( "\t",
+                $eland->{target}->[0],
+                'bowtie',
+                'read',
+                $eland->{coordinate}->[0],
+                $eland->{coordinate}->[0] + length $eland->{sequence},
+                q{.},
+                $eland->{strand}->[0],
+                q{.},
+                "read=$eland->{read_id}; alt=$eland->{alternatives}; snp=$eland->{snp}->[0]", ), "\n";
+}  
+
+sub print_paired_gff {
     my ( $current, $next ) = @_;
 
     print join( "\t",
@@ -185,8 +206,7 @@ sub print_gff {
         q{.},
         q{+},
         q{.},
-        "alt=$current->{alternatives}" ),
-        "\n";
+        "alt=$current->{alternatives}" ), "\n";
 }
 
 sub print_eland {
@@ -234,6 +254,8 @@ sub read_bowtie {
     my ( $read_id, $strand, $target, $coordinate, $sequence, $qualities,
         $alternatives, $snp )
         = split /\t|\s+/, $bowtie_line;
+
+    $strand = '-' if $target =~ s/^RC_//;
 
     my @mm = $snp ? split /,/, $snp : ();
 
@@ -350,13 +372,13 @@ __END__
 
  parse_bowtie.pl [OPTION]... [FILE]...
 
- -p, --paired       merge paired ends into gff fragments
  -s, --splice       splice original sequences when recovering (x y)
  -f, --frequencies  output SEQID    FREQUENCY(reads/100bp)    ALTERNATIVES
  -t, --type         type of bowtie output file (verbose or concise -- only verbose supported for now)
  -i, --id-regex     perl-type regular expression to identify feature id (ie. gene) in fasta alignment header (must include capturing parenthesis)
  -r, --reference    genome/cDNA models file in fasta format (for calculating relative frequency scores, etc.)
  -u, --recover      given original alignment fasta file, recovers unmatched reads (which bowtie does not output)
+ -g, --gff          convert bowtie alignment format to gff
  -p, --paired       convert bowtie's paired ends output to gff with concatenated library ends per region
  -n, --no-normalize do not normalize frequencies
  -o, --output       filename to write results to (defaults to STDOUT)
