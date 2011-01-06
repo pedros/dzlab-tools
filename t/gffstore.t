@@ -50,7 +50,8 @@ is(scalar @$results, 1, 'make iterator with contraints');
 
 # overlaps
 
-is(scalar @{$gffstore->overlappers(3000,11649)},3, 'overlappers');
+is(scalar @{$gffstore->overlappers('chr1',160000,170000)},3, 'overlappers');
+is(scalar @{$gffstore->overlappers('chr2',160000,170000)},2, 'overlappers');
 
 # count 
 

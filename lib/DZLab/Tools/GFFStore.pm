@@ -387,10 +387,15 @@ returns rows (arrayref of hashrefs) that overlaps with given region
 =cut
 sub overlappers{
     my $self = shift;
-    my ($start,$end) = @_;
-    die "need start and end" unless ($start and $end);
+    my ($seqname,$start,$end) = @_;
+    die "need seqname, start and end" unless ($seqname and $start and $end);
     my $dbh = $self->{dbh};
-    return $dbh->selectall_arrayref("select * from gff where start <= $end and end >= $start",{Slice => {}});
+
+    my $sth = $dbh->prepare("select * from gff where start <= ? and end >= ? and seqname = ?");
+    $sth->execute($end,$start,$seqname);
+    return $sth->fetchall_arrayref({});
+
+    #return $dbh->selectall_arrayref("select * from gff where start <= $end and end >= $start and seqname = $seqname",{Slice => {}});
 
     #if (!defined $self->{overlappers-sth}){
     #    $self->{overlappers-sth} = $dbh->prepare("select * from gff where end >= ? and start <= ? ");
