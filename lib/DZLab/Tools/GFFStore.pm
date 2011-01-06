@@ -14,6 +14,27 @@ my @default_coltypes = qw/text    text   text    numeric numeric real  text   nu
 
 =head2 new
 
+ my $gffstore = DZLab::Tools::GFFStore->new({
+    dbname     => 'filename',
+    indicies   => [['id'], ['seqname']],
+    attributes => {id => 'text', c => 'numeric'},
+    });
+
+
+=head3 options 
+
+By default, temporary on-disk database used. As an alternative, 'memory' for in-memory db, or 'dbname' for a specific
+file.
+
+ dbname     - filename of output sqlite database
+ memory     - in memory database
+ tmp        - use temporary (default)
+
+ overwrite  - for dbname only. whether to delete file first (default = 1)
+
+ indices    - arrayref of index, where each index is an arrayref of column names
+ attributes - hashref of attribute field name => field type ('numeric', 'text')
+
 =cut
 sub new {
     my $class = shift;
@@ -87,9 +108,6 @@ sub new {
     return $self;
 }
 
-=head2 insert_statement
-
-=cut
 sub insert_statement{
     my $self = shift;
     my $colcomma = join ",", @{$self->{columns}};
@@ -97,9 +115,6 @@ sub insert_statement{
     return "insert into gff ($colcomma) values ($placeholders)";
 }
 
-=head2 create_table_statement
-
-=cut
 sub create_table_statement{
     my $self = shift;
     return "create table if not exists gff (" . 
@@ -109,9 +124,6 @@ sub create_table_statement{
     .  ")";
 }
 
-=head2 create_index_statements
-
-=cut
 sub create_index_statements{
     my $self = shift;
     
@@ -124,6 +136,11 @@ sub create_index_statements{
 }
 
 =head2 slurp
+
+ $gffstore->slurp({handle => \*HANDLE});
+ $gffstore->slurp({filename => "genes.gff"});
+
+Read a filehandle or a file into store.
 
 =cut
 sub slurp{
@@ -167,9 +184,6 @@ sub slurp{
     }
 }
 
-=head2 create_indices
-
-=cut
 sub create_indices{
     my $self = shift;
     my $dbh  = $self->{dbh};
@@ -186,6 +200,10 @@ sub create_indices{
 
 =head2 count
 
+ $gffstore->count();
+
+Return the number of rows in store.
+
 =cut
 sub count{
     my $self = shift;
@@ -195,6 +213,12 @@ sub count{
 }
 
 =head2 select_iter
+
+ my $iter = $gffstore->select_iter("select seqname from gff");
+
+ while (defined(my $row_href = $iter->())){
+    ...
+ }
 
 Run raw select statement against db, return an hashref iterator
 
@@ -240,6 +264,8 @@ SELECT
 
 
 =head2 select
+
+ my $rows_aref = $gffstore->select("select seqname from gff");
 
 Run raw select statement against db, return an arrayref of hashrefs
 
@@ -309,6 +335,7 @@ sub query{
 =head2 exists {column1 => value1, column2 => value2, ...}
 
 =cut
+
 sub exists{
     my $self = shift;
     my $constraints = shift;
@@ -355,6 +382,8 @@ sub make_iterator_overlappers{
 
 =head2 $gffstore->sequences
 
+ my @distinct = $gffstore->sequences();
+
 return distinct elements from the seqname column
 
 =cut
@@ -363,12 +392,13 @@ sub sequences{
     my $dbh = $self->{dbh};
     my $results = $dbh->selectall_arrayref("select distinct seqname from gff");
 
-    return map { $_->[0] } @$results;
+    return sort map { $_->[0] } @$results;
 }
 
 =head2 dump
 
 =cut
+
 sub dump{
     my $self = shift;
     my $dbh = $self->{dbh};
@@ -379,9 +409,6 @@ sub dump{
     }
 }
 
-=head2 DESTROY
-
-=cut
 sub DESTROY{
     my $self = shift;
     $self->{dbh}->disconnect;
@@ -423,8 +450,6 @@ This documentation refers to DZLab::Tools::GFFStore version 0.0.1
  
 =head1 BUGS AND LIMITATIONS
  
-There are no known bugs in this module. 
-Please report problems to <Maintainer name(s)>  (<contact address>)
-Patches are welcome.
+Probably.
 
 =cut
