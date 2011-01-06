@@ -48,6 +48,10 @@ is(scalar @$results, 100, 'make iterator with contraints');
 $results = $gffstore->query({start => 31170, frame => undef});
 is(scalar @$results, 1, 'make iterator with contraints');
 
+# overlaps
+
+is(scalar @{$gffstore->overlappers(3000,11649)},3, 'overlappers');
+
 # count 
 
 is_deeply([$gffstore->sequences],[undef,'chr1','chr2'],"correct number of distinct sequences");
@@ -62,6 +66,7 @@ is_deeply([ {
     'strand' => '-'
 } ], 
 $gffstore->select('select count(strand) as count, strand from gff group by strand'), "\$gffstore->select");
+
 
 
 __DATA__

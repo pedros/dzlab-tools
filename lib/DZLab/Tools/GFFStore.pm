@@ -380,6 +380,28 @@ sub make_iterator_overlappers{
     };
 }
 
+=head2 overlappers($start, $end);
+
+returns rows (arrayref of hashrefs) that overlaps with given region
+
+=cut
+sub overlappers{
+    my $self = shift;
+    my ($start,$end) = @_;
+    die "need start and end" unless ($start and $end);
+    my $dbh = $self->{dbh};
+    return $dbh->selectall_arrayref("select * from gff where start <= $end and end >= $start",{Slice => {}});
+
+    #if (!defined $self->{overlappers-sth}){
+    #    $self->{overlappers-sth} = $dbh->prepare("select * from gff where end >= ? and start <= ? ");
+    #}
+
+    #my $sth = $dbh->prepare("select * from gff where start <= $end and end >= $start");
+    #    $self->{overlappers-sth} = $dbh->prepare("select * from gff where end >= ? and start <= ? ");
+    #$sth->execute(); 
+    #return $sth->fetchall_arrayref({});
+}
+
 =head2 $gffstore->sequences
 
  my @distinct = $gffstore->sequences();
@@ -392,7 +414,7 @@ sub sequences{
     my $dbh = $self->{dbh};
     my $results = $dbh->selectall_arrayref("select distinct seqname from gff");
 
-    return sort map { $_->[0] } @$results;
+    return map { $_->[0] } @$results;
 }
 
 =head2 dump
