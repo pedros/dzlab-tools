@@ -66,7 +66,7 @@ sub parse_gff_arrayref{
 
     # split, map missing columns "." to undef
     my @arr = map { $_ eq q{.} ? undef : $_} split /\t/, $line;
-    $arr[0] = lc $arr[0];
+    $arr[0] = lc $arr[0] if defined $arr[0];
 
     (carp "unparseable GFF line" && return 0) unless @arr == 9;
 
@@ -105,7 +105,7 @@ sub parse_gff_hashref{
     :  ();
 
     return {
-        seqname   => lc $arr[0],
+        seqname   => defined ($arr[0]) ? lc $arr[0] : undef,
         source    => $arr[1],
         feature   => $arr[2],
         start     => $arr[3],
@@ -181,7 +181,7 @@ sub gff_read {
     } values %attributes;
 
     return {
-        seqname   => d2u( lc $seqname ),
+        seqname   => d2u( defined $seqname ? lc $seqname : undef ),
         source    => d2u( $source     ),
         feature   => d2u( $feature    ),
         start     => d2u( $start      ),

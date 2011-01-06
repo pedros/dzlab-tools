@@ -25,7 +25,7 @@ is($gffstore->count(),100,"Correct count");
 
 my $results;
 $results = $gffstore->query({seqname => 'chr1'});
-is(scalar @$results, 50, 'make iterator with contraints');
+is(scalar @$results, 49, 'make iterator with contraints');
 
 $results = $gffstore->query({seqname => 'chr2'});
 is(scalar @$results, 50, 'make iterator with contraints');
@@ -50,7 +50,7 @@ is(scalar @$results, 1, 'make iterator with contraints');
 
 # count 
 
-is_deeply([$gffstore->sequences],['chr1','chr2'],"correct number of distinct sequences");
+is_deeply([$gffstore->sequences],[undef,'chr1','chr2'],"correct number of distinct sequences");
 
 # select
 
@@ -65,7 +65,7 @@ $gffstore->select('select count(strand) as count, strand from gff group by stran
 
 
 __DATA__
-Chr1	TAIR8	gene	3631	5899	.	+	.	ID=AT1G01010;Name=AT1G01010;Note=ANAC001 (Arabidopsis NAC domain containing protein 1),transcription factor
+.	TAIR8	gene	3631	5899	.	+	.	ID=AT1G01010;Name=AT1G01010;Note=ANAC001 (Arabidopsis NAC domain containing protein 1),transcription factor
 Chr1	TAIR8	gene	6790	8737	.	-	.	ID=AT1G01020;Name=AT1G01020;Note=ARV1
 Chr1	TAIR8	gene	11649	13714	.	-	.	ID=AT1G01030;Name=AT1G01030;Note=NGA3 (NGATHA3),transcription factor
 Chr1	TAIR8	gene	23146	31227	.	+	.	ID=AT1G01040;Name=AT1G01040;Note=DCL1 (DICER-LIKE1),ATP-dependent helicase,ribonuclease III
