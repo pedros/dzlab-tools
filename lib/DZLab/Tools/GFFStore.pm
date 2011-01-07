@@ -6,51 +6,118 @@ use Data::Dumper;
 use feature 'say';
 use Carp;
 use DBI;
-use DZLab::Tools::GFF qw/parse_gff parse_attributes/;
+use File::Temp qw/tempfile unlink0/;
+use DZLab::Tools::GFF qw/parse_gff_arrayref gff_to_string/;
 
-my @default_cols     = qw/sequence source feature start   end     score strand frame   attribute/;
-my @default_coltypes = qw/text     text   text    numeric numeric real  text   numeric text/;
+my @default_cols     = qw/seqname source feature start   end     score strand frame   attribute/;
+my @default_coltypes = qw/text    text   text    numeric numeric real  text   numeric text/;
 
+=head2 new
+
+ my $gffstore = DZLab::Tools::GFFStore->new({
+    dbname     => 'filename',
+    indicies   => [['id'], ['seqname']],
+    attributes => {id => 'text', c => 'numeric'},
+    });
+
+
+=head3 options 
+
+By default, temporary on-disk database used. As an alternative, 'memory' for in-memory db, or 'dbname' for a specific
+file.
+
+ dbname     - filename of output sqlite database
+ memory     - in memory database
+ tmp        - use temporary (default)
+
+ overwrite  - for dbname only. whether to delete file first (default = 1)
+
+ indices    - arrayref of index, where each index is an arrayref of column names
+ attributes - hashref of attribute field name => field type ('numeric', 'text')
+
+=cut
 sub new {
     my $class = shift;
     my $opt = shift;
-    my $self = {};
+    #my $self = {};
+    #my $blessed = bless $self, $class;
+    my $self = bless {}, $class;
 
-    $self->{attributes}  = [];
-    $self->{filename}    = $opt->{filename}   || undef;
-    $self->{handle}      = $opt->{handle}   || undef;
-    $self->{indices}     = $opt->{indices}    || [];
-    $self->{debug}       = $opt->{debug}      || 0;
-    $self->{verbose}     = $opt->{verbose}    || 0;
-    $self->{columns}     = [@default_cols];
-    $self->{columntypes} = [@default_coltypes];
-    $self->{counter}     = 10000;
-
-    unless ($self->{handle} xor $self->{filename}) {croak "Need handle or a filename"};
-
-    while (my ($col,$coltype) = each %{$opt->{attributes}}) {
-        push @{$self->{attributes}}, $col;
-        push @{$self->{columns}}, $col;
-        push @{$self->{columntypes}}, $coltype;
+    # the three possible sqlite storage options. default to temp file since the 
+    # operations seem to be cpu bound more than IO bound. may change after benchmarking.
+    $self->{dbname}      = $opt->{dbname}     || 0;
+    $self->{memory}      = $opt->{memory}     || 0;
+    $self->{tmp}         = $opt->{tmp}        || 0;
+    if (!$self->{dbname} && ! $self->{memory} && ! $self->{tmp}){
+        $self->{tmp} = 1;
     }
 
+    # only for dbname option: if existing db should be overwritten.
+    # default to yes since can't imagine reusing db's (yet)
+    $self->{overwrite}   = $opt->{overwrite}     || 1;
+
+    # attributes and indices
+    $self->{attributes}  = []; # not an error, this should be array. see line 67
+    $self->{indices}     = $opt->{indices}    || [];
+    $self->{columns}     = [@default_cols];
+    $self->{columntypes} = [@default_coltypes];
+
+    # other 
+    $self->{debug}       = $opt->{debug}      || 0;
+    $self->{verbose}     = $opt->{verbose}    || 0;
+    $self->{counter}     = 10000;
+
+    croak "dbname, memory, temp options are mutually exclusive"
+    unless ( $self->{dbname} xor $self->{memory} xor $self->{tmp});
+
+    # use the dbname attribute even for memory and tmp
+    if ($self->{dbname} && -e $self->{dbname} && $self->{overwrite}){ # overwrite?
+        unlink $self->{dbname};
+    }
+    elsif ($self->{memory}) {
+        $self->{dbname} = ':memory:';
+    } 
+    elsif ($self->{tmp}) {
+        ($self->{tmpfh}, $self->{dbname}) = tempfile();
+        if($self->{debug}){
+            say STDERR "tmpfile = $self->{dbname}";
+        }
+    }
+
+    # go through attributes and add them to @columns and @columntypes. 
+    # keeping their order is important b/c when inserting via param bind, 
+    # doesn't accepting hashes
+    if (ref $opt->{attributes} eq 'HASH'){ # but only if we were actually given attr hash
+        while (my ($col,$coltype) = each %{$opt->{attributes}}) {
+            push @{$self->{attributes}}, $col;
+            push @{$self->{columns}}, $col;
+            push @{$self->{columntypes}}, $coltype;
+        }
+    }
     $self->{numcol}      = scalar @{$self->{columns}};
 
-    my $blessed = bless $self, $class;
+    my $dbname = $self->{dbname};
 
-    $blessed->slurp();
+    # create database
+    my $dbh = $self->{dbh} = DBI->connect("dbi:SQLite:dbname=$dbname","","",
+        {RaiseError => 1, AutoCommit => 1});
+    $dbh->do("PRAGMA automatic_index = OFF");
+    $dbh->do("PRAGMA journal_mode = OFF");
+    $dbh->do($self->create_table_statement());
 
-    return $blessed;
+    return $self;
 }
+
 sub insert_statement{
     my $self = shift;
     my $colcomma = join ",", @{$self->{columns}};
     my $placeholders = join (q{,}, map {'?'} (0 .. $self->{numcol} - 1));
     return "insert into gff ($colcomma) values ($placeholders)";
 }
+
 sub create_table_statement{
     my $self = shift;
-    return "create table gff (" . 
+    return "create table if not exists gff (" . 
     join(',',
         map { $self->{columns}[$_] . " " .  $self->{columntypes}[$_]} (0 .. $self->{numcol}-1)
     ) 
@@ -68,60 +135,76 @@ sub create_index_statements{
     } @{$self->{indices}};
 }
 
+=head2 slurp
+
+ $gffstore->slurp({handle => \*HANDLE});
+ $gffstore->slurp({filename => "genes.gff"});
+
+Read a filehandle or a file into store.
+
+=cut
 sub slurp{
     my $self = shift;
+    my $opt = shift;
 
-    my $dbname = $self->{debug} ? 'debug.db' : ':memory:';
-    unlink 'debug.db' if $self->{debug};
+    my $filename = $opt->{filename}  || undef;
+    my $handle   = $opt->{handle}    || undef;
+    unless ($filename xor $handle) {croak "Need handle or a filename"};
 
-    # create database
-    my $dbh = $self->{dbh} = DBI->connect("dbi:SQLite:dbname=$dbname","","");
-    $dbh->{RaiseError} = 1;
-    $dbh->do("PRAGMA automatic_index = OFF");
-    $dbh->do("PRAGMA journal_mode = OFF");
-    $dbh->do($self->create_table_statement());
+    my $dbh = $self->{dbh};
 
-    #say $self->insert_statement();
+    say STDERR $self->insert_statement() if $self->{debug};
     my $insert_sth = $dbh->prepare($self->insert_statement());
 
     $dbh->{AutoCommit} = 0;
 
     my $fh;
-    if ($self->{filename}){
-        say "opening $self->{filename}" if $self->{verbose};
-        open $fh, '<', $self->{filename} or croak "can't open $self->{filename}";
+    if ($filename){
+        say STDERR "opening $filename" if $self->{verbose};
+        open $fh, '<', $filename or croak "can't open $filename";
     } else{
-        $fh = $self->{handle};
+        $fh = $handle;
     }
     my $counter = 0;
     while (my $line = <$fh>){
         chomp $line;
-        my $parsed = parse_gff($line,@{$self->{attributes}});
+        my $parsed = parse_gff_arrayref($line,@{$self->{attributes}});
         next unless $parsed;
 
         $insert_sth->execute(@$parsed);
         if ($counter++ % $self->{counter} == 0){
-            say "Read " . ($counter-1) if $self->{verbose};
+            say STDERR "Reading "  . ($filename ? $filename : q{}) . ' ' . ($counter-1) if $self->{verbose};
             $dbh->commit;
         }
     }
     $dbh->commit;
     $dbh->{AutoCommit} = 1;
-
-    say "creating indices (if any)" if $self->{verbose};
-    for my $index_statement ($self->create_index_statements()){
-        say $index_statement if $self->{verbose};
-        $dbh->do($index_statement);
-    }
-    
-    if ($self->{filename}){
+    if ($filename){
         close $fh;
     }
 }
 
+sub create_indices{
+    my $self = shift;
+    my $dbh  = $self->{dbh};
+    say STDERR "creating indices (if any)" if $self->{verbose};
+    for my $index_statement ($self->create_index_statements()){
+        say STDERR $index_statement if $self->{verbose};
+        $dbh->do($index_statement);
+    }
+}
+    
+
 ##########################################################
 # Accessors
 
+=head2 count
+
+ $gffstore->count();
+
+Return the number of rows in store.
+
+=cut
 sub count{
     my $self = shift;
     my $dbh = $self->{dbh};
@@ -129,16 +212,81 @@ sub count{
     return $r[0];
 }
 
-sub make_iterator_arrayref{
+=head2 select_iter
+
+ my $iter = $gffstore->select_iter("select seqname from gff");
+
+ while (defined(my $row_href = $iter->())){
+    ...
+ }
+
+Run raw select statement against db, return an hashref iterator
+
+=cut
+sub select_iter{
     my $self = shift;
+    my $stmt = shift;
     my $dbh = $self->{dbh};
-    my $select = $dbh->prepare("select * from gff");
-    $select->execute();
-    return sub{
-        return $select->fetchrow_arrayref();
+    my $sth = $dbh->prepare($stmt);
+    $sth->execute() or die "can't execute statement";
+    
+    return sub {
+        return $sth->fetchrow_hashref();
     };
 }
 
+
+=head2 select_aggregate $feature, $by, @on
+
+Run aggregating select over rows of type $feature grouped by $by on cols @on
+
+Return an arrayref iterator of [[aggregate-cols], group-by-col]
+
+=cut
+sub select_aggregate {
+    my ($self, $feature, $by, @on) = @_;
+    my $on = join ',', @on;
+
+    require DZLab::Tools::ArrayAggregator;
+    $self->{dbh}->sqlite_create_aggregate( 'aggregate', -1, 'ArrayAggregator' );
+
+    my $it = $self->select_iter(<<"SELECT");
+select aggregate($on),$by from gff a
+where exists (select count(*) from gff b where a.$by=b.$by)
+and a.feature='$feature' group by $by
+SELECT
+
+    return sub {
+        my $aggregate = $it->() or return;
+        return ArrayAggregator->post_process($aggregate, $by, $on);
+    };
+}
+
+
+=head2 select
+
+ my $rows_aref = $gffstore->select("select seqname from gff");
+
+Run raw select statement against db, return an arrayref of hashrefs
+
+=cut
+sub select{
+    my $self = shift;
+    my $stmt = shift;
+    my $iter = $self->select_iter($stmt);
+    my @accum;
+    while (my $row = $iter->()){
+        push @accum,$row;
+    }
+    return \@accum;
+}
+
+=head2 make_iterator {column1 => value1, column2 => value2, ...}
+
+return an iterator which, for every call, returns a hashref of a row matching the given 
+equality constraints.
+
+=cut
 sub make_iterator{
     my $self = shift;
     my $constraints = shift;
@@ -158,7 +306,7 @@ sub make_iterator{
     my $where_clause = @where ? ("where " . join " and ", @where) : "";
 
     my $select_stmt = "select * from gff $where_clause";
-    say $select_stmt;
+    say STDERR $select_stmt if $self->{debug};
 
     my $dbh = $self->{dbh};
     my $sth = $dbh->prepare($select_stmt);
@@ -168,6 +316,11 @@ sub make_iterator{
     };
 }
 
+=head2 query {column1 => value1, column2 => value2, ...}
+
+like make_iterator, except slurps up entire row set and returns arrayref
+
+=cut
 sub query{
     my $self = shift;
     my $constraints = shift;
@@ -179,13 +332,27 @@ sub query{
     return \@accum;
 }
 
+=head2 exists {column1 => value1, column2 => value2, ...}
+
+=cut
+
+sub exists{
+    my $self = shift;
+    my $constraints = shift;
+    my $iter = $self->make_iterator($constraints);
+    my @accum;
+    if (my $row = $iter->()){
+        return 1;
+    }
+    return 0;
+}
+
 =head2 make_iterator_overlappers [[$start1, $end1], [start2, $end2], ...]
 
 returns and iterator which, on every call, returns a element overlapping with the ranges.
 may return same thing twice....
 
 =cut
-
 sub make_iterator_overlappers{
     my $self = shift;
     my $ranges = shift;
@@ -213,20 +380,103 @@ sub make_iterator_overlappers{
     };
 }
 
+=head2 overlappers($start, $end);
+
+returns rows (arrayref of hashrefs) that overlaps with given region
+
+=cut
+sub overlappers{
+    my $self = shift;
+    my ($seqname,$start,$end) = @_;
+    die "need seqname, start and end" unless ($seqname and $start and $end);
+    my $dbh = $self->{dbh};
+
+    my $sth = $dbh->prepare("select * from gff where start <= ? and end >= ? and seqname = ?");
+    $sth->execute($end,$start,$seqname);
+    return $sth->fetchall_arrayref({});
+
+    #return $dbh->selectall_arrayref("select * from gff where start <= $end and end >= $start and seqname = $seqname",{Slice => {}});
+
+    #if (!defined $self->{overlappers-sth}){
+    #    $self->{overlappers-sth} = $dbh->prepare("select * from gff where end >= ? and start <= ? ");
+    #}
+
+    #my $sth = $dbh->prepare("select * from gff where start <= $end and end >= $start");
+    #    $self->{overlappers-sth} = $dbh->prepare("select * from gff where end >= ? and start <= ? ");
+    #$sth->execute(); 
+    #return $sth->fetchall_arrayref({});
+}
+
+=head2 $gffstore->sequences
+
+ my @distinct = $gffstore->sequences();
+
+return distinct elements from the seqname column
+
+=cut
+sub sequences{
+    my $self = shift;
+    my $dbh = $self->{dbh};
+    my $results = $dbh->selectall_arrayref("select distinct seqname from gff");
+
+    return map { $_->[0] } @$results;
+}
+
+=head2 dump
+
+=cut
+
 sub dump{
     my $self = shift;
     my $dbh = $self->{dbh};
     my $select = $dbh->prepare("select * from gff");
     $select->execute();
     while (my $row = $select->fetchrow_arrayref()){
-        say Dumper $row;
+        say gff_to_string $row;
     }
 }
 
 sub DESTROY{
     my $self = shift;
     $self->{dbh}->disconnect;
+    
+    if ($self->{tmp}) {
+        unlink0($self->{tmpfh}, $self->{dbname});
+    }
 }
 
 1;
 
+
+=head1 NAME
+ 
+DZLab::Tools::GFFStore - DBI/DBD::SQLite backend for gff data
+ 
+=head1 VERSION
+ 
+This documentation refers to DZLab::Tools::GFFStore version 0.0.1
+ 
+=head1 SYNOPSIS
+ 
+    use DZLab::Tools::GFFStore;
+  
+=head1 DESCRIPTION
+ 
+<description>
+
+=head1 SUBROUTINES/METHODS 
+
+<exports>
+
+=over
+
+=item <func1>
+
+=back
+ 
+ 
+=head1 BUGS AND LIMITATIONS
+ 
+Probably.
+
+=cut

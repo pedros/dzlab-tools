@@ -35,63 +35,87 @@ require Exporter;
 
 our @ISA       = qw/Exporter/;
 our @EXPORT    = qw/gff_read gff_make_iterator gff_validate gff_slurp_by_seq
-                    gff_to_string parse_gff parse_attributes/;
+                    gff_to_string parse_gff_arrayref parse_gff_hashref /;
 our @EXPORT_OK = qw//;
 
-
-
-=head1 EXPORTED FUNCTIONS
-
-=head2 parse_attributes "Attributes=Strings;Go=Here" desired_attribute1 desired_attribute2 ...
-
-return an array with the values of the attributes in the same order as listed in the arguments
-
-=cut
-
-sub parse_attributes{
-    my $attr = shift;
-    # preallocate hash
-    my %accum = map {$_ => undef} @_;
-
-    my $key;
-    while($attr =~ m/
+# regular expression for "Attributes=Strings;Like=this"
+my $attributes_regex = qr/
             (?:
-            \s*?([^=;]+)\s*?  # key, which may not be there
+            \s*([^=;]+)\s*  # key, which may not be there
             =
             )?
             \s*?([^=;]+)\s*?  # value
-            /xmsg){
-        $key = $1 ? $1 : 'Note';
-        if (exists $accum{$key}){ # ignore attributes which aren't desired
-            $accum{$key} = $2;
-        }
-    }
-    return @accum{@_};
-}
+            /xms;
 
-=head2 parse_gff $gffline $attribute1 $attribute2 ...
+=head1 EXPORTED FUNCTIONS
 
-returns arrayref [col1, .. col9, attr1, attr2, ...]
+=head2 parse_gff_arrayref $gffline $attribute1 $attribute2 ...
 
-maps '.' dot columns and non-existenct attributes to undef
+returns arrayref [col1, .. col9, attr1, attr2, ...] 
+maps '.' dot columns and non-existenct attributes to undef.
+returns false on comment/pragma lines and unparsable lines.
+Check that ref $result eq 'ARRAY'
 
 =cut
 
-sub parse_gff{
-    my $line = shift || croak "need a line" ;
-
+sub parse_gff_arrayref{
+    my $line = shift || return 0;
     $line =~ s/[\n\r]//g;
 
-    my @arr = split /\t/, $line;
+    return 0 if $line =~ /^\s*#/; # comments/pragmas ignored in this version
 
-    # map missing columns "." to undef
-    @arr = map { $_ eq q{.} ? undef : $_} @arr; 
+    # split, map missing columns "." to undef
+    my @arr = map { $_ eq q{.} ? undef : $_} split /\t/, $line;
+    $arr[0] = lc $arr[0] if defined $arr[0];
 
-    return unless @arr == 9;
+    (carp "unparseable GFF line" && return 0) unless @arr == 9;
 
-    my @attrvals = parse_attributes($arr[8],@_);
+    my %accum = defined($arr[8]) 
+    ?  map { defined $_ ? $_ : 'Note' } ($arr[8] =~ m/$attributes_regex/g)
+    :  ();
 
-    return [@arr,@attrvals];
+    return [@arr,@accum{@_}];
+}
+
+=head2 parse_gff_hashref $line
+
+parse gff into a hashref with all attributes. attributes are returned the same level,
+not in a sub hash.  maps '.' dot columns and non-existenct attributes to undef
+returns 0 on non-parseable lines or comments. *Returns pragmas as strings*.
+Check that ref $result eq 'HASH'
+
+=cut
+
+sub parse_gff_hashref{
+    my $line = shift || return 0;
+    $line =~ s/[\n\r]//g;
+
+    if ($line =~ m/^\s*##(.*)/){
+        return $1;
+    }
+    return 0 if $line =~ m/^\s*#/;
+
+    # split, map missing columns "." to undef
+    my @arr = map { $_ eq q{.} ? undef : $_} split /\t/, $line;
+
+    (carp "unparseable GFF line" && return 0) unless @arr == 9;
+
+    my %accum = defined($arr[8]) 
+    ?  map { defined $_ ? $_ : 'Note' } ($arr[8] =~ m/$attributes_regex/g)
+    :  ();
+
+    return {
+        seqname   => defined ($arr[0]) ? lc $arr[0] : undef,
+        source    => $arr[1],
+        feature   => $arr[2],
+        start     => $arr[3],
+        end       => $arr[4],
+        score     => $arr[5],
+        strand    => $arr[6],
+        frame     => $arr[7],
+        attribute => $arr[8],
+        %accum,
+    };
 }
 
 =head2 gff_read $string
@@ -157,7 +181,7 @@ sub gff_read {
     } values %attributes;
 
     return {
-        seqname   => d2u( lc $seqname ),
+        seqname   => d2u( defined $seqname ? lc $seqname : undef ),
         source    => d2u( $source     ),
         feature   => d2u( $feature    ),
         start     => d2u( $start      ),
@@ -173,7 +197,8 @@ sub gff_read {
 
 =head2 gff_make_iterator %options
 
-Returns an anonymous function that on, each call, reads one gff line from a $file or $handle, and returns a parsed structure as delivered by $parser.
+Returns an anonymous function that on, each call, reads one gff line from a $file or $handle, and returns a parsed
+structure as delivered by $parser.
 
 Returns undef or empty list on EOF.
 
@@ -181,7 +206,7 @@ Returns undef or empty list on EOF.
 sub gff_make_iterator {
     my %options = @_;
 
-    my $parser = $options{parser};
+    my $parser = $options{parser} || \&parse_gff_hashref;
     my $file   = $options{file};
     my $handle = $options{handle};
 
@@ -259,9 +284,23 @@ return a gffrec back in original text format
 
 
 sub gff_to_string{
-    my $gff = shift || return; 
-    return join "\t",@{$gff}{'seqname', 'source', 'feature', 'start', 'end',
-        'score',   'strand', 'frame',   'attribute'};
+    my $gff = shift || (croak "gff_to_string needs an argument??"); 
+    if (ref $gff eq 'HASH'){
+        return 
+        join "\t",
+        map { ! defined $_ ? q{.} : $_ } 
+            @{$gff}{'seqname', 'source', 'feature', 'start', 'end',
+            'score',   'strand', 'frame',   'attribute'};
+    } 
+    elsif (ref $gff eq 'ARRAY'){
+        return 
+        join "\t",
+        map { ! defined $_ ? q{.} : $_ } 
+        @{$gff}[0..8];
+    }
+    else {
+        croak "non-gff record given to gff_to_string";
+    }
 }
 
 1;
