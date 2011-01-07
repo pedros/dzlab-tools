@@ -1,0 +1,16 @@
+cpan Algorithm::Permute
+cpan Bio::DB::Fasta
+cpan Bio::SeqIO
+cpan DBI
+cpan DBD::SQLite
+cpan Digest::MD5 
+cpan List::MoreUtils 
+cpan LWP::Simple 
+cpan Module::Build
+cpan Moose
+cpan PPI
+cpan Smart::Comments
+cpan Statistics::Basic 
+cpan Statistics::KernelEstimation
+cpan XML::Simple
+cpan XML::Twig

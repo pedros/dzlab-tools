@@ -7,8 +7,12 @@ use Carp;
 use Getopt::Long;
 use Pod::Usage;
 use File::Basename;
+use feature 'say';
 
-my $output;
+use FindBin;
+use lib "$FindBin::Bin/DZLab-Tools/lib";
+use DZLab::Tools::GFF qw/gff_to_string gff_make_iterator/;
+
 my $feature;
 my $sequence;
 
@@ -16,7 +20,6 @@ my $sequence;
 my $result = GetOptions (
     'feature|f=s'  => \$feature,
     'sequence|s=s' => \$sequence,
-    'output|o=s'   => \$output,
     'verbose|v'  => sub { use diagnostics; },
     'quiet|q'    => sub { no warnings; },
     'help|h'     => sub { pod2usage ( -verbose => 1 ); },
@@ -25,45 +28,36 @@ my $result = GetOptions (
 
 # Check required command line parameters
 pod2usage ( -verbose => 1 )
-unless @ARGV and $result and -e $ARGV[0]
-or (
-    ($feature and !$sequence) or
-    (!$feature and $sequence)
-);
+unless @ARGV && $result && -e $ARGV[0] && ($feature xor $sequence);
 
-if ($output) {
-    open my $USER_OUT, '>', $output or carp "Can't open $output for writing: $!";
-    select $USER_OUT;
-}
 
 my ($name, $path, $suffix) = fileparse ($ARGV[0], qr/\.[^.]*/);
 
 my %file_handle;
-while (my $gff_line = <>) {
-    next if $gff_line =~ m/^\s*$|^\s*#/;
+my $iter = gff_make_iterator(file => $ARGV[0]);
+RECORD:
+while (defined(my $gff = $iter->())){
+    next unless ref $gff eq 'HASH';
 
-    my $current = (split /\t/, $gff_line)[($sequence ? 0 : 2)];
-    $feature = $sequence if $sequence;
+    my $current = $sequence ? $gff->{seqname} : $gff->{feature};
+    next RECORD unless defined $current;
 
-    next unless ($feature =~ m/all/i
-                 or $current =~ m/$feature/i)
-    and $current !~ m/\./;
+    if (($feature && ($feature eq 'all' || $feature eq $gff->{feature}))
+        ||
+        ($sequence && ($sequence eq 'all' || $sequence eq $gff->{seqname})))
+    {
+        my $out = $path . $name . "-$current" . $suffix;
 
-    my $out = $path . $name . "-$current" . $suffix;
+        if (! exists $file_handle{$current}){
+            open $file_handle{$current}, '>', $out
+                or croak "Can't open $out for writing: $!";
+        }
 
-    open $file_handle{$current}, '>', $out
-    or croak "Can't open $out for writing: $!"
-    unless exists $file_handle{$current};
-
-    print {$file_handle{$current}} $gff_line;
+        say {$file_handle{$current}} gff_to_string $gff;
+    }
 }
-close $file_handle{$_} for keys %file_handle;
-
-exit 0;
-
 
 __END__
-
 
 =head1 NAME
 
@@ -71,9 +65,9 @@ __END__
 
 =head1 SYNOPSIS
 
- split_gff.pl -f exon all_features.gff  # filter by exon
- split_gff.pl -s chr1 all_sequences.gff # filter by chromosome
- split_gff.pl -f all all_features.gff    # create multiple files, one per feature
+ split_gff.pl -f exon all_features.gff  # filter by exon, create file all_features-exon.gff
+ split_gff.pl -s chr1 all_sequences.gff # filter by chromosome, create file all_sequences-chr1.gff
+ split_gff.pl -f all all_features.gff   # create multiple files, one per feature
 
 =head1 DESCRIPTION
 
@@ -83,7 +77,6 @@ __END__
 
  -f, --feature     feature used to filter GFF file by ('all' generates one file per feature)
  -s, --sequence    sequence ID used to filter GFF file by ('all' generates one file per sequence ID)
- -o, --output      filename to write results to (defaults to STDOUT)
  -v, --verbose     output perl's diagnostic and warning messages
  -q, --quiet       supress perl's diagnostic and warning messages
  -h, --help        print this information
