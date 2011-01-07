@@ -228,7 +228,7 @@ sub select_iter{
     my $stmt = shift;
     my $dbh = $self->{dbh};
     my $sth = $dbh->prepare($stmt);
-    $sth->execute() or die "can't execute statement";
+    $sth->execute(@_) or die "can't execute statement";
     
     return sub {
         return $sth->fetchrow_hashref();
@@ -273,7 +273,7 @@ Run raw select statement against db, return an arrayref of hashrefs
 sub select{
     my $self = shift;
     my $stmt = shift;
-    my $iter = $self->select_iter($stmt);
+    my $iter = $self->select_iter($stmt,@_);
     my @accum;
     while (my $row = $iter->()){
         push @accum,$row;
@@ -294,7 +294,7 @@ sub select_row{
 
     my $dbh = $self->{dbh};
     my $sth = $dbh->prepare($stmt);
-    $sth->execute() or die "can't execute statement";
+    $sth->execute(@_) or die "can't execute statement";
     
     my $row = $sth->fetchrow_hashref();
     $sth->finish;
@@ -314,7 +314,7 @@ sub select_col{
 
     my $dbh = $self->{dbh};
     my $sth = $dbh->prepare($stmt);
-    $sth->execute() or die "can't execute statement";
+    $sth->execute(@_) or die "can't execute statement";
     
     my @accum;
     while (my $row = $sth->fetchrow_arrayref()){
