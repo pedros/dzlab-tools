@@ -380,20 +380,31 @@ sub make_iterator_overlappers{
     };
 }
 
-=head2 overlappers($start, $end);
+=head2 overlappers
 
-returns rows (arrayref of hashrefs) that overlaps with given region
+ overlappers($seqname, $feature, $start, $end);
+ overlappers($seqname, $start, $end);
+
+returns rows (arrayref of hashrefs) that overlaps with given region. 
+Make sure you've indexed on ['seqname', 'feature', 'start', 'end'] 
+or ['seqname', 'start', 'end'] if you're running many.
 
 =cut
 sub overlappers{
     my $self = shift;
-    my ($seqname,$start,$end) = @_;
-    die "need seqname, start and end" unless ($seqname and $start and $end);
+    my ($seqname,$feature,$start,$end) = @_;
+    die "need seqname, start, and end" unless ($seqname and $start and $end);
     my $dbh = $self->{dbh};
 
-    my $sth = $dbh->prepare("select * from gff where start <= ? and end >= ? and seqname = ?");
-    $sth->execute($end,$start,$seqname);
-    return $sth->fetchall_arrayref({});
+    if ($feature){
+        my $sth = $dbh->prepare("select * from gff where seqname = ? and feature = ? and start <= ? and end >= ?");
+        $sth->execute($seqname,$feature,$end,$start);
+        return $sth->fetchall_arrayref({});
+    } else{
+        my $sth = $dbh->prepare("select * from gff where seqname = ? and start <= ? and end >= ?");
+        $sth->execute($seqname,$end,$start);
+        return $sth->fetchall_arrayref({});
+    }
 
     #return $dbh->selectall_arrayref("select * from gff where start <= $end and end >= $start and seqname = $seqname",{Slice => {}});
 
