@@ -281,6 +281,50 @@ sub select{
     return \@accum;
 }
 
+=head2 select_row
+
+ my $row_fref = $gffstore->select_row("select seqname from gff");
+
+Run raw select statement against db, return a single row as hashref
+
+=cut
+sub select_row{
+    my $self = shift;
+    my $stmt = shift;
+
+    my $dbh = $self->{dbh};
+    my $sth = $dbh->prepare($stmt);
+    $sth->execute() or die "can't execute statement";
+    
+    my $row = $sth->fetchrow_hashref();
+    $sth->finish;
+    return $row;
+}
+
+=head2 select_row
+
+ my $row_aref = $gffstore->select_col("select distinct seqname from gff");
+
+Run raw select statement against db, return an aref of first column
+
+=cut
+sub select_col{
+    my $self = shift;
+    my $stmt = shift;
+
+    my $dbh = $self->{dbh};
+    my $sth = $dbh->prepare($stmt);
+    $sth->execute() or die "can't execute statement";
+    
+    my @accum;
+    while (my $row = $sth->fetchrow_arrayref()){
+        next if ! defined $row->[0];
+        push @accum,$row->[0];
+    }
+    $sth->finish();
+    return \@accum;
+}
+
 =head2 make_iterator {column1 => value1, column2 => value2, ...}
 
 return an iterator which, for every call, returns a hashref of a row matching the given 
@@ -383,7 +427,7 @@ sub make_iterator_overlappers{
 =head2 overlappers
 
  overlappers($seqname, $feature, $start, $end);
- overlappers($seqname, $start, $end);
+ overlappers($seqname, 0,        $start, $end);
 
 returns rows (arrayref of hashrefs) that overlaps with given region. 
 Make sure you've indexed on ['seqname', 'feature', 'start', 'end'] 
@@ -405,39 +449,19 @@ sub overlappers{
         $sth->execute($seqname,$end,$start);
         return $sth->fetchall_arrayref({});
     }
-
-    #return $dbh->selectall_arrayref("select * from gff where start <= $end and end >= $start and seqname = $seqname",{Slice => {}});
-
-    #if (!defined $self->{overlappers-sth}){
-    #    $self->{overlappers-sth} = $dbh->prepare("select * from gff where end >= ? and start <= ? ");
-    #}
-
-    #my $sth = $dbh->prepare("select * from gff where start <= $end and end >= $start");
-    #    $self->{overlappers-sth} = $dbh->prepare("select * from gff where end >= ? and start <= ? ");
-    #$sth->execute(); 
-    #return $sth->fetchall_arrayref({});
 }
 
-=head2 $gffstore->sequences
-
- my @distinct = $gffstore->sequences();
-
-return distinct elements from the seqname column
-
-=cut
-sub sequences{
+sub seqnames{
     my $self = shift;
-    my $dbh = $self->{dbh};
-    my $results = $dbh->selectall_arrayref("select distinct seqname from gff");
-
-    return map { $_->[0] } @$results;
+    return $self->select_col("select distinct seqname from gff");
 }
 
-=head2 dump
+sub features{
+    my $self = shift;
+    return $self->select_col("select distinct feature from gff");
+}
 
-=cut
-
-sub dump{
+sub dump_gff{
     my $self = shift;
     my $dbh = $self->{dbh};
     my $select = $dbh->prepare("select * from gff");
@@ -481,7 +505,7 @@ This documentation refers to DZLab::Tools::GFFStore version 0.0.1
 
 =over
 
-=item <func1>
+=item 
 
 =back
  
