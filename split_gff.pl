@@ -40,6 +40,7 @@ while (defined(my $gff = $iter->())){
     next unless ref $gff eq 'HASH';
 
     my $current = $sequence ? $gff->{seqname} : $gff->{feature};
+    next RECORD unless defined $current;
 
     if (($feature && ($feature eq 'all' || $feature eq $gff->{feature}))
         ||
