@@ -228,7 +228,7 @@ sub select_iter{
     my $stmt = shift;
     my $dbh = $self->{dbh};
     my $sth = $dbh->prepare($stmt);
-    $sth->execute() or die "can't execute statement";
+    $sth->execute(@_) or die "can't execute statement";
     
     return sub {
         return $sth->fetchrow_hashref();
@@ -273,11 +273,55 @@ Run raw select statement against db, return an arrayref of hashrefs
 sub select{
     my $self = shift;
     my $stmt = shift;
-    my $iter = $self->select_iter($stmt);
+    my $iter = $self->select_iter($stmt,@_);
     my @accum;
     while (my $row = $iter->()){
         push @accum,$row;
     }
+    return \@accum;
+}
+
+=head2 select_row
+
+ my $row_fref = $gffstore->select_row("select seqname from gff");
+
+Run raw select statement against db, return a single row as hashref
+
+=cut
+sub select_row{
+    my $self = shift;
+    my $stmt = shift;
+
+    my $dbh = $self->{dbh};
+    my $sth = $dbh->prepare($stmt);
+    $sth->execute(@_) or die "can't execute statement";
+    
+    my $row = $sth->fetchrow_hashref();
+    $sth->finish;
+    return $row;
+}
+
+=head2 select_row
+
+ my $row_aref = $gffstore->select_col("select distinct seqname from gff");
+
+Run raw select statement against db, return an aref of first column
+
+=cut
+sub select_col{
+    my $self = shift;
+    my $stmt = shift;
+
+    my $dbh = $self->{dbh};
+    my $sth = $dbh->prepare($stmt);
+    $sth->execute(@_) or die "can't execute statement";
+    
+    my @accum;
+    while (my $row = $sth->fetchrow_arrayref()){
+        next if ! defined $row->[0];
+        push @accum,$row->[0];
+    }
+    $sth->finish();
     return \@accum;
 }
 
@@ -380,53 +424,44 @@ sub make_iterator_overlappers{
     };
 }
 
-=head2 overlappers($start, $end);
+=head2 overlappers
 
-returns rows (arrayref of hashrefs) that overlaps with given region
+ overlappers($seqname, $feature, $start, $end);
+ overlappers($seqname, 0,        $start, $end);
+
+returns rows (arrayref of hashrefs) that overlaps with given region. 
+Make sure you've indexed on ['seqname', 'feature', 'start', 'end'] 
+or ['seqname', 'start', 'end'] if you're running many.
 
 =cut
 sub overlappers{
     my $self = shift;
-    my ($seqname,$start,$end) = @_;
-    die "need seqname, start and end" unless ($seqname and $start and $end);
+    my ($seqname,$feature,$start,$end) = @_;
+    die "need seqname, start, and end" unless ($seqname and $start and $end);
     my $dbh = $self->{dbh};
 
-    my $sth = $dbh->prepare("select * from gff where start <= ? and end >= ? and seqname = ?");
-    $sth->execute($end,$start,$seqname);
-    return $sth->fetchall_arrayref({});
-
-    #return $dbh->selectall_arrayref("select * from gff where start <= $end and end >= $start and seqname = $seqname",{Slice => {}});
-
-    #if (!defined $self->{overlappers-sth}){
-    #    $self->{overlappers-sth} = $dbh->prepare("select * from gff where end >= ? and start <= ? ");
-    #}
-
-    #my $sth = $dbh->prepare("select * from gff where start <= $end and end >= $start");
-    #    $self->{overlappers-sth} = $dbh->prepare("select * from gff where end >= ? and start <= ? ");
-    #$sth->execute(); 
-    #return $sth->fetchall_arrayref({});
+    if ($feature){
+        my $sth = $dbh->prepare("select * from gff where seqname = ? and feature = ? and start <= ? and end >= ?");
+        $sth->execute($seqname,$feature,$end,$start);
+        return $sth->fetchall_arrayref({});
+    } else{
+        my $sth = $dbh->prepare("select * from gff where seqname = ? and start <= ? and end >= ?");
+        $sth->execute($seqname,$end,$start);
+        return $sth->fetchall_arrayref({});
+    }
 }
 
-=head2 $gffstore->sequences
-
- my @distinct = $gffstore->sequences();
-
-return distinct elements from the seqname column
-
-=cut
-sub sequences{
+sub seqnames{
     my $self = shift;
-    my $dbh = $self->{dbh};
-    my $results = $dbh->selectall_arrayref("select distinct seqname from gff");
-
-    return map { $_->[0] } @$results;
+    return $self->select_col("select distinct seqname from gff");
 }
 
-=head2 dump
+sub features{
+    my $self = shift;
+    return $self->select_col("select distinct feature from gff");
+}
 
-=cut
-
-sub dump{
+sub dump_gff{
     my $self = shift;
     my $dbh = $self->{dbh};
     my $select = $dbh->prepare("select * from gff");
@@ -470,7 +505,7 @@ This documentation refers to DZLab::Tools::GFFStore version 0.0.1
 
 =over
 
-=item <func1>
+=item 
 
 =back
  
