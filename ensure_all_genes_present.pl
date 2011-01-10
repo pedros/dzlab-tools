@@ -12,14 +12,18 @@ use FindBin;
 use lib "$FindBin::Bin/DZLab-Tools/lib";
 use DZLab::Tools::RunUtils;
 
-GetOptions(
-    \%ARGV,
-    'input|i=s', 'output|o=s', 'error|e=s',
-    'annotation|a=s',
-    _meta_options( \%ARGV ),
-) and (@ARGV or $ARGV{input}) or pod2usage( -verbose => 1 );
+use Pod::Usage;
+use Getopt::Long;
 
-my ( $INH, $OUTH, $ERRH ) = _prepare_io( \%ARGV, \@ARGV );
+my $help;
+my $verbose;
+my $annotation;
+my $result = GetOptions (
+    "verbose" => \$verbose,
+    "help"    => \$help,
+    "annotation|a=s" => \$annotation,
+);
+pod2usage(-verbose => 1) if (!$annotation || $help);  
 
 my %genes;
 open my $ANNOTATION, q{<}, $ARGV{annotation} or die "Can't open $ARGV{annotation}: $!";
@@ -48,7 +52,7 @@ for my $scores (@ARGV) {
     }
     close $SCORES or die "Can't close $scores: $!";
 
-    open my $OUTFILE, q{>}, $scores or die "Can't open $scores: $!";
+    open my $OUTFILE, q{>}, "$scores.allgenes" or die "Can't open $scores: $!";
   CANONICAL_GENE:
     for (@genes) {
         if (exists $file_genes{$_}) {
@@ -58,7 +62,7 @@ for my $scores (@ARGV) {
             print $OUTFILE "$_\t$genes{$_}\n";
         }
     }
-    close $OUTFILE or die "Can't close $scores: $!";
+    close $OUTFILE; 
 }
 
 __DATA__
@@ -68,33 +72,33 @@ __END__
 
 =head1 NAME
 
-ensure_all_genes_present.pl - Ensure all genes present
+ ensure_all_genes_present.pl - Ensure all genes present
 
 =head1 SYNOPSIS
 
-ensure_all_genes_present.pl [OPTION]... [[-i] FILE]...
-
-ensure_all_genes_present.pl bunch_of_'GENEID SCORE'_FILES
+ ensure_all_genes_present.pl -a annotation.gff input_file1.gff inputfile2.gff ...
 
 =head1 DESCRIPTION
 
- Long description
+For each input file, output entire content PLUS a line for every gene which 
+is present in the annotation file but not in the input file. Output file is 
+named input_fileN.gff.allgenes
 
 =head1 OPTIONS
 
- -i, --input       <string>     input filename                           (STDIN)
- -o, --output      <string>     output filename                          (STDOUT)
- -e, --error       <string>     output error filename                    (STDERR)
-     --verbose     [integer]    print increasingly verbose error messages
-     --quiet                    print no diagnostic or warning messages
-     --version                  print current version
-     --license                  print author's contact and copyright information
-     --help                     print this information
-     --manual                   print the plain old documentation page
+     --annotation      GFF Annotation file to compare the input file genes against.  
+      -a               Each line in annotation file is parsed for and ID=...; field.
+
+     --verbose         print increasingly verbose error messages
+     --quiet           print no diagnostic or warning messages
+     --version         print current version
+     --license         print author's contact and copyright information
+     --help            print this information
+     --manual          print the plain old documentation page
 
 =head1 VERSION
 
- 0.0.1
+ 0.0.2
 
 =head1 REVISION
 
