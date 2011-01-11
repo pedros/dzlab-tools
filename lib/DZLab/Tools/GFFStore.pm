@@ -4,6 +4,7 @@ use strict;
 use warnings;
 use Data::Dumper;
 use feature 'say';
+use feature 'state';
 use Carp;
 use DBI;
 use File::Temp qw/tempfile unlink0/;
@@ -103,6 +104,8 @@ sub new {
         {RaiseError => 1, AutoCommit => 1});
     $dbh->do("PRAGMA automatic_index = OFF");
     $dbh->do("PRAGMA journal_mode = OFF");
+    $dbh->do("PRAGMA cache_size = 80000");
+        
     $dbh->do($self->create_table_statement());
 
     return $self;
@@ -127,12 +130,12 @@ sub create_table_statement{
 sub create_index_statements{
     my $self = shift;
     
-    return map { 
+    return (map { 
         my @cols = @$_;
         my $colcomma   = join q{,}, @cols;
         my $index_name = join q{_}, @cols;
-        return "create index $index_name on gff ($colcomma)";
-    } @{$self->{indices}};
+        "create index $index_name on gff ($colcomma)";
+    } @{$self->{indices}});
 }
 
 =head2 slurp
@@ -188,6 +191,7 @@ sub create_indices{
     my $self = shift;
     my $dbh  = $self->{dbh};
     say STDERR "creating indices (if any)" if $self->{verbose};
+
     for my $index_statement ($self->create_index_statements()){
         say STDERR $index_statement if $self->{verbose};
         $dbh->do($index_statement);
@@ -439,15 +443,19 @@ sub overlappers{
     my ($seqname,$feature,$start,$end) = @_;
     die "need seqname, start, and end" unless ($seqname and $start and $end);
     my $dbh = $self->{dbh};
+    state $sth_with_f = $dbh->prepare("select * from gff where seqname = ? and feature = ? and start <= ? and end >= ?");
+    state $sth_without_f = $dbh->prepare("select * from gff where seqname = ? and start <= ? and end >= ?");
 
     if ($feature){
-        my $sth = $dbh->prepare("select * from gff where seqname = ? and feature = ? and start <= ? and end >= ?");
-        $sth->execute($seqname,$feature,$end,$start);
-        return $sth->fetchall_arrayref({});
+        $sth_with_f->execute($seqname,$feature,$end,$start);
+        my $rv = $sth_with_f->fetchall_arrayref({});
+        $sth_with_f->finish();
+        return $rv;
     } else{
-        my $sth = $dbh->prepare("select * from gff where seqname = ? and start <= ? and end >= ?");
-        $sth->execute($seqname,$end,$start);
-        return $sth->fetchall_arrayref({});
+        $sth_without_f->execute($seqname,$end,$start);
+        my $rv = $sth_without_f->fetchall_arrayref({});
+        $sth_without_f->finish();
+        return $rv;
     }
 }
 
