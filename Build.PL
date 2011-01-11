@@ -20,9 +20,10 @@ my $builder = Module::Build->new(
     },
     add_to_cleanup      => [ 'DZLab-Tools-*' ],
     create_makefile_pl  => 'traditional',
-    sign                => 1,
+    script_files => qw/gff2sqlite.pl/,
+    #sign                => 1,
     create_readme       => 1,
-    create_license      => 1,
+    #create_license      => 0,
 );
 
 $builder->create_build_script();
