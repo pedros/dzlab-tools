@@ -107,6 +107,7 @@ sub new {
     $dbh->do("PRAGMA cache_size = 80000");
         
     $dbh->do($self->create_table_statement());
+    $dbh->do($self->create_rtree_statement());
 
     return $self;
 }
@@ -120,11 +121,19 @@ sub insert_statement{
 
 sub create_table_statement{
     my $self = shift;
-    return "create table if not exists gff (" . 
+    return "create table if not exists gff (_id integer primary key autoincrement, " . 
     join(',',
         map { $self->{columns}[$_] . " " .  $self->{columntypes}[$_]} (0 .. $self->{numcol}-1)
     ) 
     .  ")";
+}
+
+sub create_rtree_statement{
+    my $self = shift;
+    return "create virtual table range using rtree (_id integer primary key, start, end)";
+}
+sub insert_rtree_statement{
+    return "insert into range (_id, start, end) values (?,?,?)";
 }
 
 sub create_index_statements{
@@ -158,6 +167,7 @@ sub slurp{
 
     say STDERR $self->insert_statement() if $self->{debug};
     my $insert_sth = $dbh->prepare($self->insert_statement());
+    my $rtree_sth  = $dbh->prepare($self->insert_rtree_statement());
 
     $dbh->{AutoCommit} = 0;
 
@@ -175,6 +185,7 @@ sub slurp{
         next unless $parsed;
 
         $insert_sth->execute(@$parsed);
+        $rtree_sth->execute($dbh->last_insert_id("","","",""), $parsed->[3], $parsed->[4]);
         if ($counter++ % $self->{counter} == 0){
             say STDERR "Reading "  . ($filename ? $filename : q{}) . ' ' . ($counter-1) if $self->{verbose};
             $dbh->commit;
@@ -443,8 +454,15 @@ sub overlappers{
     my ($seqname,$feature,$start,$end) = @_;
     die "need seqname, start, and end" unless ($seqname and $start and $end);
     my $dbh = $self->{dbh};
-    state $sth_with_f = $dbh->prepare("select * from gff where seqname = ? and feature = ? and start <= ? and end >= ?");
-    state $sth_without_f = $dbh->prepare("select * from gff where seqname = ? and start <= ? and end >= ?");
+
+    my $colcomma = join ",", map {"gff.$_ as $_"} @{$self->{columns}};
+
+    state $sth_with_f = $dbh->prepare(
+        "select $colcomma from gff,range where gff._id = range._id and gff.seqname = ? and gff.feature = ? and range.start <= ? and range.end >= ?"
+    );
+    state $sth_without_f = $dbh->prepare(
+        "select $colcomma from gff,range where gff._id = range._id and gff.seqname = ? and range.start <= ? and range.end >= ?"
+    );
 
     if ($feature){
         $sth_with_f->execute($seqname,$feature,$end,$start);
