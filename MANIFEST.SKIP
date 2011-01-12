@@ -1,0 +1,12 @@
+^MYMETA.yml$
+.git
+^_build
+^Build$
+^blib
+~$
+\.bak$
+^MANIFEST\.SKIP$
+CVS
+.gz$
+.swp$
+
