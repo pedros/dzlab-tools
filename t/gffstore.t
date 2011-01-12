@@ -16,7 +16,7 @@ my $gffstore = DZLab::Tools::GFFStore->new({
         verbose => 1, 
         #debug => 1,
         indices => [['start','end']],
-        dbname => 'tmp.sqlite',
+        #dbname => 'tmp.sqlite',
     });
 
 $gffstore->slurp({handle => \*DATA});
