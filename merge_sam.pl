@@ -1,5 +1,7 @@
 #!/usr/bin/env perl
 
+package merge_sam;
+
 use warnings;     use strict; use diagnostics;
 use Data::Dumper; use Carp;
 use Getopt::Long; use Pod::Usage;
@@ -8,6 +10,10 @@ use FindBin;      use lib "$FindBin::Bin/DZLab-Tools/lib";
 
 use DZLab::Tools::RunUtils;
 use Bio::DB::Sam;
+
+main() unless caller();
+
+sub main {
 
 GetOptions(
     \%ARGV,
@@ -20,20 +26,7 @@ GetOptions(
 my ( $INH, $OUTH, $ERRH ) = _prepare_io( \%ARGV, \@ARGV );
 
 
-my ($left, $right) = map {
-    Bio::DB::Sam->new( 
-        -bam => $_,
-        -expand_flags => 1,
-        -fasta => $ARGV{reference},
-    )->features( -iterator => 1 ) 
-} @ARGV[0, 1];
-
-
-while (my $alignments = next_multiple_alignments( $left ) ) {
-    #die Dumper $alignments->[0]->strand;
-    print Dumper $alignments->[0]->strand;
 }
-
 
 
 
@@ -57,8 +50,8 @@ while (my $alignments = next_multiple_alignments( $left ) ) {
  and an options hash with the following keys:
 
  %opt = (
-     random => boolean,
-     insert-size => integer,
+     random      => boolean,
+     insert      => integer,
      variance    => float coefficient (0.0-1.0)
      orientation => -1|1,
  );
@@ -68,7 +61,6 @@ while (my $alignments = next_multiple_alignments( $left ) ) {
  or undef if no possible mappings exist.
 
 =cut
-
 sub choose_mates {
     my ($alignment_iterator, %opts) = @_;
 
@@ -91,7 +83,7 @@ sub choose_mates {
  and an options hash with the following keys:
 
  %opt = (
-     insert-size => integer,
+     insert      => integer,
      variance    => float coefficient (0.0-1.0)
      orientation => -1|1,
  );
@@ -101,10 +93,9 @@ sub choose_mates {
  1. Map to same sequence ID (chromosome)
  2. Map to opposite (-1) or same (1) orientation
  3. Are separated, from end of one object to start of another,
-    by exactly $insert-size bp * ( +/- $variance )
+    by exactly $insert bp * ( +/- $variance )
 
 =cut
-
 sub check_mates {
     my ($left, $right, %opts) = @_;
 
@@ -123,18 +114,19 @@ sub check_mates {
 
     my $variance = $opts{distance} * $opts{variance};
 
-    return ($opts{distance} + $variance) >= $insert
-    and    ($opts{distance} - $variance) <= $insert; # condition 3, map within acceptable range
+    return ($opts{insert} + $variance) >= $insert
+    and    ($opts{insert} - $variance) <= $insert; # condition 3, map within acceptable range
 }
 
 =head2 make_mates_iterator
 
  Takes two references to arrays of Bio::DB::Bam::AlignWrapper objects.
- Returns an anonymous subroutine that will iterate over all combinations
- of one object from each array reference.
+ In scalar context, returns an anonymous subroutine that will iterate
+ over all combinations of one object from each arrayref.
+ In list context, returns a list of all combinations of one object from
+ each arrayref.
 
 =cut
-
 sub make_mates_iterator {
     my ($left, $right) = @_;
 
@@ -146,7 +138,7 @@ sub make_mates_iterator {
         }
     }
 
-    return sub { shift @combos };
+    return wantarray ? @combos : sub { shift @combos };
 }
 
 
@@ -154,7 +146,7 @@ sub make_mates_iterator {
 
  Takes a Bio::DB::Sam features iterator.
  Returns undef if iterator exhausted,
- or a list of Bio::DB::Bam::AlignWrapper objects
+ or an arrayref of Bio::DB::Bam::AlignWrapper objects
  representing different possible Sam alignments
  for the same read (as defined by its group/machine id)
 
@@ -193,6 +185,9 @@ sub next_multiple_alignments {
             }
         }
     }
+    my $reads = $buffer{$sam};
+    delete $buffer{$sam};
+    return $reads;
 }
 
 
