@@ -10,11 +10,13 @@ use FindBin;
 use lib "$FindBin::Bin/../lib";
 use DZLab::Tools::GFFStore;
 
+
 my $gffstore = DZLab::Tools::GFFStore->new({
         attributes => {ID => 'text', Note => 'text'}, 
-        #verbose => 1, 
+        verbose => 1, 
         #debug => 1,
         indices => [['start','end']],
+        dbname => 'tmp.sqlite',
     });
 
 $gffstore->slurp({handle => \*DATA});
@@ -50,8 +52,10 @@ is(scalar @$results, 1, 'make iterator with contraints');
 
 # overlaps
 
-is(scalar @{$gffstore->overlappers('chr1','gene',160000,170000)},3, 'overlappers');
-is(scalar @{$gffstore->overlappers('chr2',0, 160000,170000)},2, 'overlappers');
+if ($gffstore->{rtree_supported}){
+    is(scalar @{$gffstore->overlappers('chr1','gene',160000,170000)},3, 'overlappers');
+    is(scalar @{$gffstore->overlappers('chr2',0, 160000,170000)},2, 'overlappers');
+}
 
 # count 
 
@@ -68,10 +72,12 @@ is_deeply([ {
 } ], 
 $gffstore->select('select count(strand) as count, strand from gff group by strand'), "\$gffstore->select");
 
-say $gffstore->select_row('select start,end from gff where end = 31227 limit 1')->{start};
-say Dumper $gffstore->select_col('select distinct seqname from gff');
-say Dumper $gffstore->seqnames();
-say Dumper $gffstore->features();
+#say Dumper $gffstore->overlappers('chr1',0,8000,12000);
+
+#say $gffstore->select_row('select start,end from gff where end = 31227 limit 1')->{start};
+#say Dumper $gffstore->select_col('select distinct seqname from gff');
+##say Dumper $gffstore->seqnames();
+#say Dumper $gffstore->features();
 
 __DATA__
 .	TAIR8	gene	3631	5899	.	+	.	ID=AT1G01010;Name=AT1G01010;Note=ANAC001 (Arabidopsis NAC domain containing protein 1),transcription factor
