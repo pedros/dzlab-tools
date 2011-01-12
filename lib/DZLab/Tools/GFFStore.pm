@@ -7,6 +7,7 @@ use feature 'say';
 use feature 'state';
 use Carp;
 use DBI;
+use Regexp::Common;
 use File::Temp qw/tempfile unlink0/;
 use DZLab::Tools::GFF qw/parse_gff_arrayref gff_to_string/;
 
@@ -225,7 +226,11 @@ sub slurp{
         next unless $parsed;
 
         $insert_sth->execute(@$parsed);
-        $rtree_sth->execute($dbh->last_insert_id("","","",""), $parsed->[3], $parsed->[4]) if $self->{rtree_supported};
+
+        if ($RE{num}{real}->matches($parsed->[3]) && $RE{num}{real}->matches($parsed->[4])){
+            $rtree_sth->execute($dbh->last_insert_id("","","",""), $parsed->[3], $parsed->[4]) if $self->{rtree_supported};
+        }
+
         if ($counter++ % $self->{counter} == 0){
             say STDERR "Reading "  . ($filename ? $filename : q{}) . ' ' . ($counter-1) if $self->{verbose};
             $dbh->commit;
