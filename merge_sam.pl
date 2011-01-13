@@ -7,6 +7,7 @@ use Data::Dumper; use Carp;
 use Getopt::Long; use Pod::Usage;
 use version;      our $VERSION = qv('0.0.1');
 use FindBin;      use lib "$FindBin::Bin/DZLab-Tools/lib";
+use feature 'state';
 
 use DZLab::Tools::RunUtils;
 use Bio::DB::Sam;
@@ -112,10 +113,10 @@ sub check_mates {
                  ? $right->start - $left->end
                  : abs( $chr_len - $right->start + 1 ) - $left->end;
 
-    my $variance = $opts{distance} * $opts{variance};
+    my $variance = $opts{insert} * $opts{variance};
 
-    return ($opts{insert} + $variance) >= $insert
-    and    ($opts{insert} - $variance) <= $insert; # condition 3, map within acceptable range
+    return ($opts{insert} + $variance) >= $insert - 1
+    &&     ($opts{insert} - $variance) <= $insert - 1; # condition 3, map within acceptable range
 }
 
 =head2 make_mates_iterator
@@ -123,8 +124,6 @@ sub check_mates {
  Takes two references to arrays of Bio::DB::Bam::AlignWrapper objects.
  In scalar context, returns an anonymous subroutine that will iterate
  over all combinations of one object from each arrayref.
- In list context, returns a list of all combinations of one object from
- each arrayref.
 
 =cut
 sub make_mates_iterator {
@@ -138,7 +137,7 @@ sub make_mates_iterator {
         }
     }
 
-    return wantarray ? @combos : sub { shift @combos };
+    return sub { shift @combos };
 }
 
 
@@ -160,6 +159,14 @@ sub next_multiple_alignments {
     state %buffer;
 
     while ( my $read = $sam->next_seq ) {
+
+        # HERE BE DRAGONS: DZLab's BS alignment process makes it so that
+        #                  reverse orientation reads align to a mock chr
+        #                  prefixed by 'RC_', always in the forward strand.
+        # The following patches the Bio::DB::Bam::AlignWrapper object methods
+        # 'seq_id' and 'strand' to return appropriate values as expected.
+        _monkey_patch_instance( $read, seq_id => \&_seq_id );
+        _monkey_patch_instance( $read, strand => \&_strand );
 
         # not seen this iterator yet, or buffer empty
         # save read; note, buffer is stateful, so 
@@ -190,6 +197,32 @@ sub next_multiple_alignments {
     return $reads;
 }
 
+# Code by John Siracusa (Jan 16 2009): 'How can I monkey-patch an instance method in Perl?'
+# http://stackoverflow.com/questions/449690/how-can-i-monkey-patch-an-instance-method-in-perl/451281#451281
+sub _monkey_patch_instance {
+    my($instance, $method, $code) = @_;
+
+    state $counter = 1;
+
+    my $package = ref( $instance ) . '::MonkeyPatch' . $counter++;
+
+    no strict 'refs';
+    @{$package . '::ISA'} = (ref( $instance ));
+    *{$package . '::' . $method} = $code;
+
+    bless $_[0], $package; # sneaky re-bless of aliased argument
+}
+
+sub _seq_id {
+    my ($self) = @_;
+    my $seq_id = $self->Bio::DB::Bam::AlignWrapper::seq_id;
+    $seq_id =~ s/^rc_//i;
+    return $seq_id;
+}
+sub _strand {
+    my ($self) = @_;
+    return $self->Bio::DB::Bam::AlignWrapper::seq_id =~ m/^RC_/ ? -1 : 1;
+}
 
 
 
@@ -248,3 +281,4 @@ __END__
  along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 =cut
+
