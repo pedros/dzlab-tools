@@ -7,7 +7,7 @@ use Data::Dumper; use Carp;
 use Getopt::Long; use Pod::Usage;
 use version;      our $VERSION = qv('0.0.1');
 use FindBin;      use lib "$FindBin::Bin/DZLab-Tools/lib";
-use feature 'state';
+use feature qw/state switch/;
 
 use DZLab::Tools::RunUtils;
 use Bio::DB::Sam;
@@ -18,9 +18,10 @@ sub main {
 
 GetOptions(
     \%ARGV,
-    'forward-reverse|fr', 'forward-forward|ff',
-    'insert-size|i=i',    'reference|r=s',
-    'output|o=s',         'error|e=s',
+    'random|r',      'max-mates|m',
+    'insert|i=i',    'variance|v=f',
+    'reference|r=s', 'reads-1|1' 'reads-2|2',
+    'output|o=s',    'error|e=s',
     _meta_options( \%ARGV ),
 ) and ($ARGV[0] and $ARGV[1] ) or pod2usage( -verbose => 1 );
 
@@ -28,8 +29,6 @@ my ( $INH, $OUTH, $ERRH ) = _prepare_io( \%ARGV, \@ARGV );
 
 
 }
-
-
 
 
     ##### No matches on either end #####
@@ -45,6 +44,8 @@ my ( $INH, $OUTH, $ERRH ) = _prepare_io( \%ARGV, \@ARGV );
     ##### Multiple matches on both ends #####
 
 
+
+
 =head2 choose_mates
 
  Takes an iterator of two Bio::DB::Bam::AlignWrapper objects as produced by make_mates_iterator(),
@@ -52,13 +53,15 @@ my ( $INH, $OUTH, $ERRH ) = _prepare_io( \%ARGV, \@ARGV );
 
  %opt = (
      random      => boolean,
+     max-mates   => integer,
      insert      => integer,
      variance    => float coefficient (0.0-1.0)
      orientation => -1|1,
  );
 
  Returns best pair if unique possible mapping,
- a random pair if multiple possible mappings and $opt{random},
+ a random pair if multiple possible mappings and $opt{random}
+ and number of mappings is smaller than ($opt{max-mates} // 1),
  or undef if no possible mappings exist.
 
 =cut
@@ -71,10 +74,13 @@ sub choose_mates {
         push @alignments, $mates
         if check_mates( @$mates, %opts );
     }
-    
-    return shift @alignments if @alignments == 1;
-    return $alignments[int rand (@alignments - 1)] if @alignments > 1 and $opts{random};
-    return unless @alignments;
+
+    given (scalar @alignments) {
+        when (0) { return }
+        when (1) { return $alignments[0]}
+        when ($_ > 1 and $_ > ($opts{'max-mates'} // 1)) { return }
+        when ($_ > 1 and $opts{random}) {return $alignments[int rand (@alignments - 1)]}
+    }
 }
 
 
@@ -130,8 +136,8 @@ sub make_mates_iterator {
     my ($left, $right) = @_;
 
     my @combos;
-
-    while (my $l = shift @$left) {
+    
+    for my $l (@$left) {
         for my $r (@$right) {
             push @combos, [$l, $r];
         }
@@ -221,7 +227,7 @@ sub _seq_id {
 }
 sub _strand {
     my ($self) = @_;
-    return $self->Bio::DB::Bam::AlignWrapper::seq_id =~ m/^RC_/ ? -1 : 1;
+    return $self->Bio::DB::Bam::AlignWrapper::seq_id =~ m/^rc_/i ? -1 : 1;
 }
 
 
