@@ -53,7 +53,7 @@ my $iter = $gffstore->select_iter(<<SELECT );
     sum(c) as c,
     sum(t) as t 
     from
-    gff group by seqname, source, start, end
+    gff group by seqname, start, end
 SELECT
 
 while (my $row = $iter->()){
