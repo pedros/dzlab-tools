@@ -20,7 +20,7 @@ GetOptions(
     \%ARGV,
     'random|r',      'max-mates|m',
     'insert|i=i',    'variance|v=f',
-    'reference|r=s', 'reads-1|1' 'reads-2|2',
+    'reference|r=s', 'reads-1|1', 'reads-2|2',
     'output|o=s',    'error|e=s',
     _meta_options( \%ARGV ),
 ) and ($ARGV[0] and $ARGV[1] ) or pod2usage( -verbose => 1 );
