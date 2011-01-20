@@ -46,7 +46,6 @@ filter_gff.pl
 filter_reads_by_coord.pl
 filter_repeats.pl
 find_loci.pl
-fixed_window_gff.pl
 fq_all2std.pl
 freq.sh
 full_run.sh
@@ -92,6 +91,5 @@ use_sub_graph.pl
 window_by_annotation.pl
 window_gff_by_frequency.pl
 window_gff_DEPRECATED.pl
-window_gff_fixed.pl
 window_gff.pl
 xml_to_gff.pl

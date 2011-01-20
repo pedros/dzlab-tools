@@ -23,7 +23,6 @@ my $builder = Module::Build->new(
         'LWP::Simple'                  => 0,
         'Math::Round'                  => 0,
         'Moose'                        => 0,
-        'Parallel::FileFilter'         => 0,
         'Parallel::ForkManager'        => 0,
         'Pod::Usage'                   => 0,
         'Regexp::Common'               => 0,
