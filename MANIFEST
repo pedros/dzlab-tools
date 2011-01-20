@@ -93,3 +93,4 @@ window_gff_by_frequency.pl
 window_gff_DEPRECATED.pl
 window_gff.pl
 xml_to_gff.pl
+SequenceLength.pm
