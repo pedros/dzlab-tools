@@ -11,10 +11,7 @@ my $builder = Module::Build->new(
     dist_abstract       => 'UC Berkeley Zilberman Lab Tools',
     requires => {
         'Algorithm::Permute'           => 0,
-        # don't want to deal with these yet...
-        #'Bio::DB::Fasta'               => 0,
-        #'Bio::DB::Sam'                 => 0,
-        #'Bio::SeqIO'                   => 0,
+        'Bio::DB::Sam'                 => 0,
         'DBI'                          => 0,
         'DBD::SQLite'                  => 0,
         'File::Slurp'                  => 0,
@@ -29,14 +26,12 @@ my $builder = Module::Build->new(
         'Smart::Comments'              => 0,
         'Statistics::Basic'            => 0,
         'Statistics::KernelEstimation' => 0,
-        #'System::Wrapper'              => 0,
-        #'System::Wrapper::Parallel'    => 0,
+        'System::Wrapper'              => 0,
         'Test::Exception'              => 0,
         'Test::More'                   => 0,
         #only for sub_graph.pm/pl, not in use
         #'XML::Simple'                  => 0,
         #'XML::Twig'                    => 0,
-        'version'                      => 0,
     },
     script_files        => [
         glob("*.pl *.sh"), 
