@@ -5,8 +5,9 @@
 ^blib
 ~$
 \.bak$
-^MANIFEST\.SKIP$
+\.SKIP$
 CVS
 .gz$
 .swp$
+utilities/
 
