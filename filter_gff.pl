@@ -53,7 +53,11 @@ my %loci_to_delete;
 
 if ($loci_list) {
     open my $LOCI, '<', $loci_list or croak "Can't read $loci_list: $!";
-    %loci_to_delete = map { chomp $_; $_ => undef } <$LOCI>;
+    while (defined(my $locus = <$LOCI>)){
+        if ($locus =~ /(\w+)/){
+            $loci_to_delete{$1} = 1;
+        }
+    }
     close $LOCI or die "Can't close $loci_list: $!";
 }
 
