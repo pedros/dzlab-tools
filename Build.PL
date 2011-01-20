@@ -7,7 +7,7 @@ my $builder = Module::Build->new(
     license             => 'gpl3',
     dist_author         => [q{Pedro Silva <pedros@berkeley.edu>},
                             q{Toshiro Nishimura <tnish@berkeley.edu>}],
-    dist_version        => '0.0.1',
+    dist_version        => '0.0.5',
     dist_abstract       => 'UC Berkeley Zilberman Lab Tools',
     requires => {
         'Algorithm::Permute'           => 0,
