@@ -16,6 +16,7 @@ my $builder = Module::Build->new(
         'DBD::SQLite'                  => 0,
         'File::Slurp'                  => 0,
         'Getopt::Long::Descriptive'    => 0,
+        'IO::Prompt'                   => 0,
         'List::MoreUtils'              => 0,
         'LWP::Simple'                  => 0,
         'Math::Round'                  => 0,
