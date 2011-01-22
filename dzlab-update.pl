@@ -8,9 +8,9 @@ use File::Spec;
 
 my $gitname = $^O eq 'MSWin32' ? 'git.exe' : 'git';
 
-if (! grep { -e File::Spec->catfile($_,$gitname) } File::Spec->path){
-    die "Can't find Git source code management software in PATH";
-}
+#if (! grep { -e File::Spec->catfile($_,$gitname) } File::Spec->path){
+    #die "Can't find Git source code management software in PATH";
+#}
 
 chdir $Bin;
 
