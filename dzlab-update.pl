@@ -3,7 +3,6 @@ use strict;
 use warnings;
 use Data::Dumper;
 use feature 'say';
-use IO::Prompt;
 use FindBin qw($Bin);
 use File::Spec;
 
@@ -15,18 +14,30 @@ if (! grep { -e File::Spec->catfile($_,$gitname) } File::Spec->path){
 
 chdir $Bin;
 
-my $response1 = prompt -menu=>[
-'Update DZLab-Tools to latest version',
-'Checkout older version via graphical interface',
-'Quit'
-];
+say 'u) Update DZLab-Tools to latest version';
+say 'c) Checkout older version via graphical interface';
+say 'q) Quit';
+print 'enter u, c, or q: ';
 
-if ($response1 =~ /^Update/){
-    system(qw/git fetch/);
-    system(qw{git checkout remotes/origin/HEAD});
-} 
-elsif ($response1 =~ /^Checkout/){
-    system(qw/gitk --all/);
+while (my $response = <>){
+    chomp $response;
+    if ($response eq 'u'){
+        system(qw/git fetch/);
+        system(qw{git checkout remotes/origin/HEAD});
+        last;
+    } 
+    elsif ($response eq 'c'){
+        system(qw/gitk --all/);
+        last;
+    }
+    elsif ($response eq 'q'){
+        last;
+    }
+    else {
+        say 'u) Update DZLab-Tools to latest version';
+        say 'c) Checkout older version via graphical interface';
+        say 'q) Quit';
+        print 'enter u, c, or q: ';
+    }
 }
-
 
