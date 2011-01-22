@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 
 ## TODO: keep mm calls difference for both reads as a measure of quality
 

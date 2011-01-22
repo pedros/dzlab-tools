@@ -1,4 +1,4 @@
-#!/usr/bin/perl -w
+#!/usr/bin/env perl -w
 # parse_ecker.pl --- Parses GSM276809.txt data set from Ecker et all, Cell 133
 # Author: Pedro Silva <psilva@dzlab.pmb.berkeley.edu>
 # Created: 20 Jan 2009

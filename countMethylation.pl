@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 #
 # Last edited 2009-08-25
 # Copyright 2008-2009 Pedro Silva <psilva@nature.berkeley.edu/>

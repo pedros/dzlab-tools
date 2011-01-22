@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 #
 # mutateSeq.pl <inputfile> [numseqs] [seqsize]
 #       where: <inputfile> is a fasta formated sequence file
