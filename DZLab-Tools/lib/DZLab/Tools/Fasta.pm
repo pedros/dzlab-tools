@@ -20,7 +20,7 @@ sub slurp_fasta {
     my ($file, $opts) = @_;
     return {} unless $file;
 
-    $opts->{-l} ||= 0;
+    $opts->{-l} //= 0;
 
     my %accum = ();
 
@@ -63,7 +63,7 @@ sub format_fasta{
 
     my @buffer;
     $buffer[0] = ">$header" if defined $header;
-    $width ||= 80;
+    $width //= 80;
     my $length = length $seq;
 
     for (my $position = 0; $position < $length; $position += $width){
@@ -71,6 +71,7 @@ sub format_fasta{
     }
     return (join "\n", @buffer) . "\n";
 }
+
 1;
 
 

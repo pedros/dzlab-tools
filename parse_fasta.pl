@@ -17,11 +17,13 @@ my $seqid;
 my $output;
 my $list;
 my $split;
+my $rc;
 
 # Grabs and parses command line options
 my $result = GetOptions (
     'list|l'       => \$list,
     'seqid|i=s'    => \$seqid,
+    'rc'           => \$rc,
     'range|r=i{2}' => \@range,
     'split|s'      => \$split,
     'output|o=s'   => \$output,
@@ -42,7 +44,6 @@ if ($output) {
 
 my $reference = $ARGV[0];
 my %reference = %{ slurp_fasta ($reference) };
-
 
 my $total_bp     = 0;
 my $total_non_bp = 0;
@@ -80,8 +81,7 @@ if ($seqid) {
         while ($seqid = <$SEQID>) {
             $seqid =~ s/[\n\r]//g;
             
-            my $sequence
-            = _sequence (\%reference, $seqid);
+            my $sequence = _get_subseq (\%reference, $seqid, $rc);
 
 	    next SEQID unless $sequence;
 
@@ -108,15 +108,15 @@ if ($seqid) {
     }
     else {
 
-        my $sequence
-        = _sequence (\%reference, $seqid, @range);
+        my $sequence = _get_subseq (\%reference, $seqid, $rc, @range);
 
         @range = (1, length $sequence)
         unless @range;
 
         my $file_name = fileparse ($reference);
 
-        print string_to_fasta ($sequence, "lcl|$file_name|$seqid|$range[0]-$range[1]"), "\n";
+        print format_fasta("lcl|$file_name|$seqid|$range[0]-$range[1]", $sequence), "\n";
+        #print string_to_fasta($sequence, "lcl|$file_name|$seqid|$range[0]-$range[1]"), "\n";
 
         exit 0;
     }
@@ -137,53 +137,34 @@ if ($split) {
 }
 
 
-sub _sequence {
-    my ($reference, $seqid, $start, $end) = @_;
+sub _get_subseq {
+    my ($seq_href, $seqid, $rc, $start, $end) = @_;
 
     $seqid =~ tr/A-Z/a-z/;
 
-    unless (exists $reference{$seqid}) {
-	carp "Sequence ID does not exist";
-	return;
+    unless (exists $seq_href->{$seqid}) {
+        croak "Sequence ID $seqid does not exist";
     }
+
+    my $sequence = $seq_href->{$seqid};
 
     if ($start and $end) {
+        # b/c start, end are 1-based
+        my $s0 = $start-1;
+        my $e0 = $end-1;
+        my $last = length($sequence) - 1;
 
-        croak "Coordinates out of bounds"
-        if $start < 1 or $end > length $reference->{$seqid};
+        croak "Coordinates out of bounds" if ($s0 < 0 || $e0 > $last);
 
-        return
-        substr ($reference{$seqid}, $start - 1, $end - $start);
+        my $subseq = substr ($sequence, $s0 , $e0 - $s0);
+        $subseq =~ tr/ACGTacgt/TGCAtgca/ if $rc;
+        return $subseq;
     }
     else {
-        return $reference{$seqid};
+        $sequence =~ tr/ACGTacgt/TGCAtgca/ if $rc;
+        return $sequence;
     }
 }
-
-
-sub string_to_fasta {
-    my ($sequence, $header) = @_;
-    return unless $sequence;
-    my $fasta_length   = 80;
-    my $fasta_sequence = q{};
-    
-    $fasta_sequence .= ">$header\n" if $header;
-    
-    my $buffer_size = 0;
-    for (ref $sequence eq 'ARRAY' ? @$sequence : split //, $sequence) {
-
-        if ($buffer_size == $fasta_length - 1) {
-            $fasta_sequence .= "$_\n";
-            $buffer_size = 0;
-        }
-        else {
-            $fasta_sequence .= $_;
-            $buffer_size++
-        }
-    }
-    return $fasta_sequence;
-}
-
 
 __END__
 
@@ -192,6 +173,17 @@ __END__
  parse_fasta.pl - Retrieve sequence information from fasta files
 
 =head1 SYNOPSIS
+
+ # list all sequences in fasta file:
+ parse_fasta.pl -l fasta.txt
+
+ # print base pair 123 to 456 in sequence chr1
+ parse_fasta.pl -r 123 456 -i chr1 fasta.txt
+
+ # retrieves, reverse compliments base pair 123 to 456 in sequence chr1
+ # NOTE: all coordinates are relative to the 5' end of the + strand
+ parse_fasta.pl --rc - -r 123 456 -i chr1 fasta.txt
+
 
 =head1 DESCRIPTION
 
@@ -203,6 +195,7 @@ __END__
  -i, --seqid       sequence id from which to print sub sequence
  -r, --range       start and end coordinates to print
  -s, --split       split input fasta file into <basename> chromosomes
+     --rc          take reverse compliment of range
  -o, --output      filename to write results to (defaults to STDOUT)
  -v, --verbose     output perl's diagnostic and warning messages
  -q, --quiet       supress perl's diagnostic and warning messages

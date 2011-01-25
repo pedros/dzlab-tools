@@ -9,20 +9,10 @@ our @ISA = qw(Exporter);
 our @EXPORT_OK = qw();
 our @EXPORT = qw(_meta_options _prepare_io);
 
+# to include:
 # use FindBin;
 # use lib "$FindBin::Bin/DZLab-Tools/lib";
 # use DZLab::Tools::RunUtils;
-
-# * average_gff.pl
-# * build_gff_score_table.pl
-# * check_methyl.pl
-# * eland2gff.pl
-# * ensure_all_genes_present.pl
-# * expand_gff.pl
-# * gff2eland.pl
-# * gff2eland3.pl
-# * normalize_gff.pl
-# * sort_gff.pl
 
 =head1 EXPORTED FUNCTIONS
 
@@ -51,18 +41,6 @@ sub _meta_options {
     );
 }
 
-# * average_gff.pl
-# * build_gff_score_table.pl
-# * check_methyl.pl
-# * eland2gff.pl
-# * ensure_all_genes_present.pl
-# * expand_gff.pl
-# * gff2eland.pl
-# * gff2eland3.pl
-# * normalize_gff.pl
-# parent_imprinting.pl
-# * sort_gff.pl
-
 =head2 _prepare_io $opt $argv
 
 Takes a reference to a hash of options with keys: input, output, error, quiet; and a reference to an array of command line arguments.
@@ -75,8 +53,12 @@ sub _prepare_io {
 
     my ($INH, $OUTH, $ERRH);
     
+    # push input onto argv as if it were given as just another file
     unshift @$argv, $opt->{input} if exists $opt->{input};
 
+    # if input and output are the same, open as input, then unlink the file.  
+    # otherwise, read ARGV files. NOTE: this seems to have the effect that, 
+    # if output==input, ARGV files are ignored.
     if (    exists $opt->{input} and exists $opt->{output}
                and $opt->{input} eq $opt->{output} ) {
         open $INH, q{<}, $opt->{input}
@@ -85,12 +67,14 @@ sub _prepare_io {
     }
     else { $INH = *ARGV }
 
+    # if output is file, open it, or STDOUT
     if ( exists $opt->{output} and q{-} ne $opt->{output} ) {
         open $OUTH, q{>}, $opt->{output}
             or croak "Can't write $opt->{output}: $!";
     }
     else { $OUTH = *STDOUT }
 
+    # if error is file, open it.  if quiet, pipe to dev null. otherwise, STDERR
     if ( exists $opt->{error} and q{-} ne $opt->{error} ) {
         open $ERRH, q{>}, $opt->{error}
             or croak "Can't write $opt->{error}: $!";
