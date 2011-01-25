@@ -146,6 +146,8 @@ while ( my ( $locus, $scores_ref ) = $scores_iterator->($num_bins) ) {
 
 ## done
 
+#==================================================================
+# only assign partial scores according to amount of overlap
 
 sub weight_score {
     my ( $locus, $gff_line ) = @_;
@@ -245,6 +247,10 @@ sub gff_read {
     };
 }
 
+#==================================================================
+# for a given gff file and an attribute tag, return 
+# { seqname => { start_coord => [start, end, strand, attribute}}
+
 sub index_gff_annotation {
     my ( $gff_file_name, $attribute_id ) = @_;
 
@@ -272,8 +278,19 @@ sub index_gff_annotation {
     return $gff_annotation;
 }
 
+#==================================================================
+# like index_gff_annotation EXCEPT replace the start/end with flag start/end.
+# keep original start/end in array index 4/5.
+# return { seqname => { 
+#             start_coord => 
+#                  [flag_start, flag_end, strand, attributes, 
+#                   original_start, original_end]}}
 sub offset_gff_annotation {
     my ( $gff_annotation, $flag_parser, $parameters ) = @_;
+    # gff_annotion: { seqname => { start_coord => [start, end, strand, attribute}}
+    # flag_parser: subref which returns flag start/end
+    # parameters: -three_prime -five_prime -distance -stop_flag -stop_distance (-stop_flag redundant)
+
     my $offset_gff_annotation = {};
 
     return unless $gff_annotation and $flag_parser;
@@ -308,6 +325,7 @@ sub offset_gff_annotation {
     return $offset_gff_annotation;
 }
 
+
 sub check_neighbourhood {
     my ( $offset_gff_annotation, $flag_parser, $parameters, $seqid, @memory )
         = @_;
@@ -341,13 +359,27 @@ sub stop_flag_2 {
 
     my ( $minimum, $maximum ) = min_max_distance( $current, $parameters );
 
+    # basically: go down or upstream at most -distance, but clip so that you 
+    # don't go beyond:
+    # 1) the other end of itself,
+    # 2) into another gene
     if (   $parameters->{-five_prime} and $current->[2] eq q{-}
         or $parameters->{-three_prime} and $current->[2] eq q{+} )
     {
+        #                       min       max
+        # window:                v----+----v
+        # n                               |-------------|
+        # c                 |---------|
+        # p   |--------------|
         return ( max( $current->[0], $previous->[1], $minimum ),
                  min( $next->[0], $maximum ) );
     }
     else {
+        #             min       max
+        # window:      v----+----v
+        # n   |--------------|
+        # c                 |---------|
+        # p                               |-------------|
         return ( max( $previous->[1], $minimum ),
                  min( $current->[1], $next->[0], $maximum ) );
     }
@@ -364,6 +396,10 @@ sub stop_flag_4 {
 sub stop_flag_5 {
     croak "Not yet implemented";
 }
+
+#==================================================================
+# just like stop_flag_2, EXCEPT don't go within -stop_distance of the other end
+# (in stop_flag_2, you can go up to the other end).
 
 sub stop_flag_6 {
     my ( $parameters, $previous, $current, $next ) = @_;
@@ -390,6 +426,9 @@ sub stop_flag_6 {
         );
     }
 }
+
+#==================================================================
+# return forward-strand coordinates of the end window. don't go into negatives.
 
 sub min_max_distance {
     my ( $current, $parameters ) = @_;
