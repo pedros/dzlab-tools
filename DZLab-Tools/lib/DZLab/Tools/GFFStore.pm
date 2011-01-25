@@ -14,39 +14,6 @@ use DZLab::Tools::GFF qw/parse_gff_arrayref gff_to_string/;
 my @default_cols     = qw/seqname source feature start   end     score strand frame   attribute/;
 my @default_coltypes = qw/text    text   text    numeric numeric real  text   numeric text/;
 
-my $RTREE_ERROR =  <<'END';
-==================================================================
-
-Searching for overlaps requires the R*Tree feature built into DBD::SQLite.  Please downloading the following file:
-
-http://search.cpan.org/CPAN/authors/id/A/AD/ADAMK/DBD-SQLite-1.31.tar.gz
-
-and rebuild with
-
-perl Makefile.PL -DSQLITE_ENABLE_RTREE=1 -DSQLITE_ENABLE_COLUMN_METADATA=1 -DSQLITE_ENABLE_FTS3=1 -DSQLITE_ENABLE_FTS3_PARENTHESIS=1
-make
-make test
-make install
-
-alternatively, you can put the following contents in ~/.cpan/prefs/sqlite-rtree.yml and do an 
-"install ADAMK/DBD-SQLite-1.31.tar.gz" at the cpan commandline.
-
----
-comment: |
-  Compile RTREE feature
-
-match:
-  distribution: '^ADAMK/DBD-SQLite-\d'
-pl:
-  args: ["DEFINE=' -DSQLITE_ENABLE_RTREE=1 -DSQLITE_ENABLE_COLUMN_METADATA=1 -DSQLITE_ENABLE_FTS3=1 -DSQLITE_ENABLE_FTS3_PARENTHESIS=1 '"]
-depends:
-  configure_requires:
-    DBI: 1.58
-  requires:
-    DBI: 1.58
-
-==================================================================
-END
 
 =head2 new
 
@@ -120,11 +87,6 @@ sub new {
         }
     }
 
-    $self->{rtree_supported} = rtree_supported();
-    if ($self->{verbose} && ! $self->{rtree_supported}){
-        carp $RTREE_ERROR;
-    }
-
     # go through attributes and add them to @columns and @columntypes. 
     # keeping their order is important b/c when inserting via param bind, 
     # doesn't accepting hashes
@@ -147,8 +109,6 @@ sub new {
     $dbh->do("PRAGMA cache_size = 80000");
         
     $dbh->do($self->create_table_statement());
-
-    $dbh->do($self->create_rtree_statement()) if $self->{rtree_supported};
 
     return $self;
 }
@@ -208,7 +168,6 @@ sub slurp{
 
     say STDERR $self->insert_statement() if $self->{debug};
     my $insert_sth = $dbh->prepare($self->insert_statement());
-    my $rtree_sth  = $dbh->prepare($self->insert_rtree_statement()) if $self->{rtree_supported};
 
     $dbh->{AutoCommit} = 0;
 
@@ -226,10 +185,6 @@ sub slurp{
         next unless $parsed;
 
         $insert_sth->execute(@$parsed);
-
-        if ($RE{num}{real}->matches($parsed->[3]) && $RE{num}{real}->matches($parsed->[4])){
-            $rtree_sth->execute($dbh->last_insert_id("","","",""), $parsed->[3], $parsed->[4]) if $self->{rtree_supported};
-        }
 
         if ($counter++ % $self->{counter} == 0){
             say STDERR "Reading "  . ($filename ? $filename : q{}) . ' ' . ($counter-1) if $self->{verbose};
@@ -505,19 +460,11 @@ or ['seqname', 'start', 'end'] if you're running many.
 =cut
 sub overlappers{
     my $self = shift;
-    croak "overlappers needs rtree support:\n $RTREE_ERROR" unless $self->{rtree_supported};
     my ($seqname,$feature,$start,$end) = @_;
     die "need seqname, start, and end" unless ($seqname and $start and $end);
     my $dbh = $self->{dbh};
-
-    my $colcomma = join ",", map {"gff.$_ as $_"} @{$self->{columns}};
-
-    state $sth_with_f = $dbh->prepare(
-        "select $colcomma from gff,range where gff._id = range._id and gff.seqname = ? and gff.feature = ? and range.start <= ? and range.end >= ?"
-    );
-    state $sth_without_f = $dbh->prepare(
-        "select $colcomma from gff,range where gff._id = range._id and gff.seqname = ? and range.start <= ? and range.end >= ?"
-    );
+    state $sth_with_f = $dbh->prepare("select * from gff where seqname = ? and feature = ? and start <= ? and end >= ?");
+    state $sth_without_f = $dbh->prepare("select * from gff where seqname = ? and start <= ? and end >= ?");
 
     if ($feature){
         $sth_with_f->execute($seqname,$feature,$end,$start);
@@ -563,6 +510,39 @@ sub DESTROY{
 
 1;
 
+#my $RTREE_ERROR =  <<'END';
+#==================================================================
+#
+#Searching for overlaps requires the R*Tree feature built into DBD::SQLite.  Please downloading the following file:
+#
+#http://search.cpan.org/CPAN/authors/id/A/AD/ADAMK/DBD-SQLite-1.31.tar.gz
+#
+#and rebuild with
+#
+#perl Makefile.PL -DSQLITE_ENABLE_RTREE=1 -DSQLITE_ENABLE_COLUMN_METADATA=1 -DSQLITE_ENABLE_FTS3=1 -DSQLITE_ENABLE_FTS3_PARENTHESIS=1
+#make
+#make test
+#make install
+#
+#alternatively, you can put the following contents in ~/.cpan/prefs/sqlite-rtree.yml and do an 
+#"install ADAMK/DBD-SQLite-1.31.tar.gz" at the cpan commandline.
+#
+#---
+#comment: |
+#  Compile RTREE feature
+#
+#match:
+#  distribution: '^ADAMK/DBD-SQLite-\d'
+#pl:
+#  args: ["DEFINE=' -DSQLITE_ENABLE_RTREE=1 -DSQLITE_ENABLE_COLUMN_METADATA=1 -DSQLITE_ENABLE_FTS3=1 -DSQLITE_ENABLE_FTS3_PARENTHESIS=1 '"]
+#depends:
+#  configure_requires:
+#    DBI: 1.58
+#  requires:
+#    DBI: 1.58
+#
+#==================================================================
+#END
 
 =head1 NAME
  
