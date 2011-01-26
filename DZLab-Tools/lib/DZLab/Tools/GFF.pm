@@ -38,14 +38,6 @@ our @EXPORT    = qw/gff_read gff_make_iterator gff_validate gff_slurp_by_seq
                     gff_to_string parse_gff_arrayref parse_gff_hashref /;
 our @EXPORT_OK = qw//;
 
-# regular expression for "Attributes=Strings;Like=this"
-my $attributes_regex = qr/
-            (?:
-            \s*([^=;]+)\s*  # key, which may not be there
-            =
-            )?
-            \s*?([^=;]+)\s*?  # value
-            /xms;
 
 =head1 EXPORTED FUNCTIONS
 
@@ -53,28 +45,15 @@ my $attributes_regex = qr/
 
 returns arrayref [col1, .. col9, attr1, attr2, ...] 
 maps '.' dot columns and non-existenct attributes to undef.
-returns false on comment/pragma lines and unparsable lines.
+returns 0 on non-parseable lines or comments. *Returns pragmas as strings*.
 Check that ref $result eq 'ARRAY'
 
 =cut
 
 sub parse_gff_arrayref{
-    my $line = shift || return 0;
-    $line =~ s/[\n\r]//g;
-
-    return 0 if $line =~ /^\s*#/; # comments/pragmas ignored in this version
-
-    # split, map missing columns "." to undef
-    my @arr = map { $_ eq q{.} ? undef : $_} split /\t/, $line;
-    $arr[0] = lc $arr[0] if defined $arr[0];
-
-    (carp "unparseable GFF line" && return 0) unless @arr == 9;
-
-    my %accum = defined($arr[8]) 
-    ?  map { defined $_ ? $_ : 'Note' } ($arr[8] =~ m/$attributes_regex/g)
-    :  ();
-
-    return [@arr,@accum{@_}];
+    my ($line, @wanted) = @_;
+    my $gff_ref = parse_gff_hashref($line);
+    return [@{$gff_ref}{qw/seqname source feature start end score strand frame attribute/, @wanted}]; 
 }
 
 =head2 parse_gff_hashref $line
