@@ -87,35 +87,38 @@ Check that ref $result eq 'HASH'
 =cut
 
 sub parse_gff_hashref{
-    my $line = shift || return 0;
-    $line =~ s/[\n\r]//g;
+    my ($line) = @_;
+     
+    return 0 unless $line;
+    $line =~ tr/\n\r//;
 
-    if ($line =~ m/^\s*##(.*)/){
-        return $1;
+    if ($line =~ m/^\s*#(#)?/o){
+        return defined $1 ? $' : 0; # $' = regex postmatch
     }
-    return 0 if $line =~ m/^\s*#/;
 
-    # split, map missing columns "." to undef
-    my @arr = map { $_ eq q{.} ? undef : $_} split /\t/, $line;
+    my %accum;
+    @accum{qw/seqname source feature start end score strand frame attribute/}
+    = map { $_ eq q{.} ? undef : $_ } split /\t/, $line;
 
-    (carp "unparseable GFF line" && return 0) unless @arr == 9;
+    (carp "unparseable GFF line" && return 0) unless keys %accum == 9;
 
-    my %accum = defined($arr[8]) 
-    ?  map { defined $_ ? $_ : 'Note' } ($arr[8] =~ m/$attributes_regex/g)
-    :  ();
+    if (defined $accum{seqname}){
+        $accum{seqname} = lc $accum{seqname};
+    }
 
-    return {
-        seqname   => defined ($arr[0]) ? lc $arr[0] : undef,
-        source    => $arr[1],
-        feature   => $arr[2],
-        start     => $arr[3],
-        end       => $arr[4],
-        score     => $arr[5],
-        strand    => $arr[6],
-        frame     => $arr[7],
-        attribute => $arr[8],
-        %accum,
-    };
+    if (defined($accum{attribute}) ){
+        for (split /;/, $accum{attribute}){
+            my ($key, $val) = split /=/, $_;
+            if (defined $val){
+                $accum{$key} = $val;
+            }
+            else {
+                $accum{Note} = $key;
+            }
+        }
+    }
+
+    return \%accum;
 }
 
 =head2 gff_read $string
