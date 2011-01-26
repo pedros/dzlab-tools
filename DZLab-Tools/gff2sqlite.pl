@@ -5,29 +5,36 @@ use Data::Dumper;
 use feature 'say';
 
 use FindBin;
-use lib "$FindBin::Bin/../DZLab-Tools/lib";
+use lib "$FindBin::Bin/lib";
 use DZLab::Tools::GFF qw/gff_make_iterator/;
 use DZLab::Tools::GFFStore;
 
 use Pod::Usage;
-use Getopt::Long;
+use Getopt::Long::Descriptive;
 
 my $output;
 my $help;
 
-my $result = GetOptions (
-    "output|o=s" => \$output,
-    "help"    => \$help,
+my ($opt, $usage) = describe_options(
+    "Usage: %c %o ...",
+    [],
+    [ "output|o=s"     , "output sqlite database file"                 , { required => 1 }]    , 
+    [ "commitsize|s=i" , "number of records to commit per transaction" , { default => 10000 }] , 
+    [ 'bench|b'        , "benchmark: only read into memory" ]          , 
+    [ 'debug|g'        , "Be debugful" ]                               , 
+    [ 'quiet|q'        , "Be quiet" ]                                  , 
+    [ 'help|h'         , "print this message and exit" ]               , 
 );
-pod2usage(-verbose => 1) if (!$result || $help || !$output);  
+                
+print($usage->text), exit if ($opt->help);
 
 if (!@ARGV) { pod2usage(-verbose => 1) }
 
 my $gffstore = DZLab::Tools::GFFStore->new({
-        dbname => $output,
-        verbose => 1,
+        dbname     => $opt->output,
+        verbose    => ! $opt->quiet,
+        commitsize => $opt->commitsize,
     });
-
 
 $gffstore->slurp({handle => \*ARGV});
 

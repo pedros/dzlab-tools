@@ -68,7 +68,7 @@ sub new {
     # other 
     $self->{debug}       = $opt->{debug}      || 0;
     $self->{verbose}     = $opt->{verbose}    || 0;
-    $self->{counter}     = 10000;
+    $self->{counter}     = $opt->{commitsize} || 10000;
 
     croak "dbname, memory, temp options are mutually exclusive"
     unless ( $self->{dbname} xor $self->{memory} xor $self->{tmp});
