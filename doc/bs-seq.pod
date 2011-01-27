@@ -1,0 +1,52 @@
+
+=head1 input reads
+
+s_6_sequence.txt - single ended fastaq formated reads
+s_6_1_sequence.txt - forward of paired end
+s_6_2_sequence.txt - backwards of paired end
+
+fastaq is a 4-line/record format showing a short read on the second line, and a quality score of the of read on
+the fourth.
+
+Initially, these are converted to fasta, and conversions are performed: 
+c2t on the forward strand to simulate completely unprotected bisulfite treatment.
+g2a on the backward strand.
+
+=head2 reference genome
+
+reference genome is reverse complimented, then c2t on forward and g2a on reverse.
+
+=head1 bowtie vs seqmap
+
+seqmap is deprecated. use bowtie. 
+
+=head1 trim
+
+  |------------------------------------| (original read, paired end)
+  |----------->                          1', aligned to c2t
+               |---------|               insert
+                          <------------| 2', aligned to g2a
+
+  |----------------------|               (original read, single end)
+  |----------->                          1'
+               |                         insert (size 0)
+                |-------->               2' (simulated. compared against c2t just like 1')
+
+=head1 eland
+
+there's two different types-- bowtie-eland, and eland3
+
+bowtie-eland (named .eland) converted to eland3 format (named .eland.post) via parse-bowtie 
+
+=head1 eland3 format
+
+column 1: machine ID
+column 2: read
+column 3: #:#:#:# = number of matches with 0/1/2/3 mismatches, or NM
+column 4: chromosome locations, comma sep
+
+=head2 correlate paired end-- 
+
+for paired reads, the forward read should be upstream (separated by insert) from the backward read.
+  
+=cut 
