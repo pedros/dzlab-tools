@@ -355,15 +355,18 @@ __END__
 
 =head1 OPTIONS
 
- -i, --input       <string>     input filename                           (STDIN)
- -o, --output      <string>     output filename                          (STDOUT)
- -e, --error       <string>     output error filename                    (STDERR)
-     --verbose     [integer]    print increasingly verbose error messages
-     --quiet                    print no diagnostic or warning messages
-     --version                  print current version
-     --license                  print author's contact and copyright information
-     --help                     print this information
-     --manual                   print the plain old documentation page
+ -i   --input         short reads file in fastq format
+ -o   --output        output filename
+ -e   --error         output error filename 
+ -ea  --ecotype-a     label for maternal strain (eg. columnbia)
+ -eb  --ecotype-b     label for paternal strain (eg. ler)
+ -ga  --genotype-a    label for ecotype-a genotype (WT, mut-a, mut-b, ...)
+ -gb  --genotype-b    label for ecotype-b genotype (WT, mut-a, mut-b, ...)
+ -t   --tissue        label for tissue type (endosperm, embryo, etc)
+ -ra  --reference-a   genome of ecotype-a in fasta format
+ -rb  --reference-b   genome of ecotype-b in fasta
+ -a   --annotation    gff annotation 
+ -l   --loci-type     [gene, transposon, exon, etc]
 
 =head1 VERSION
 
