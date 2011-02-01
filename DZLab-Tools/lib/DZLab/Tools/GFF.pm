@@ -69,7 +69,7 @@ sub parse_gff_hashref{
     my ($line) = @_;
      
     return 0 unless $line;
-    $line =~ tr/\n\r//;
+    $line =~ tr/\n\r//d;
 
     if ($line =~ m/^\s*#(#)?/o){
         return defined $1 ? $' : 0; # $' = regex postmatch

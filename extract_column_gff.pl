@@ -3,13 +3,13 @@ use strict;
 use warnings;
 use Data::Dumper;
 use feature 'say';
+use autodie;
+use Pod::Usage;
+use Getopt::Long;
+
 use FindBin;
 use lib "$FindBin::Bin/DZLab-Tools/lib";
 use DZLab::Tools::GFF qw/gff_make_iterator/;
-use autodie;
-
-use Pod::Usage;
-use Getopt::Long;
 
 my $help;
 my $verbose;
@@ -28,6 +28,7 @@ my $result = GetOptions (
     "help"       => \$help,
 );
 pod2usage(-verbose => 99) if (!$result || !$input || $help);  
+
 
 # map numbered columns to named
 
@@ -75,6 +76,14 @@ foreach my $row (@accum) {
 extract_column_gff.pl - extract a single column or attribute field from gff
 
 =head1 SYNOPSIS
+
+This script can extract either entire columns (which can be denoted by their number 1 through 9, or by name 
+seqname, source, feature, start, end, score, strand, frame, or attribute) or specific fields in the attributes field. 
+For example, for the GFF line below, you can specify a column as ID, Name, or Note: 
+
+ Chr1 TAIR8 gene 6790 8737 . - . ID=AT1G01020;Name=AT1G01020;Note=ARV1
+
+Examples:
 
 Grab all ID's from input.gff, sort it, get rid of duplicates, and put it into output:
 

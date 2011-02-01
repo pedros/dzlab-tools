@@ -44,6 +44,7 @@ sub _meta_options {
 =head2 _prepare_io $opt $argv
 
 Takes a reference to a hash of options with keys: input, output, error, quiet; and a reference to an array of command line arguments.
+input, output, error can be filenames. 
 
 Returns input, output and error file handles.
 
