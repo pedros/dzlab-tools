@@ -1,42 +1,37 @@
 
 =head1 dzlab.pmb.berkeley.edu/tools README
 
-=head2 Installing Perl
+L<http://dzlab.pmb.berkeley.edu/tools/archive>
 
-There are two ways to install perl on windows: ActivePerl and Strawberry Perl.  ActivePerl is what the lab has been
-using.  Strawberry perl is a newer, entirely opensource/free distribution with stronger 3rd party module support.  Both
-versions should work for now, but future development and testing (ie, after Pedro leaves) will take place against
-Strawberry perl.  
+This page contains everything you need to know to get the Zilberman Lab scripts running on your computer.  
 
-Both installers are found below. Though you can have both installed at the same time, make sure that you only have one
-in your PATH environment variable at any time-- otherwise you are asking for trouble.
+=head2 Overview
 
-Strawberry perl:
-    L<http://dzlab.pmb.berkeley.edu/tools/strawberry-perl-5.12.1.0.msi>
+You need to install packages in order to get the scripts running on your computer: DZ-Perl and DZLab-Tools.  DZ-Perl is
+a customized version of Perl.  DZLab-Tools contains the actual scripts.  
 
-ActivePerl (32-bit):
-    L<http://dzlab.pmb.berkeley.edu/tools/ActivePerl-5.12.2.1203-MSWin32-x86-294165.msi>
+=head2 Installing DZ-Perl and DZLab-Tools
 
-ActivePerl (64-bit):
-    L<http://dzlab.pmb.berkeley.edu/tools/ActivePerl-5.12.2.1203-MSWin32-x64-294165.msi>
+Both DZ-Perl and DZLab-Tools are available from L<http://dzlab.pmb.berkeley.edu/tools/archive>.  Simply download the
+most recent version of each, for example dzlab-tools-0.0.6.exe and dz-perl-1.2.exe, and double click each to install.
+The order of installation does not (or at least shouldn't) matter.
 
-=head2 Installing 3rd party modules
+The packages are installed to c:\dzlab-tools and c:\dz-perl, though you shouldn't need to know that.
 
-After installing perl, run the following batch file to install the necessary 3rd party modules:
-    L<http://dzlab.pmb.berkeley.edu/tools/install_3rd_party_modules.bat>
+=head2 Upgrading
 
-=head2 Get DZLab-tools
+Simply grab the latest version of DZLab-Tools (and DZ-Perl, if there's a newer version of that as well) from
+L<http://dzlab.pmb.berkeley.edu/tools/archive> and double click the installer.  The older version will be automatically
+uninstalled.  (Note: You can also downgrade by installing an older version.)
 
-We have not yet figured out how to get the new versioning system working properly on windows (so that the users can
-checkout and update changes to the source tree.  For now, please grab the most recent version of dzlab-tools in zip
-format below, and enjoy:
+=head2 Launching the command line
 
-=over 1
+The command line can be launched from the Start Menu, via Start Menu->All Programs->Zilberman Lab->DZLab Command Line.
+From this command line, you should be able launch all scripts installed in c:\dzlab-tools directly (without 'perl -S'),
+from any directory.  For example:
 
-=item * 
+=for html <img src="launch.jpg">
 
-L<http://dzlab.pmb.berkeley.edu/tools/dzlab-tools-v0.01.zip> (12-26-2010)
-
-=back
+Be sure to check out the new console windows settings (Edit->Settings) to adjust font sizes/etc.  
 
 =cut
