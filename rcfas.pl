@@ -1,4 +1,5 @@
 #!/usr/bin/env perl
+# ___UNDOCUMENTED___
 #
 # rcfas.pl <inputfile> [> outputfile]
 #       where: <inputfile> is a fasta formated sequence file

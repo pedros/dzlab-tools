@@ -1,4 +1,5 @@
 #!/usr/bin/env perl
+# ___UNDOCUMENTED___
 
 my %hash = ();
 while (<>) {

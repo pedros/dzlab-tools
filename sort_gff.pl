@@ -1,4 +1,5 @@
 #!/usr/bin/env perl
+# ___UNDOCUMENTED___
 
 use warnings;
 use strict;
@@ -25,66 +26,6 @@ print $OUTH map  { $_->[0] }
 sort { $a->[1] cmp $b->[1] or $a->[2] <=> $b->[2] }
 map  { [$_, (split /\t/, $_)[0,3]] }
 <$INH>;
-
-
-#sub _meta_options {
-#    my ($opt) = @_;
-#
-#    return (
-#        'quiet'     => sub { $opt->{quiet}   = 1;          $opt->{verbose} = 0 },
-#        'verbose:i' => sub { $opt->{verbose} = $_[1] // 1; $opt->{quiet}   = 0 },
-#        'version'   => sub { pod2usage( -sections => ['VERSION', 'REVISION'],
-#                                        -verbose  => 99 )                      },
-#        'license'   => sub { pod2usage( -sections => ['AUTHOR', 'COPYRIGHT'],
-#                                        -verbose  => 99 )                      },
-#        'usage'     => sub { pod2usage( -sections => ['SYNOPSIS'],
-#                                        -verbose  => 99 )                      },
-#        'help'      => sub { pod2usage( -verbose  => 1  )                      },
-#        'manual'    => sub { pod2usage( -verbose  => 2  )                      },
-#    );
-#}
-#
-#sub _prepare_io {
-#    my ($opt, $argv) = @_;
-#
-#    my ($INH, $OUTH, $ERRH);
-#    
-#    # If user explicitly sets -i, put the argument in @$argv
-#    unshift @$argv, $opt->{input} if exists $opt->{input};
-#
-#    # Allow in-situ arguments (equal input and output filenames)
-#    if (    exists $opt->{input} and exists $opt->{output}
-#               and $opt->{input} eq $opt->{output} ) {
-#        open $INH, q{<}, $opt->{input}
-#            or croak "Can't read $opt->{input}: $!";
-#        unlink $opt->{output};
-#    }
-#    else { $INH = *ARGV }
-#
-#    # Redirect STDOUT to a file if so specified
-#    if ( exists $opt->{output} and q{-} ne $opt->{output} ) {
-#        open $OUTH, q{>}, $opt->{output}
-#            or croak "Can't write $opt->{output}: $!";
-#    }
-#    else { $OUTH = *STDOUT }
-#
-#    # Log STDERR if so specified
-#    if ( exists $opt->{error} and q{-} ne $opt->{error} ) {
-#        open $ERRH, q{>}, $opt->{error}
-#            or croak "Can't write $opt->{error}: $!";
-#    }
-#    elsif ( exists $opt->{quiet} and $opt->{quiet} ) {
-#        use File::Spec;
-#        open $ERRH, q{>}, File::Spec->devnull
-#            or croak "Can't write $opt->{error}: $!";
-#    }
-#    else { $ERRH = *STDERR }
-#
-#    return ( $INH, $OUTH, *STDERR = $ERRH );
-#}
-
-__DATA__
-
 
 __END__
 
