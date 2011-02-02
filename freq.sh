@@ -1,4 +1,5 @@
 #!/bin/bash
+#___UNDOCUMENTED___
 
 NAME=$1
 GENOME=$2

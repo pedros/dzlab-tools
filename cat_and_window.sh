@@ -1,4 +1,5 @@
 #!/bin/sh
+#___UNDOCUMENTED___
 
 echo "Starting cat and window run at" `date`
 
