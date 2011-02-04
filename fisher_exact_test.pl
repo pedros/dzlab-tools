@@ -83,7 +83,7 @@ while (defined (my $line = <$fh>)){
 }
 
 close $fh;
-if ($output eq q{-}){
+if ($output ne q{-}){
     close $outfh;
 }
 
@@ -124,6 +124,8 @@ fisher_exact_test.pl -a 2 -b 4 -c 6 -d 8 -i input.txt -o output.txt
  --sep           -s  File column separator (default: tab) 
  --significance  -p  If P-value is less than this, mark it with a '+' sign
                      Otherwise, '-'. Default: .0001
+ --input         -i  Input file
+ --output        -o  Output file (default to screen)
 
  --help        print this information
 
