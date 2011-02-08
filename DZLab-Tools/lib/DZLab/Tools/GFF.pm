@@ -35,7 +35,7 @@ require Exporter;
 
 our @ISA       = qw/Exporter/;
 our @EXPORT    = qw/gff_read gff_make_iterator gff_validate gff_slurp_by_seq
-                    gff_to_string parse_gff_arrayref parse_gff_hashref /;
+                    gff_to_string parse_gff_arrayref parse_gff_hashref gff_slurp/;
 our @EXPORT_OK = qw//;
 
 
@@ -63,10 +63,14 @@ not in a sub hash.  maps '.' dot columns and non-existenct attributes to undef
 returns 0 on non-parseable lines or comments. *Returns pragmas as strings*.
 Check that ref $result eq 'HASH'
 
+If a locus_tag is given as a second argument, and locus is of the form "SOME.THING",
+locus_tag.prefix is set to SOME and locus_tag.suffix is set to THING.  If locus does 
+not have a dot, locus_tag.prefix and suffix are undef.  
+
 =cut
 
 sub parse_gff_hashref{
-    my ($line) = @_;
+    my ($line, $locus_tag) = @_;
      
     return 0 unless $line;
     $line =~ tr/\n\r//d;
@@ -94,6 +98,16 @@ sub parse_gff_hashref{
             else {
                 $accum{Note} = $key;
             }
+        }
+    }
+
+    if ($locus_tag){
+        if ($accum{$locus_tag} =~ /([^\.]+)\.([^\.]+)/){
+            $accum{$locus_tag . '.prefix'} = $1;
+            $accum{$locus_tag . '.suffix'} = $2;
+        } else {
+            $accum{$locus_tag . '.prefix'} = undef;
+            $accum{$locus_tag . '.suffix'} = undef;
         }
     }
 
@@ -221,6 +235,31 @@ sub gff_make_iterator {
     };
 }
 
+=head2 gff_slurp
+
+Returns arrayref of gff-records 
+
+=cut
+
+sub gff_slurp{
+    my ($opt) = @_;
+    
+    ($opt->{file} xor $opt->{handle}) 
+        or (carp "slurp_gff: need filename xor filehandle" and return {});
+
+    my $it = gff_make_iterator( 
+        $opt->{file} ? (file => $opt->{file}) : (handle => $opt->{handle}),
+    );
+
+    my @accum;
+    while (defined (my $gff = $it->())){
+        if (ref $gff eq 'HASH'){
+            push @accum, $gff;
+        }
+    }
+    return \@accum;
+}
+
 =head2 gff_slurp_by_seq 
 
 Returns hash of sequences to gff-records { sequence => [$gff_hashes] }. 
@@ -228,7 +267,7 @@ Returns hash of sequences to gff-records { sequence => [$gff_hashes] }.
 =cut
 
 sub gff_slurp_by_seq {
-    my $opt = shift;
+    my ($opt) = @_;
     
     ($opt->{file} xor $opt->{handle}) 
         or (carp "slurp_gff: need filename xor filehandle" and return {});
