@@ -94,17 +94,20 @@ sub is_gff{
     return ref $gff && ref $gff eq 'HASH';
 }
 
-=head2 do_gff(&@)
+=head2 do_gff BLOCK ARGS_FOR_GFFPARSER_CONSTRUCTOR
+
+BLOCK is executed with $_ set to the GFF hashref.  ARGS_FOR_GFFPARSER_CONSTRUCTOR are passed to
+GFF::Parser constructor directly.
 
  do_gff { 
     # ... $_ is a gff hashref here
- } 'file_or_handle', 'locus_tag';
+ } file => 'file.gff', locus => 'ID';
 
 =cut
 
 sub do_gff(&@){
-    my ($code, $file_or_handle, $locus) = @_;
-    my $iter = GFF::Parser->new(file => $file_or_handle, locus => $locus);
+    my ($code, @opt) = @_;
+    my $iter = GFF::Parser->new(@opt);
     while (defined (my $gff = $iter->next())){
         if (is_gff($gff)){
             local $_ = $gff;

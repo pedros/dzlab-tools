@@ -8,6 +8,6 @@ use GFF;
 
 do_gff {
     say gff_to_string $_;
-} 't/test1.gff';
+} file => 't/test1.gff', locus => 'ID';
 
 ok(1);
