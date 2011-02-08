@@ -8,11 +8,12 @@ use GFF::Parser;
 use GFF;
 
 my $it = GFF::Parser->new(file => 't/test1.gff',locus => 'ID');
+my $seq_index = $it->slurp_index('seqname');
 
-while (defined (my $gff = $it->next())){
-    if (is_gff $gff){
-        print Dumper $gff;
-    }
-}
+#while (my $gff = $it->next()){
+#print Dumper $gff;
+#}
+
+#print Dumper $seq_index;
 
 ok(1);

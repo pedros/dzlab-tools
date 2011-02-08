@@ -25,10 +25,8 @@ has filehandle => (
     init_arg => undef,
 );
 
-
 sub BUILD{
     my ($self) = @_;
-    print Dumper $self;
     if (ref $self->filename_or_handle eq 'GLOB'){
         $self->filehandle = $self->filename_or_handle;
     }
@@ -50,14 +48,92 @@ sub DEMOLISH{
     }
 }
 
+=head2 $p->next()
+
+return the next gff record. returns undef when eof.
+
+=cut 
+
 sub next{
     my ($self) = @_;
-    my $line = scalar readline $self->filehandle;
-    if (defined ($line)){
+    while (defined (my $line = scalar readline $self->filehandle)){
+        my $gff = _parse_gff_hashref($line,$self->locus_tag);
+        if (_is_gff($gff)){
+            return $gff;
+        }
+    }
+    return;
+}
+
+=head2 $p->next_no_skip()
+
+return the next gff record, 0 on a comment, or string on a pragma statement.
+returns undef when eof.
+
+=cut 
+
+sub next_no_skip{
+    my ($self) = @_;
+    while (defined (my $line = scalar readline $self->filehandle)){
         return _parse_gff_hashref($line,$self->locus_tag);
     }
-    else {
-        return;
+    return;
+}
+
+=head2 $p->slurp()
+
+return an arrayref of all gff records
+
+=cut
+
+sub slurp{
+    my ($self) = @_;
+    my @accum;
+    while (my $gff = $self->next()){
+        # if we're skipping, no need to check
+        if (_is_gff($gff)){ 
+            push @accum, $gff;
+        }
+    }
+    return \@accum;
+}
+
+=head2 $p->slurp_index('colname')
+
+return a hashref of column val to gff record
+
+=cut
+
+sub slurp_index{
+    my ($self, $column) = @_;
+    my %index;
+    my $counter = 0;
+    my $badrecords = 0;
+    while (my $gff = $self->next()){
+        if (_is_gff($gff)){ 
+            if (exists $gff->{$column} && defined $gff->{$column}){
+                push @{$index{$gff->{$column}}}, $gff;
+            } else {
+                $badrecords++;
+            }
+            $counter++;
+        }
+    }
+    carp "warning: $badrecords out of $counter records didn't have a column/attribute $column in $self->file_or_handle"
+    if $badrecords;
+
+    return \%index;
+}
+
+=head2 $p->do(sub { my $gff = shift; ... })
+
+=cut
+
+sub do{
+    my ($self,$code) = @_;
+    croak "do needs a sub!" if (ref $code ne 'CODE');
+    while (my $gff = $self->next()){
+        $code->($gff);
     }
 }
 
@@ -119,6 +195,10 @@ sub _parse_gff_hashref{
     return \%accum;
 }
 
+sub _is_gff{
+    my ($gff) = @_;
+    return ref $gff && ref $gff eq 'HASH';
+}
 
 no Moose;
 __PACKAGE__->meta->make_immutable;

@@ -15,7 +15,7 @@ use version; our $VERSION = qv('0.0.1');
 require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT_OK = qw();
-our @EXPORT = qw(do_gff is_gff gff_to_string);
+our @EXPORT = qw(is_gff gff_to_string);
 
 =head1 EXPORT
 
@@ -48,52 +48,6 @@ sub gff_to_string{
     }
 }
 
-=head2 gff_slurp
-
-Returns arrayref of gff-records 
-
-=cut
-
-sub gff_slurp{
-    my ($file_or_handle, $locus) = @_;
-    
-    my @accum;
-    do_gff {
-        push @accum,$_;
-    } $file_or_handle, $locus;
-
-    return \@accum;
-}
-
-=head2 gff_slurp_by_seq 
-
-Returns hash of sequences to gff-records { sequence => [$gff_hashes] }. 
-
-=cut
-
-sub gff_slurp_by_seq {
-    my ($file_or_handle, $locus, $sort) = @_;
-
-    my %gff_records = ();
-    do_gff {
-        my $seq = $_->{seqname} ;
-        push @{ $gff_records{ $seq } }, $_;
-    } $file_or_handle, $locus;
-    
-    if ($sort){
-        foreach my $seq (keys %gff_records) {
-            @{ $gff_records{$seq} }
-            = sort { $a->{start} <=> $b->{start} } @{ $gff_records{$seq} };
-        }
-    }
-    return \%gff_records;
-}
-
-sub is_gff{
-    my ($gff) = @_;
-    return ref $gff && ref $gff eq 'HASH';
-}
-
 =head2 do_gff BLOCK ARGS_FOR_GFFPARSER_CONSTRUCTOR
 
 BLOCK is executed with $_ set to the GFF hashref.  ARGS_FOR_GFFPARSER_CONSTRUCTOR are passed to
@@ -108,11 +62,9 @@ GFF::Parser constructor directly.
 sub do_gff(&@){
     my ($code, @opt) = @_;
     my $iter = GFF::Parser->new(@opt);
-    while (defined (my $gff = $iter->next())){
-        if (is_gff($gff)){
-            local $_ = $gff;
-            &$code;
-        }
+    while (my $gff = $iter->next()){
+        local $_ = $gff;
+        &$code;
     }
 }
 
