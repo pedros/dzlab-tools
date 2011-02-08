@@ -119,7 +119,7 @@ sub slurp_index{
             $counter++;
         }
     }
-    carp "warning: $badrecords out of $counter records didn't have a column/attribute $column in $self->file_or_handle"
+    carp "warning: $badrecords out of $counter records didn't have a column/attribute $column in " . $self->file_or_handle
     if $badrecords;
 
     return \%index;
@@ -183,7 +183,8 @@ sub _parse_gff_hashref{
     }
 
     if ($locus_tag){
-        if ($accum{$locus_tag} =~ /([^\.]+)\.([^\.]+)/){
+        if (exists($accum{$locus_tag}) && 
+            $accum{$locus_tag} =~ /([^\.]+)\.([^\.]+)/){
             $accum{$locus_tag . '.prefix'} = $1;
             $accum{$locus_tag . '.suffix'} = $2;
         } else {

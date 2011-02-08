@@ -9,8 +9,8 @@ use autodie;
 use Pod::Usage;
 use Getopt::Long;
 use FindBin;
-use lib "$FindBin::Bin/DZLab-Tools/lib";
-use DZLab::Tools::GFF qw/gff_to_string gff_slurp/;
+use lib "$FindBin::Bin/GFF/lib";
+use GFF;
 
 my $locus_tag = q/ID/;
 my $input;
