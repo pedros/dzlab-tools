@@ -1,4 +1,4 @@
-outFile "dzlab-tools-0.0.10.exe"
+outFile "dzlab-tools-0.0.11.exe"
  
 InstallDir C:\dzlab-tools
 !define UNINSTALLER $INSTDIR\uninstaller.exe
@@ -13,10 +13,13 @@ section
 setOutPath $INSTDIR
 file /r /x utilities /x .* /x .git /x *.exe /x *.nsi /x tmp /x *.gff *
 writeUninstaller ${UNINSTALLER}
+CreateDirectory "$SMPROGRAMS\Zilberman Lab"
+CreateShortCut "$SMPROGRAMS\Zilberman Lab\Help.lnk" "$INSTDIR\help\index.html"
 sectionEnd
  
 section "Uninstall"
 SetAutoClose true
+Delete "$SMPROGRAMS\Zilberman Lab\Help.lnk"
 delete ${UNINSTALLER}
 rmdir /r $INSTDIR\*
 sectionEnd
