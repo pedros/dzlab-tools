@@ -9,7 +9,7 @@ use autodie;
 use Pod::Usage;
 use Getopt::Long;
 use FindBin;
-use lib "$FindBin::Bin/GFF/lib";
+use lib "$FindBin::Bin/lib";
 use GFF;
 
 my $locus_tag = q/ID/;
@@ -26,72 +26,41 @@ my $result = GetOptions (
 );
 pod2usage(-verbose => 1) if (!$result || $help || !$input || !$output_base);  
 
-# return hashref { locus_id => [gff_hashes] }
-
-sub parse_exons{
-    my ($opt) = @_;
-    if (ref $opt->{gff_aref} ne 'ARRAY' || !exists $opt->{tag}){
-        croak "parse_exon argument error";
-    }
-    my %exon;
-    my $counter=0;
-    my $no_locus_count=0;
-    # populate %exon, { locus_id => [gff_hashrefs] }
-    foreach my $gff (@{$opt->{gff_aref}}) {
-
-        $counter++;
-        if (! exists $gff->{$opt->{tag}}){
-            $no_locus_count++;
-            next;
-        }
-
-        # if ID=AT12345.123, use AT12345 part. else use entire thing
-        # add an exonid entry into $gff
-        my $locus;
-        if ($gff->{$opt->{tag}} =~ /([^\.]+)\.([^\.]+)/){
-            $locus = $1;
-            $gff->{exonid} = $2;
-        } else {
-            $locus = $gff->{$opt->{tag}};
-            carp "non-exon locus $locus already exists?"
-            if exists $exon{$locus};
-            $gff->{exonid} = '1';
-        }
-        push @{$exon{$locus}}, $gff;
-    }
-    carp "WARNING: $no_locus_count out of $counter gff records had no valid locus tag"
-    if $no_locus_count;
+sub sort_exons{
+    my ($exon) = @_;
 
     # sort, taking strand into account
-    foreach my $locus (keys %exon) {
-        my @strands = map { $_->{strand} // '+' } @{$exon{$locus}};
+    foreach my $locus (keys %$exon) {
+        my @strands = map { $_->{strand} // '+' } @{$exon->{$locus}};
         my $dir = $strands[0];
         if (! all { $_ eq $dir } @strands){
             die "$locus: mixed strands for an exon?";
         }
         # sort backwards if - strand
         if ($dir eq '+'){
-            @{$exon{$locus}} = sort { $a->{start} <=> $b->{start} } @{$exon{$locus}};
+            @{$exon->{$locus}} = sort { $a->{start} <=> $b->{start} } @{$exon->{$locus}};
         } else {
-            @{$exon{$locus}} = sort { $b->{start} <=> $a->{start} } @{$exon{$locus}};
+            @{$exon->{$locus}} = sort { $b->{start} <=> $a->{start} } @{$exon->{$locus}};
         }
     }
-
-    # if unique is set, only keep one version of the exon, chosen randomly.
-    if ($opt->{unique}){
-        foreach my $locus (keys %exon) {
-            my @exonids = map { $_->{exonid} } @{$exon{$locus}};
-            my $chosen_one = $exonids[0];
-            @{$exon{$locus}} = grep { $_->{exonid} eq $chosen_one} @{$exon{$locus}};
-        }
-    }
-
-    return \%exon;
 }
 
-my $gff_aref = gff_slurp({file => $input});
+sub eliminate_dupes{
+    my ($exon,$locus_tag) = @_;
+    my $exonid = $locus_tag . ".suffix";
+    foreach my $locus (keys %$exon) {
+        my @exonids = map { $_->{$exonid} } @{$exon->{$locus}};
+        my $chosen_one = $exonids[0];
+        @{$exon->{$locus}} = 
+        grep { $_->{$exonid} eq $chosen_one} @{$exon->{$locus}};
+    }
+}
 
-my $exon = parse_exons({gff_aref => $gff_aref,tag => $locus_tag,unique => ! $all});
+my $p = GFF::Parser->new(file => $input,locus => $locus_tag);
+my $exon = $p->slurp_index($locus_tag . ".prefix");
+
+sort_exons($exon);
+eliminate_dupes($exon,$locus_tag) if $all;
 
 open my $first  , '>' , "$output_base.first.gff";
 open my $middle , '>' , "$output_base.middle.gff";

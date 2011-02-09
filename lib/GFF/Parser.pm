@@ -119,7 +119,7 @@ sub slurp_index{
             $counter++;
         }
     }
-    carp "warning: $badrecords out of $counter records didn't have a column/attribute $column in " . $self->file_or_handle
+    carp "warning: $badrecords out of $counter records didn't have a column/attribute $column in " .  $self->filename_or_handle
     if $badrecords;
 
     return \%index;
