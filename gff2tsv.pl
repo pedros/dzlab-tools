@@ -62,7 +62,7 @@ foreach my $file (@ARGV) {
 
 =head1 NAME
 
-gff2tsv.pl - 
+gff2tsv.pl - convert a GFF file to TSV, tab seperated file
 
 =head1 SYNOPSIS
 
@@ -70,7 +70,9 @@ gff2tsv.pl -
 
 =head1 DESCRIPTION
 
-Long description
+The first 8 columns are always seqname, source, feature, start, end, score, strand, frame.  The
+ninth and further columns are the attributes split up into individual column.  First line of output
+is the column names.
 
 =head1 OPTIONS
 
