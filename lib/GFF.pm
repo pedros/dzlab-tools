@@ -15,7 +15,7 @@ use version; our $VERSION = qv('0.0.1');
 require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT_OK = qw();
-our @EXPORT = qw(is_gff gff_to_string);
+our @EXPORT = qw(do_gff gff_to_string);
 
 =head1 EXPORT
 
