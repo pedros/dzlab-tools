@@ -173,6 +173,11 @@ sub _parse_gff_hashref{
     if (defined($accum{attribute}) ){
         for (split /;/, $accum{attribute}){
             my ($key, $val) = split /=/, $_;
+            $key =~ s/^\s+//;
+            $val =~ s/^\s+//;
+            $key =~ s/\s+$//;
+            $val =~ s/\s+$//;
+
             if (defined $val){
                 $accum{$key} = $val;
             }
