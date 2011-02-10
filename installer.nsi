@@ -11,7 +11,7 @@ FunctionEnd
  
 section
 setOutPath $INSTDIR
-file /r /x utilities /x .* /x .git /x *.exe /x *.nsi /x tmp /x *.gff *
+file /r /x utilities /x .* /x .git /x *.exe /x *.nsi /x t /x tmp /x *.gff *
 writeUninstaller ${UNINSTALLER}
 CreateDirectory "$SMPROGRAMS\Zilberman Lab"
 CreateShortCut "$SMPROGRAMS\Zilberman Lab\Help.lnk" "$INSTDIR\help\index.html"
