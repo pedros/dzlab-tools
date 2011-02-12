@@ -40,6 +40,11 @@ my $gfffile = '';
 my $reference = '';
 my $stats_only = 0;
 my $sort = 0;
+
+# dinucleotide is a flag which enables CA,CT,CC counting.  CG is included even
+# if not.  This is an additional flag instead of the default since the lab is
+# mostly interetested in CG/CHH/CHG, but some organisms like fruit fly,
+# CA/CC/CT is relevant
 my $di_nucleotide_count = 0;
 my $output = "-";
 my $verbose = 0;
@@ -96,15 +101,33 @@ print join("\t",
 
 # declare and initialize a hash of hashes, where each inner hash's key is a 'C' coordinate
 # and its key/value pairs are total c/t counts, and contexts
-my %HoH=();
+my %HoH=(); 
+
+# { coord => [ 
+#  0: #c
+#  1: #t
+#  2: #cg
+#  3: #chg
+#  4: #chh
+#  5: coord
+#  6: seqname
+#  7: strand
+#  8: fractional meth c/(c+t) score, calc'd in sort_and_count
+#  9: # of '+' strand
+#  10: # of '-' strand (9, 10 are for debugging. should be equal.
+#  11: #ca
+#  12: #cc
+#  13: #ct
+# ] }
 
 # for basic stats
 my %total_count = ();
 ($total_count{bp}, $total_count{overlaps}) = (0, 0);
 
 # holds name of chromosomes as keys and length of chromosomes in bp as values
-my %reference = ();
+my %reference = (); # {seqname => sequence lengths}
 
+# index_fasta
 # begins limited scope for extracting names and lengths of chromosomes in reference file
 {
     # reads in the reference genome file into @fastaseq
@@ -166,8 +189,8 @@ while (<$GFF>) { ### Indexing...
 
     $last_seen_coordinate = $record{'end'};
 
-    # grabs methylated sequence from gff file
-    # assumes sequence is exactly $readsize bps long
+    # grabs methylated sequence (from column 3) from gff file assumes sequence
+    # is exactly $readsize bps long.  @methylated is the split array
     $record{'feature'} =~ m/([ACGTN]+$)/ or die Dumper \%record;
     my @methylated = split(//, $1);
 
@@ -178,20 +201,31 @@ while (<$GFF>) { ### Indexing...
     # assumes sequence is in the 'attribute' field, separated from extraneous information by a '='
     my @unmethylated = split(//, (split "=", $record{'attribute'})[1]);
 
-    # check for overlapping pairs of reads
+    # * so we have @methylated and @unmethylated
+
+    # check for overlapping pairs of reads. If feature is
+    # "@HWI-EAS105_0001:2:1:1050:9974#0/1", $pair_id is
+    # "@HWI-EAS105_0001:2:1:1050:9974#0" and read id is "1" for left, "2" for
+    # right.  This naming is probably backwards, 
     my ($pair_id, $read_id) = $record{'feature'} =~ m/(^.*?)\/([12]):[ACGTN]+/;
     my $overlap = 0; # array reference with overlap start coord, end coord
 
-    # if matching pair has not been seen, create a new entry for this pair in buffer
+    # if matching pair (ie, the read from the other side) has not been seen,
+    # create a new entry for this pair in buffer
     if (!exists $reads_buffer{$pair_id}) {
         $reads_buffer{$pair_id} = [$record{'start'}, $record{'end'}, $read_id];
     }
-    else { # if matching pair on buffer
+    else { 
+        # if matching pair on buffer
         # existing end runs into pair - overlap is current pair's start to existing end's end
+	#       |-----------| current
+        # |----------|        read buffer
         if ($record{'end'} > $reads_buffer{$pair_id}->[0] and $record{'start'} < $reads_buffer{$pair_id}->[1]) {
             $overlap = [$record{'start'}, $reads_buffer{$pair_id}->[1]];
         }
         # current end runs into pair - overlap is existing end's start to current end's end
+        # |----------|        current
+	#       |-----------| read buffer
         elsif ($reads_buffer{$pair_id}->[1] > $record{'start'} and $reads_buffer{$pair_id}->[0] < $record{'end'}) {
             $overlap = [$reads_buffer{$pair_id}->[0], $record{'end'}];
         }
@@ -276,8 +310,9 @@ while (<$GFF>) { ### Indexing...
 		$HoH{$coord}[1]++; # t_count
 	    }
 
-	    # checks the context by looking behind +1 or +0..+1 bps
-	    # because the scaffold read is displaced by 2 bps
+	    # checks the context by looking behind +1 or +0..+1 bps because the
+	    # scaffold read is displaced by 2 bps remember that the base in
+	    # question is $j+2, so $j+1 is actually looking backwards.
 	    if ( $unmethylated[$j + 1] =~ m/[Cc]/ ) {
                 $HoH{$coord}[2]++; # cg_count
 	    }
@@ -323,6 +358,12 @@ while (<$GFF>) { ### Indexing...
 
 sort_and_count (\%HoH, $di_nucleotide_count) if scalar keys %HoH > 0;
 close($GFF);
+
+#==========================================================================================
+### Calculate frequencies
+# The reason this isn't a a separate script is b/c we need $total_count{bp},
+# $total_count{overlaps} for this section, but they are hard to pass in GFF
+# form.  Maybe use a GFF pragma statement?
 
 # open for counting frequencies
 my @freq = count_freq($output, $di_nucleotide_count);
@@ -420,6 +461,7 @@ sub gff_sort {
 }
 
 
+# TODO: replace the array of HoH with actual names...
 sub sort_and_count {
     my ($single_count_ref, $di_nucleotide_count)
     = @_;
@@ -428,6 +470,7 @@ sub sort_and_count {
     # loops through every initialized key in main hash
     # keys are sorted, so the output is going to be sorted by starting coordinate
     for my $i (sort {$a <=> $b} keys %single_count) { ### Sorting and counting...  % done
+        # $i is the coord.
 
         # we need to check that a given key/value pair was initialized
         # if it wasn't, initialize it to zero (to avoid division-by-zero, etc)
@@ -514,8 +557,9 @@ sub sort_and_count {
         }
 
         my $attribute = join q{;}, "c=$single_count{$i}[0]", "t=$single_count{$i}[1]";
+        # mark with * when the read count > 20 b/c that's probably a repeat block.
         $attribute .= '*' if ($single_count{$i}[0] + $single_count{$i}[1] > 20
-        and $single_count{$i}[6] !~ m/chr[cm]/);
+        and $single_count{$i}[6] !~ m/chr[cm]/); # arabidopsis
 
         # prints a single gff record
         print join("\t",
