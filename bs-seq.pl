@@ -28,13 +28,13 @@ my $trust_dash_2  = 0;
 my $single_ends   = 1;
 my @left_splice;
 my @right_splice;
-my @groups        = ();
+my @groups        = (); 	# sequences (chr1, chr2, ...)
 my $aligner       = 'bowtie';
 my $max_hits      = 0;
 my $random_assign = 1;
 my $pthreads      = 1;
 my $di_nuc_freqs  = 0;
-my @contexts;
+my @contexts;		# CG, CHG, CHH, etc.
 
 my @date = localtime (time);
 
@@ -111,17 +111,32 @@ unless (@contexts) {
 }
 
 my %files = (
+    # left fasta, and bisulfite treated
     lfa   => File::Spec->catfile ($out_dir, basename($left_read))  . '.fa',
     lc2t  => File::Spec->catfile ($out_dir, basename($left_read))  . '.c2t',
+    # right fasta, and bisulfite treated
     rfa   => File::Spec->catfile ($out_dir, basename($right_read)) . '.fa',
     rg2a  => File::Spec->catfile ($out_dir, basename($right_read)) . '.g2a',
+    # left/right eland3, from bowtie
     lel3  => File::Spec->catfile ($out_dir, basename($left_read))  . "_$left_splice[0]-$left_splice[1].eland3",
     rel3  => File::Spec->catfile ($out_dir, basename($right_read)) . "_$right_splice[0]-$right_splice[1].eland3",
+    # output of correlated paired ends
     base  => File::Spec->catfile ($out_dir, $base_name)  . '.gff',
+    # output of collect align states
     log   => File::Spec->catfile ($out_dir, $base_name)  . '.log',
+    
+    # <output dir>/basename-sequence.gff
     split => _gen_files (File::Spec->catfile ($out_dir, $base_name), 'gff',  @groups),
+
+    # <output dir>/single-c/basename-sequence.single-c.gff
     freq  => _gen_files (File::Spec->catfile ($out_dir, 'single-c', $base_name), 'single-c.gff', @groups),
+
+    # <output dir>/single-c/basename-sequence.single-c-CG.gff, 
+    # <output dir>/single-c/basename-sequence.single-c-CHG.gff, etc.
     cont  => [map { _gen_files (File::Spec->catfile ($out_dir, 'single-c', $base_name), "single-c-$_.gff", @groups) } @contexts],
+
+    # <output dir>/windows/basename-sequence.w50-CG.gff, 
+    # <output dir>/windows/basename-sequence.w50-CHG.gff, etc.
     wcont => [map { _gen_files (File::Spec->catfile ($out_dir, 'windows', $base_name), "w${window_size}-$_.gff", @groups) } @contexts],
 );
 
@@ -138,56 +153,51 @@ run_cmd ("perl -S rcfas.pl $reference > $reference.rc")           unless file_ex
 run_cmd ("perl -S convert.pl c2t $reference.rc > $reference.c2t") unless file_exists("$reference.c2t");
 run_cmd ("perl -S convert.pl g2a $reference.rc > $reference.g2a") unless file_exists("$reference.g2a") or $single_ends;
 
-if ($aligner eq 'bowtie') {
-    run_cmd ("bowtie-build $reference.c2t $reference.c2t") unless file_exists("$reference.c2t.1.ebwt");
-    run_cmd ("bowtie-build $reference.g2a $reference.g2a") unless file_exists("$reference.g2a.1.ebwt") or $single_ends;
+# align with bowtie
+run_cmd ("bowtie-build $reference.c2t $reference.c2t") unless file_exists("$reference.c2t.1.ebwt");
+run_cmd ("bowtie-build $reference.g2a $reference.g2a") unless file_exists("$reference.g2a.1.ebwt") or $single_ends;
+
+my $l3trim = $read_size - $left_splice[1];
+my $l5trim = $left_splice[0] - 1;
+
+my $r3trim = $read_size - $right_splice[1];
+my $r5trim = $right_splice[0] - 1;
+
+# align with bowtie
+run_cmd ("bowtie $reference.c2t -f -B 1 -v $mismatches -5 $l5trim -3 $l3trim --best" . ($max_hits ? " --strata  -k $max_hits -m $max_hits" : q{}) . " --norc $files{lc2t} $files{lel3}" )   unless file_exists($files{lel3});
+unless ($single_ends) {
+	run_cmd ("bowtie $reference.g2a -f -B 1 -v $mismatches -5 $r5trim -3 $r3trim --best" . ($max_hits ? "  --strata -k $max_hits -m $max_hits" : q{}) . " --norc $files{rg2a} $files{rel3}" ) unless file_exists($files{rel3});
+}
+else {
+	run_cmd ("bowtie $reference.c2t -f -B 1 -v $mismatches -5 $r5trim -3 $r3trim --best" . ($max_hits ? "  --strata -k $max_hits -m $max_hits" : q{}) . " --norc $files{lc2t} $files{rel3}" ) unless file_exists($files{rel3});
 }
 
-if ($aligner eq 'seqmap') {
-    # align with seqmap
-    run_cmd ("seqmap $mismatches $files{lc2t} $reference.c2t $files{lel3} /eland:3 /forward_strand /available_memory:8000 /cut:$left_splice[0],$left_splice[1]")   unless file_exists($files{lel3});
-    unless ($single_ends) {
-        run_cmd ("seqmap $mismatches $files{rg2a} $reference.g2a $files{rel3} /eland:3 /forward_strand /available_memory:8000 /cut:$right_splice[0],$right_splice[1]") unless file_exists($files{rel3});
-    }
-    else {
-        run_cmd ("seqmap $mismatches $files{lc2t} $reference.c2t $files{rel3} /eland:3 /forward_strand /available_memory:8000 /cut:$right_splice[0],$right_splice[1]") unless file_exists($files{rel3});
-    }
-
-    # get back original non-converted reads
-    run_cmd ("perl -S replace_reads.pl -f $files{lfa} -r $read_size -s @left_splice  $files{lel3} > $files{lel3}.post") unless file_exists("$files{lel3}.post");
-    unless ($single_ends) {
-        run_cmd ("perl -S replace_reads.pl -f $files{rfa} -r $read_size -s @right_splice $files{rel3} > $files{rel3}.post") unless file_exists("$files{rel3}.post");
-    }
-    else {
-        run_cmd ("perl -S replace_reads.pl -f $files{lfa} -r $read_size -s @right_splice $files{rel3} > $files{rel3}.post") unless file_exists("$files{rel3}.post");
-    }
+# get back original non-converted reads and convert from bowtie to eland3
+run_cmd ("perl -S parse_bowtie.pl -u $files{lfa} -s @left_splice  $files{lel3} -o $files{lel3}.post") unless file_exists("$files{lel3}.post");
+unless ($single_ends) {
+	run_cmd ("perl -S parse_bowtie.pl -u $files{rfa} -s @right_splice  $files{rel3} -o $files{rel3}.post") unless file_exists("$files{rel3}.post");
 }
-elsif ($aligner eq 'bowtie') {
-
-    my $l3trim = $read_size - $left_splice[1];
-    my $l5trim = $left_splice[0] - 1;
-
-    my $r3trim = $read_size - $right_splice[1];
-    my $r5trim = $right_splice[0] - 1;
-
-    # align with bowtie
-    run_cmd ("bowtie $reference.c2t -f -B 1 -v $mismatches -5 $l5trim -3 $l3trim --best" . ($max_hits ? " --strata  -k $max_hits -m $max_hits" : q{}) . " --norc $files{lc2t} $files{lel3}" )   unless file_exists($files{lel3});
-    unless ($single_ends) {
-        run_cmd ("bowtie $reference.g2a -f -B 1 -v $mismatches -5 $r5trim -3 $r3trim --best" . ($max_hits ? "  --strata -k $max_hits -m $max_hits" : q{}) . " --norc $files{rg2a} $files{rel3}" ) unless file_exists($files{rel3});
-    }
-    else {
-        run_cmd ("bowtie $reference.c2t -f -B 1 -v $mismatches -5 $r5trim -3 $r3trim --best" . ($max_hits ? "  --strata -k $max_hits -m $max_hits" : q{}) . " --norc $files{lc2t} $files{rel3}" ) unless file_exists($files{rel3});
-    }
-
-    # get back original non-converted reads and convert from bowtie to eland3
-    run_cmd ("perl -S parse_bowtie.pl -u $files{lfa} -s @left_splice  $files{lel3} -o $files{lel3}.post") unless file_exists("$files{lel3}.post");
-    unless ($single_ends) {
-        run_cmd ("perl -S parse_bowtie.pl -u $files{rfa} -s @right_splice  $files{rel3} -o $files{rel3}.post") unless file_exists("$files{rel3}.post");
-    }
-    else {
-        run_cmd ("perl -S parse_bowtie.pl -u $files{lfa} -s @right_splice  $files{rel3} -o $files{rel3}.post") unless file_exists("$files{rel3}.post");
-    }
+else {
+	run_cmd ("perl -S parse_bowtie.pl -u $files{lfa} -s @right_splice  $files{rel3} -o $files{rel3}.post") unless file_exists("$files{rel3}.post");
 }
+
+# deprecated: seqmap instead of bowtie.
+#    run_cmd ("seqmap $mismatches $files{lc2t} $reference.c2t $files{lel3} /eland:3 /forward_strand /available_memory:8000 /cut:$left_splice[0],$left_splice[1]")   unless file_exists($files{lel3});
+#    unless ($single_ends) {
+#        run_cmd ("seqmap $mismatches $files{rg2a} $reference.g2a $files{rel3} /eland:3 /forward_strand /available_memory:8000 /cut:$right_splice[0],$right_splice[1]") unless file_exists($files{rel3});
+#    }
+#    else {
+#        run_cmd ("seqmap $mismatches $files{lc2t} $reference.c2t $files{rel3} /eland:3 /forward_strand /available_memory:8000 /cut:$right_splice[0],$right_splice[1]") unless file_exists($files{rel3});
+#    }
+#
+#    # get back original non-converted reads
+#    run_cmd ("perl -S replace_reads.pl -f $files{lfa} -r $read_size -s @left_splice  $files{lel3} > $files{lel3}.post") unless file_exists("$files{lel3}.post");
+#    unless ($single_ends) {
+#        run_cmd ("perl -S replace_reads.pl -f $files{rfa} -r $read_size -s @right_splice $files{rel3} > $files{rel3}.post") unless file_exists("$files{rel3}.post");
+#    }
+#    else {
+#        run_cmd ("perl -S replace_reads.pl -f $files{lfa} -r $read_size -s @right_splice $files{rel3} > $files{rel3}.post") unless file_exists("$files{rel3}.post");
+#    }
 
 # make sure reads map together
 run_cmd ("perl -S correlatePairedEnds.pl -l $files{lel3}.post -r $files{rel3}.post -ref $reference -o $files{base} -t 0 -d $library_size -s $read_size -2 $trust_dash_2 -1 $single_ends -m $max_hits -a $random_assign") unless file_exists($files{base});
@@ -204,9 +214,12 @@ for (@groups) {
 # window methylation counts into non-overlapping windows
 for my $context (0 .. @contexts - 1) {
     for my $group (@groups) {
-        run_cmd ("perl -S split_gff.pl --feature all $files{freq}->{$group}") unless file_exists($files{cont}->[$context]{$group});
-        run_cmd ("perl -S window_gff.pl $files{cont}->[$context]{$group} --width 1 --step 1 --output $files{cont}->[$context]{$group}.merged") unless file_exists("$files{cont}->[$context]{$group}.merged");
-        run_cmd ("perl -S window_gff.pl $files{cont}->[$context]{$group}.merged --width $window_size --step $window_size --output $files{wcont}->[$context]{$group} --no-skip") unless file_exists($files{wcont}->[$context]{$group});
+        run_cmd ("perl -S split_gff.pl --feature all $files{freq}->{$group}") 
+		unless file_exists($files{cont}->[$context]{$group});
+        run_cmd ("perl -S window_gff.pl $files{cont}->[$context]{$group} --width 1 --step 1 --output $files{cont}->[$context]{$group}.merged") 
+		unless file_exists("$files{cont}->[$context]{$group}.merged");
+        run_cmd ("perl -S window_gff.pl $files{cont}->[$context]{$group}.merged --width $window_size --step $window_size --output $files{wcont}->[$context]{$group} --no-skip") 
+		unless file_exists($files{wcont}->[$context]{$group});
     }
 }
 
