@@ -86,7 +86,7 @@ if ($opt_seqid) {
     }
     else {
 
-        my $sequence = _get_subseq (\%reference, $opt_seqid, $opt_rc, %opt_range);
+        my $sequence = _get_subseq (\%reference, $opt_seqid, $opt_rc, $opt_range{start}, $opt_range{end});
 
         my ($start,$end) = %opt_range ? @opt_range{'start','end'} : (1, length $sequence);
 
