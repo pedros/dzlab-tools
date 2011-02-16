@@ -255,7 +255,7 @@ sub read_bowtie {
         $alternatives, $snp )
         = split /\t|\s+/, $bowtie_line;
 
-    $strand = '-' if $target =~ s/^RC_//;
+        #$strand = '-' if $target =~ s/^RC_//;
 
     my @mm = $snp ? split /,/, $snp : ();
 
