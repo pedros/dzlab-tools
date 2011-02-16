@@ -10,6 +10,18 @@ use File::Spec;
 use File::Path;
 use File::Basename;
 
+# set up logger
+use Log::Log4perl qw/get_logger :levels/;
+my $logger = get_logger();
+$logger->level($DEBUG); 
+my $appender = Log::Log4perl::Appender->new(
+    "Log::Dispatch::File", filename => "bs-seq.log", mode => "append",
+);    
+$appender->layout(
+    Log::Log4perl::Layout::PatternLayout->new( "%d %p> %F{1}:%L %M - %m%n")
+);
+$logger->add_appender($appender);
+
 # SIGINT trap. Ctrl-c triggers unclean exit.
 $SIG{INT} = sub {croak "Received SIG$_[0]. Exiting...\n"};
 
@@ -43,6 +55,8 @@ my $out_dir = File::Spec->catdir (
     sprintf "DZ_full-run_%4d-%02d-%02d_%02d.%02d.%02d",
     $date[5] + 1900, $date[4] + 1, $date[3], $date[2], $date[1], $date[0]
 );
+
+$logger->info(Dumper \@ARGV);
 
 # Grabs and parses command line options
 my $result = GetOptions (
@@ -79,6 +93,7 @@ my $result = GetOptions (
 pod2usage ( -verbose => 1 )
 unless $result and $left_read and $right_read and $reference;
 
+$logger->debug("Reading in reference genome for groups");
 
 # Get all chromosomes, pseudo-chromosomes, groups, etc, in the fasta reference file
 # Discards all information after first blank character in fasta header
@@ -93,6 +108,7 @@ unless (@groups) {
     }
     close $REFERENCE or carp "Can't close $reference: $!";
 }
+$logger->info("groups = " . join ",", @groups);
 
 @left_splice  = (1, $read_size) unless @left_splice;
 @right_splice = (1, $read_size) unless @right_splice;
@@ -109,6 +125,7 @@ unless (@contexts) {
     if ($di_nuc_freqs) {@contexts = qw(CA CC CG CT)}
     else {@contexts = qw(CG CHG CHH)}
 }
+$logger->info("contexts = " . join ",", @contexts);
 
 my %files = (
     # left fasta, and bisulfite treated
@@ -139,8 +156,12 @@ my %files = (
     # <output dir>/windows/basename-sequence.w50-CHG.gff, etc.
     wcont => [map { _gen_files (File::Spec->catfile ($out_dir, 'windows', $base_name), "w${window_size}-$_.gff", @groups) } @contexts],
 );
+$logger->info("files = " . Dumper \%files);
+
 
 # convert reads
+$logger->info("converting reads");
+
 run_cmd ("perl -S fq_all2std.pl fq2fa $left_read > $files{lfa}")  unless file_exists($files{lfa});
 run_cmd ("perl -S convert.pl c2t $files{lfa} > $files{lc2t}")     unless file_exists($files{lc2t});
 unless ($single_ends) {
@@ -149,11 +170,14 @@ unless ($single_ends) {
 }
 
 # convert genomes
+$logger->info("converting genomes");
+
 run_cmd ("perl -S rcfas.pl $reference > $reference.rc")           unless file_exists("$reference.rc");
 run_cmd ("perl -S convert.pl c2t $reference.rc > $reference.c2t") unless file_exists("$reference.c2t");
 run_cmd ("perl -S convert.pl g2a $reference.rc > $reference.g2a") unless file_exists("$reference.g2a") or $single_ends;
 
 # align with bowtie
+$logger->info("bowtie-build");
 run_cmd ("bowtie-build $reference.c2t $reference.c2t") unless file_exists("$reference.c2t.1.ebwt");
 run_cmd ("bowtie-build $reference.g2a $reference.g2a") unless file_exists("$reference.g2a.1.ebwt") or $single_ends;
 
@@ -164,6 +188,7 @@ my $r3trim = $read_size - $right_splice[1];
 my $r5trim = $right_splice[0] - 1;
 
 # align with bowtie
+$logger->info("bowtie align");
 run_cmd ("bowtie $reference.c2t -f -B 1 -v $mismatches -5 $l5trim -3 $l3trim --best" . ($max_hits ? " --strata  -k $max_hits -m $max_hits" : q{}) . " --norc $files{lc2t} $files{lel3}" )   unless file_exists($files{lel3});
 unless ($single_ends) {
 	run_cmd ("bowtie $reference.g2a -f -B 1 -v $mismatches -5 $r5trim -3 $r3trim --best" . ($max_hits ? "  --strata -k $max_hits -m $max_hits" : q{}) . " --norc $files{rg2a} $files{rel3}" ) unless file_exists($files{rel3});
@@ -173,6 +198,7 @@ else {
 }
 
 # get back original non-converted reads and convert from bowtie to eland3
+$logger->info("parse bowtie");
 run_cmd ("perl -S parse_bowtie.pl -u $files{lfa} -s @left_splice  $files{lel3} -o $files{lel3}.post") unless file_exists("$files{lel3}.post");
 unless ($single_ends) {
 	run_cmd ("perl -S parse_bowtie.pl -u $files{rfa} -s @right_splice  $files{rel3} -o $files{rel3}.post") unless file_exists("$files{rel3}.post");
@@ -206,12 +232,14 @@ run_cmd ("perl -S correlatePairedEnds.pl -l $files{lel3}.post -r $files{rel3}.po
 run_cmd ("perl -S collect_align_stats.pl $files{lel3}.post $files{rel3}.post $files{base} $organism $batch > $files{log}") unless file_exists($files{log});
 
 # quantify methylation
+$logger->info("quantify methylation");
 for (@groups) {
     run_cmd ("perl -S split_gff.pl --sequence all $files{base}") unless (file_exists($files{split}->{$_}));
     run_cmd ("perl -S countMethylation.pl --ref $reference --gff $files{split}->{$_} --output $files{freq}->{$_} --sort -d $di_nuc_freqs") unless file_exists($files{freq}->{$_});
 }
 
 # window methylation counts into non-overlapping windows
+$logger->info("windowing meth counts");
 for my $context (0 .. @contexts - 1) {
     for my $group (@groups) {
         run_cmd ("perl -S split_gff.pl --feature all $files{freq}->{$group}") 
@@ -242,8 +270,9 @@ sub _error {
 }
 
 sub run_cmd {
+    my $logger = get_logger();
     my ($cmd) = @_;
-    warn "-- CMD: $cmd\n";
+    $logger->info("RUN_CMD: $cmd");
     eval {system ("$cmd") == 0 or croak _error( $? )};
     croak "** failed to run command '$cmd': $@" if $@;
 }
