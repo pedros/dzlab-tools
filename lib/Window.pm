@@ -25,15 +25,15 @@ sub to_gff{
     croak "abstract class: unimplemented";
 }
 
-has seqname     => (is => rw, isa => Str, required => 1);
-has feature     => (is => ro, isa => Str, default  => window);
-has source      => (is => ro, isa => Str, default  => dzlab);
-has start       => (is => ro, isa => Int, required => 1);
-has end         => (is => ro, isa => Int, required => 1);
-has score_total => (is => rw, isa => Num, default  => 0);
-has strand      => (is => ro, isa => Str, default  => '.');
-has frame       => (is => ro, isa => Str, default  => '.');
-has counter     => (is => rw, isa => Int, default  => 0);
+has seqname     => (is => 'rw', isa => 'Str', required => 1);
+has feature     => (is => 'ro', isa => 'Str', default  => 'window');
+has source      => (is => 'ro', isa => 'Str', default  => 'dzlab');
+has start       => (is => 'ro', isa => 'Int', required => 1);
+has end         => (is => 'ro', isa => 'Int', required => 1);
+has score_total => (is => 'rw', isa => 'Num', default  => 0);
+has strand      => (is => 'ro', isa => 'Str', default  => '.');
+has frame       => (is => 'ro', isa => 'Str', default  => '.');
+has counter     => (is => 'rw', isa => 'Int', default  => 0);
 
 no Moose;
 __PACKAGE__->meta->make_immutable;
@@ -84,12 +84,12 @@ use Carp;
 
 extends 'Window';
 
-has t => (is => rw isa => Int default => 0);
-has c => (is => rw isa => Int default => 0);
+has t => (is => 'rw', isa => 'Int', default => 0);
+has c => (is => 'rw', isa => 'Int', default => 0);
 
-around 'accumulate' => sub {
-    my ($orig,$self,$gff) = @_;
-    $self->$orig($gff);
+override accumulate => sub {
+    my ($self,$gff) = @_;
+    super();
     $self->t($self->t() + $gff->{t});
     $self->c($self->c() + $gff->{c});
     # more
@@ -126,14 +126,14 @@ use Carp;
 
 extends 'Window';
 
-has score_avg => (is => rw isa => Num default => 0);
-has score_std => (is => rw isa => Num default => 0);
-has score_var => (is => rw isa => Num default => 0);
+has score_avg => (is => 'rw', isa => 'Num', default => 0);
+has score_std => (is => 'rw', isa => 'Num', default => 0);
+has score_var => (is => 'rw', isa => 'Num', default => 0);
 
 # is this right?
-around 'accumulate' => sub {
-    my ($orig,$self,$gff) = @_;
-    $self->$orig($gff);
+override accumulate => sub {
+    my ($self,$gff) = @_;
+    super();
 
     my $previous_score_avg = $self->score_avg;
 
@@ -181,12 +181,12 @@ use Carp;
 
 extends 'Window';
 
-has loci      => (is => ro isa => ArrayRef[Str] default => sub {[]});
-has locus_tag => (is => ro isa => Str init_arg   => locus);
+has loci      => (is => 'ro', isa => 'ArrayRef[Str]', default => sub {[]});
+has locus_tag => (is => 'ro', isa => 'Str', init_arg   => 'locus');
 
-around 'accumulate' => sub {
-    my ($orig,$self,$gff) = @_;
-    $self->$orig($gff);
+override accumulate => sub {
+    my ($self,$gff) = @_;
+    super();
     push @{$self->loci}, $gff->{$self->locus_tag};
 };
 
@@ -223,7 +223,7 @@ use Carp;
 use Smart::Comments;
 
 use FindBin;
-use lib "$FindBin::Bin/lib";
+use lib "$FindBin::Bin";
 use GFF::Parser::Attributes;
 
 my $data_pos = tell DATA;
