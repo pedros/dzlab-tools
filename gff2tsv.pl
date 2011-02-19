@@ -11,7 +11,8 @@ use Pod::Usage;
 use Getopt::Long;
 use FindBin;
 use lib "$FindBin::Bin/lib";
-use GFF;
+#use GFF::Parser::Attributes;
+use GFF::Parser::Locus;
 
 my $output = q{-};
 my $help;
@@ -43,21 +44,24 @@ my %seen;
 
 # read through all files once, recording all attribute names
 foreach my $file (@ARGV) {
-    do_gff{
-        my @record_cols = keys %$_;
+    my $parser = GFF::Parser::Locus->new(file => $file,locus => 'ID');
+    while (my $gff = $parser->next()){
+        my @record_cols = keys %$gff;
         my @attributes = complement \@record_cols, \@mains;
         @seen{@attributes} = map { 1 } @attributes;
-    } file => $file;
+    }
 }
 
 my @columns = (qw/seqname source feature start end score strand frame/, sort keys %seen);
 
 # read through them again, this time printing.
+
 say join "\t",@columns;
 foreach my $file (@ARGV) {
-    do_gff{
-        say join "\t", map {$_ // '.'} @{$_}{@columns};
-    } file => $file;
+    my $parser = GFF::Parser::Locus->new(file => $file,locus => 'ID');
+    while (my $gff = $parser->next()){
+        say join "\t", map {$_ // '.'} @{$gff}{@columns};
+    }
 }
 
 =head1 NAME

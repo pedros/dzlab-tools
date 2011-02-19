@@ -14,8 +14,8 @@ use version; our $VERSION = qv('0.0.1');
 
 require Exporter;
 our @ISA = qw(Exporter);
-our @EXPORT_OK = qw();
-our @EXPORT = qw(do_gff gff_to_string);
+our @EXPORT_OK = qw(colname2num);
+our @EXPORT = qw(gff_to_string);
 
 =head1 EXPORT
 
@@ -37,36 +37,23 @@ sub gff_to_string{
             @{$gff}{'seqname', 'source', 'feature', 'start', 'end',
             'score',   'strand', 'frame',   'attribute'};
     } 
-    elsif (ref $gff eq 'ARRAY'){
-        return 
-        join "\t",
-        map { ! defined $_ ? q{.} : $_ } 
-        @{$gff}[0..8];
-    }
     else {
         croak "non-gff record given to gff_to_string";
     }
 }
+my %colmap = (
+    seqname   => 1,
+    source    => 2,
+    feature   => 3,
+    start     => 4,
+    end       => 5,
+    score     => 6,
+    strand    => 7,
+    frame     => 8,
+    attribute => 9
+);
 
-=head2 do_gff BLOCK ARGS_FOR_GFFPARSER_CONSTRUCTOR
-
-BLOCK is executed with $_ set to the GFF hashref.  ARGS_FOR_GFFPARSER_CONSTRUCTOR are passed to
-GFF::Parser constructor directly.
-
- do_gff { 
-    # ... $_ is a gff hashref here
- } file => 'file.gff', locus => 'ID';
-
-=cut
-
-sub do_gff(&@){
-    my ($code, @opt) = @_;
-    my $iter = GFF::Parser->new(@opt);
-    while (my $gff = $iter->next()){
-        local $_ = $gff;
-        &$code;
-    }
-}
+sub colname2num{ return $colmap{$_[0]} // croak "bad colmn name"; }
 
 =head1 AUTHOR
 
