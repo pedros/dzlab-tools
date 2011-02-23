@@ -12,12 +12,8 @@ use lib "$FindBin::Bin/../lib";
 use GFF::Split;
 use GFF::Sort qw/gff_is_sorted/;
 
-my %splits = (
-    gff_split(file => \*DATA, sequence => 'all', sort => 'end'),
-    #gff_split(file => \*DATA, feature => 'all', tmpdir => 1),
-);
+my %splits = gff_split(file => \*DATA, sequence => 'all', sort => 'end');
 
-say Dumper \%splits;
 
 my %lines = (chr1 => 49, chr2 => 50, gene => 98, exon => 2);
 
@@ -26,11 +22,11 @@ while (my ($feature,$file) = each %splits) {
     my @arr = <$fh>;
     is($lines{$feature},scalar @arr);
     close $fh;
-    unlink $file;
 }
 
 foreach my $file (values %splits) {
     ok(gff_is_sorted($file, 'end'), 'is file actually sorted');
+    unlink $file;
 }
 
 __DATA__

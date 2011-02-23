@@ -18,7 +18,18 @@ our @ISA = qw(Exporter);
 our @EXPORT_OK = qw();
 our @EXPORT = qw(gff_split);
 
-# return hash of sequence/feature to filename
+=head2
+
+split file by sequence and sort by start
+
+ gff_split(file => 'filetosort.gff', sequence => 'all', sort => 'start');
+
+split file by feature and sort by end.
+
+ gff_split(file => 'filetosort.gff', feature => 'all', sort => 'start');
+
+returns hash of sequence/feature to filename. 
+=cut
 sub gff_split{
     my (%opt) = @_;
     my ($file, $sequence,$feature,$sort) = @opt{qw/file sequence feature sort/};
@@ -34,7 +45,8 @@ sub gff_split{
         ($name, $path, $suffix) = fileparse($file, qr/\.[^.]*/);
     }
 
-    my $outdir = $opt{tmpdir} ? tempdir(CLEANUP => 1) : $path; # if directory given, use it-- otherwise use same dir
+    # for now always use tempdir... $path is wasted
+    my $outdir = tempdir(CLEANUP => 1); 
 
     my %file_handle;
     my %files;

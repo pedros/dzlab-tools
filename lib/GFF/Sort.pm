@@ -7,20 +7,24 @@ use Carp;
 use autodie;
 
 use GFF::Parser;
-use GFF::Misc;
 
 require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT_OK = qw(gff_is_sorted);
 our @EXPORT = qw(gff_sort);
 
+
+=head2 gff_sort
+
+ gff_sort(file => 'file', overwrite => [0|1], column => [start|end], manual => [0|1]
+
+If not overwriting, filename is named "original.sorted". return name of sorted file.
+=cut
 sub gff_sort{
     my %opt = @_;
     my ($file,$overwrite,$column,$manual) = @opt{'file','overwrite','column','manual'};
     
     croak 'need column!' unless $column;
-    my $colnum = ($column eq 'start') ? 4 : ($column eq 'end') ? 5 : 
-    croak ('gff_sort: column needs to be start or end');
 
     my $tmpfile = $file . ".sorted";
     croak "$file not read/writeable" unless (-r $file && -w $file);
@@ -28,6 +32,9 @@ sub gff_sort{
 
     my @sortexec = grep {-x} qw{/usr/bin/sort /bin/sort};
     if (!$manual && ($^O =~ /^(?:linux|darwin|freebsd)$/ && @sortexec)){
+
+        my $colnum = ($column eq 'start') ? 4 : ($column eq 'end') ? 5 : 
+        croak ('gff_sort: column needs to be start or end');
         
         my $sortbin = $sortexec[0];
         system("$sortbin -k $colnum -n $file > $tmpfile");
