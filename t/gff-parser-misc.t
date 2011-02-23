@@ -22,7 +22,7 @@ is(scalar @$arr, 8, "slurp");
 
 seek DATA, $data_pos, 0;
 
-my $hash = $p->slurp_index('seqname');
+my $hash = $p->slurp_index('sequence');
 
 is(scalar @{$hash->{chr1}},6,"slurp index 1");
 is(scalar @{$hash->{chr2}},1,"slurp index 2");

@@ -6,6 +6,7 @@ use warnings;
 use Data::Dumper;
 use feature 'say';
 use Carp;
+use GFF;
 
 has filename_or_handle => (
     is => 'ro',

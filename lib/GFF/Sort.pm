@@ -6,8 +6,8 @@ use feature 'say';
 use Carp;
 use autodie;
 
-use GFF qw/gff_to_string colname2num/;
 use GFF::Parser;
+use GFF::Misc;
 
 require Exporter;
 our @ISA = qw(Exporter);
@@ -41,7 +41,7 @@ sub gff_sort{
         my @sorted = sort {
             my $res;
             foreach my $col (@cols) {
-                $res = $a->{$col} <=> $b->{$col};
+                $res = $a->get_column($col) <=> $b->get_column($col);
                 last if !$res;
             }
             $res;
@@ -49,7 +49,7 @@ sub gff_sort{
 
         open my $fh, '>', $tmpfile;
         for (@sorted){
-            say $fh gff_to_string($_);
+            say $fh $_->to_string();
         }
         close $fh;
         rename $tmpfile, $file or croak ("couldn't rename $tmpfile to $file?") if $overwrite;
