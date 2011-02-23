@@ -8,13 +8,14 @@ use Pod::Usage;
 use File::Basename;
 use Getopt::Euclid qw( :vars<opt_> );
 use Pod::Usage;
+use feature 'say';
 
 pod2usage(-verbose => 99,-sections => [qw/NAME SYNOPSIS OPTIONS/]) 
 if $opt_help || !$opt_fasta_file;
 
 use FindBin;
-use lib "$FindBin::Bin/DZLab-Tools/lib";
-use DZLab::Tools::Fasta;
+use lib "$FindBin::Bin/lib";
+use Fasta;
 
 
 if ($opt_output) {
@@ -24,25 +25,18 @@ if ($opt_output) {
 
 my %reference = %{ slurp_fasta ($opt_fasta_file) };
 
-my $total_bp     = 0;
-my $total_non_bp = 0;
 
 if ($opt_list) {
+    my $total_bp     = 0;
+    my $total_non_bp = 0;
     print $opt_fasta_file, ":\n";
+    my %count = %{count_fasta_complete($opt_fasta_file)};
 
-    for (sort keys %reference) {
+    for (sort keys %count) {
+        say join ("\t",$_,@{$count{$_}}{qw/length bp nonbp/});
 
-        my $tmp_length_bp     = length $reference{$_};
-        my $tmp_length_non_bp = $reference{$_} =~ tr/ACGTacgt//c;
-
-        print join ("\t",
-                    $_,
-                    $tmp_length_bp,
-                    $tmp_length_bp - $tmp_length_non_bp,
-                ), "\n";
-
-        $total_bp += $tmp_length_bp;
-        $total_non_bp += $tmp_length_non_bp;
+        $total_bp += $count{$_}{bp};
+        $total_non_bp += $count{$_}{nonbp};
     }
     print "Total size:\t$total_bp\t", $total_bp - $total_non_bp, "\n";
 
@@ -67,18 +61,6 @@ if ($opt_seqid) {
             my ($start,$end) = %opt_range ? @opt_range{'start','end'} : (1, length $sequence);
 
             my $file_name = fileparse ($opt_fasta_file);
-
-            # one time masking. keeping it here in case it's needed in the future
-            # if ($opt_seqid =~ m/^scaffold_2$/) {
-            #     print STDERR length $sequence, "\n";
-            #     my $n = 'N' x (2350000 - 1650000);
-            #     substr $sequence, (1650000 - 1), (2350000 - 1650000), $n;
-            # }
-            # elsif ($opt_seqid =~ m/^scaffold_175$/) {
-            #     print STDERR length $sequence, "\n";
-            #     my $n = 'N' x (56000 - 46000);
-            #     substr $sequence, (46000 - 1), (56000 - 46000), $n;
-            # }
 
             print ">$opt_seqid\n";
             print $sequence, "\n";
