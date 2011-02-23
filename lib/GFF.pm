@@ -1,89 +1,104 @@
 package GFF;
+use strict;
+use warnings;
 use Data::Dumper;
 use feature 'say';
-
-use warnings;
-use strict;
+use Moose;
 use Carp;
+use autodie;    
 
-use FindBin;
-use lib "$FindBin::Bin";
-use GFF::Parser;
+has sequence    => ( is => 'ro', isa => 'Maybe[Str]',);
+has source      => ( is => 'ro', isa => 'Maybe[Str]',);
+has feature     => ( is => 'ro', isa => 'Maybe[Str]',);
+has start       => ( is => 'ro', isa => 'Maybe[Int]',);
+has end         => ( is => 'ro', isa => 'Maybe[Int]',);
+has score       => ( is => 'ro', isa => 'Maybe[Str]',);
+has strand      => ( is => 'ro', isa => 'Maybe[Str]',);
+has frame       => ( is => 'ro', isa => 'Maybe[Str]',);
+has attribute_string => ( is => 'ro', isa => 'Maybe[Str]',);
+has attr_hash => (
+      traits    => ['Hash'],
+      is        => 'ro',
+      isa       => 'HashRef[Str]',
+      handles   => {
+          set_attribute  => 'set',
+          get_attribute  => 'get',
+          list_attribute => 'keys',
+      },
+      lazy_build => 1,
+  );
 
-use version; our $VERSION = qv('0.0.1');
+sub _build_attr_hash{
+    my $self = shift;
+    my %accum;
+    if (defined($self->attribute_string) ){
+        for (split /;/, $self->attribute_string){
+            my ($key, $val) = split /=/, $_;
+            $key =~ s/^\s+//;
+            $key =~ s/\s+$//;
 
-require Exporter;
-our @ISA = qw(Exporter);
-our @EXPORT_OK = qw(colname2num);
-our @EXPORT = qw(gff_to_string);
+            if (defined $val){
+                $val =~ s/^\s+//;
+                $val =~ s/\s+$//;
+                $accum{$key} = $val;
+            }
+            else {
+                $accum{Note} = $key;
+            }
+        }
+    }
+    return \%accum;
+}
 
-=head1 EXPORT
+sub to_string{
+    my $self = shift;
+    return 
+    join "\t",
+    map { ! defined $_ ? q{.} : $_ } 
+    ($self->sequence, $self->source, $self->feature, $self->start, $self->end,
+        $self->score,   $self->strand, $self->frame,   $self->attribute_string);
+}
 
-=head1 SUBROUTINES/METHODS
-
-=head2 gff_to_string $gffrec
-
-return a gffrec back in original text format
-
-=cut
-
-sub gff_to_string{
-    my ($gff) = @_;
-    croak "gff_to_string needs an argument??" unless $gff;
-    if (ref $gff eq 'HASH'){
-        return 
-        join "\t",
-        map { ! defined $_ ? q{.} : $_ } 
-            @{$gff}{'seqname', 'source', 'feature', 'start', 'end',
-            'score',   'strand', 'frame',   'attribute'};
-    } 
-    else {
-        croak "non-gff record given to gff_to_string";
+sub parse_locus{
+    my ($self, $locus_tag) = @_;
+    if ($self->get_attribute($locus_tag) =~ /([^\.]+)\.([^\.]+)/){
+        return ($1,$2);
+    } else{
+        return;
     }
 }
-my %colmap = (
-    seqname   => 1,
-    source    => 2,
-    feature   => 3,
-    start     => 4,
-    end       => 5,
-    score     => 6,
-    strand    => 7,
-    frame     => 8,
-    attribute => 9
-);
 
-sub colname2num{ return $colmap{$_[0]} // croak "bad colmn name"; }
+my %cols = map { $_ => 1 } qw/sequence source feature start end score strand frame attribute_string/;
 
-=head1 AUTHOR
-
-tnish, C<< <tnish at berkeley.edu> >>
-
-=head1 BUGS
-
-Please report any bugs or feature requests to C<bug-gff at rt.cpan.org>, or through
-the web interface at L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=GFF>.  I will be notified, and then you'll
-automatically be notified of progress on your bug as I make changes.
-
-=head1 SUPPORT
-
-You can find documentation for this module with the perldoc command.
-
-    perldoc GFF
-
-=head1 ACKNOWLEDGEMENTS
-
-=head1 LICENSE AND COPYRIGHT
-
-Copyright 2011 tnish.
-
-This program is free software; you can redistribute it and/or modify it
-under the terms of either: the GNU General Public License as published
-by the Free Software Foundation; or the Artistic License.
-
-See http://dev.perl.org/licenses/ for more information.
+sub get_column{
+    my ($self, $colname) = @_;
+    if (exists $cols{$colname}){
+        return $self->$colname;
+    } else{
+        return $self->get_attribute($colname);
+    }
+}
 
 
-=cut
+sub equals{
+    my ($self, %against) = @_;
+    my @columns = keys %against;
+    foreach my $col (@columns) {
+        my $x = $self->get_column($col);
+        my $y = $against{$col};
 
-1; # End of GFF
+        if ((!defined $x && !defined $y) || (defined $x && defined $y && $x eq $y)){
+            next;
+        } else {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+no Moose;
+__PACKAGE__->meta->make_immutable;
+
+#sub colname2num{ return $colmap{$_[0]} // croak "bad colmn name"; }
+
+1;

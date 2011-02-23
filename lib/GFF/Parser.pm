@@ -106,8 +106,8 @@ sub slurp_index{
     my $badrecords = 0;
     while (my $gff = $self->next()){
         if (_is_gff($gff)){ 
-            if (exists $gff->{$column} && defined $gff->{$column}){
-                push @{$index{$gff->{$column}}}, $gff;
+            if (defined $gff->get_column($column)){
+                push @{$index{$gff->get_column($column)}}, $gff;
             } else {
                 $badrecords++;
             }
@@ -155,20 +155,19 @@ sub _parse_gff{
     (carp "unparseable GFF line: $line" && return 0) unless @split == 9;
 
     my %accum;
-    @accum{qw/seqname source feature start end score strand frame attribute/}
+    @accum{qw/sequence source feature start end score strand frame attribute_string/}
     = map { $_ eq q{.} ? undef : $_ } @split;
 
-
-    if (defined $accum{seqname}){
-        $accum{seqname} = lc $accum{seqname};
+    if (defined $accum{sequence}){
+        $accum{sequence} = lc $accum{sequence};
     }
 
-    return \%accum;
+    return GFF->new(%accum);
 }
 
 sub _is_gff{
     my ($gff) = @_;
-    return ref $gff && ref $gff eq 'HASH';
+    return ref $gff eq 'GFF';
 }
 
 no Moose;
