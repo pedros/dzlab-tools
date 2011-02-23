@@ -10,22 +10,20 @@ use Test::More qw(no_plan);
 
 use FindBin;
 use lib "$FindBin::Bin/../lib";
-use GFF::Sort;
+use GFF::Sort qw/gff_sort gff_is_sorted/;
 use GFF::Parser;
 
 my $orig = 't/sorted.gff';
 my $dirty = 't/unsorted.gff';
-my $test = 't/unsorted.gff.sorted';
-
 
 for (1..10){
     shuffle_file($orig,$dirty);
-    gff_sort(file => $dirty, overwrite => 0, cols => ['start'], manual => 0);
-    #system("./sort_gff.pl -i $dirty -o $test");
-    files_identical($test,$orig);
+    my $sorted = gff_sort(file => $dirty, overwrite => 0, column => 'start', manual => 0);
+    ok(gff_is_sorted($sorted, 'start'), "file is sorted");
+    ok(!gff_is_sorted($dirty, 'start'), "file is shuffled");
+    unlink $sorted;
 }
 
-unlink $test;
 unlink $dirty;
 
 sub shuffle_file{
@@ -35,10 +33,4 @@ sub shuffle_file{
     print $outh shuffle(<$inh>);
     close $outh;
     close $inh;
-}
-
-sub files_identical{
-    my ($f1,$f2) = @_;
-    my ($gff1, $gff2) = map { GFF::Parser->new(file => $_)->slurp() } ($f1, $f2);
-    is_deeply($gff1,$gff2,"$f1 and $f2 identical contents");
 }

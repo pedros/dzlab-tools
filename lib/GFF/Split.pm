@@ -23,7 +23,7 @@ sub gff_split{
     my (%opt) = @_;
     my ($file, $sequence,$feature,$sort) = @opt{qw/file sequence feature sort/};
 
-    croak "gff_split(file => 'filename',[sequence|feature] => 'all', sort ['start'])" unless ($sequence xor $feature);
+    croak "gff_split(file => 'filename',[sequence|feature] => 'all', sort => 'start')" unless ($sequence xor $feature);
 
     my ($name, $path, $suffix);
     if (ref $file eq 'GLOB'){
@@ -62,10 +62,13 @@ sub gff_split{
     foreach my $fh (values %file_handle) {
         close $fh;
     }
-    if (ref $sort eq 'ARRAY'){
+    if ($sort eq 'start' || $sort eq 'end'){
         for $file (values %files){
-            gff_sort(file => $file, overwrite => 1, cols => $sort, manual => 0);
+            gff_sort(file => $file, overwrite => 1, column => $sort, manual => 0);
         }
+    }
+    else {
+        croak 'sort needs to be start or end';
     }
     return %files;
 }
