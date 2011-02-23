@@ -10,10 +10,11 @@ use Test::More qw(no_plan);
 use FindBin;
 use lib "$FindBin::Bin/../lib";
 use GFF::Split;
+use GFF::SplitSort;
 
 my %splits = (
-    %{gff_split(file => 't/test1.gff', sequence => 'all', tmpdir => 1)},
-    %{gff_split(file => \*DATA, feature => 'all', tmpdir => 1)},
+    gff_split(file => \*DATA, sequence => 'all', tmpdir => 1),
+    gff_split(file => \*DATA, feature => 'all', tmpdir => 1),
 );
 
 say Dumper \%splits;

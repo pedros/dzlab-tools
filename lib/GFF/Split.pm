@@ -60,7 +60,7 @@ sub gff_split{
     foreach my $fh (values %file_handle) {
         close $fh;
     }
-    return \%files;
+    return %files;
 }
 
 1;

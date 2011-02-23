@@ -58,7 +58,7 @@ override 'next' => sub{
     }
     $self->current($self->current+$self->step);
 
-    return $self->class->new(seq => $self->seqname, start => $start,end => $end);
+    return $self->class->new(seqname => $self->seqname, start => $start,end => $end);
 };
 
 no Moose;
@@ -100,15 +100,17 @@ use warnings;
 use Data::Dumper;
 use feature 'say';
 use autodie;
+
+use FindBin;
+use lib "$FindBin::Bin";
+
 use Window;
 
 unless (caller){
     my $ws = WindowSource::Fixed->new(class => 'Window::SumScore', length => 1000, step => 123, seqname => 'chr1');
     while (my $window = $ws->next()){
-        say Dumper $ws->next();
+        say Dumper $window;
     }
-
-    
 }
 
 
