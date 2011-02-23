@@ -10,6 +10,8 @@ use GFF::Parser;
 use Cwd;
 use File::Spec;
 use File::Temp qw/tempdir/;
+use GFF;
+use GFF::Sort;
 
 require Exporter;
 our @ISA = qw(Exporter);
@@ -19,9 +21,9 @@ our @EXPORT = qw(gff_split);
 # return hash of sequence/feature to filename
 sub gff_split{
     my (%opt) = @_;
-    my ($file, $sequence,$feature) = @opt{'file', 'sequence','feature'};
+    my ($file, $sequence,$feature,$sort) = @opt{qw/file sequence feature sort/};
 
-    croak "gff_split(file => 'filename',[sequence|feature] => 'all',tmpdir => 1')" unless ($sequence xor $feature);
+    croak "gff_split(file => 'filename',[sequence|feature] => 'all', sort ['start'])" unless ($sequence xor $feature);
 
     my ($name, $path, $suffix);
     if (ref $file eq 'GLOB'){
@@ -59,6 +61,11 @@ sub gff_split{
     }
     foreach my $fh (values %file_handle) {
         close $fh;
+    }
+    if (ref $sort eq 'ARRAY'){
+        for $file (values %files){
+            gff_sort(file => $file, overwrite => 1, cols => $sort, manual => 0);
+        }
     }
     return %files;
 }

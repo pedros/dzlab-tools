@@ -13,8 +13,8 @@ use GFF::Split;
 use GFF::SplitSort;
 
 my %splits = (
-    gff_split(file => \*DATA, sequence => 'all', tmpdir => 1),
-    gff_split(file => \*DATA, feature => 'all', tmpdir => 1),
+    gff_split(file => \*DATA, sequence => 'all', sort => ['end']),
+    #gff_split(file => \*DATA, feature => 'all', tmpdir => 1),
 );
 
 say Dumper \%splits;
@@ -26,43 +26,10 @@ while (my ($feature,$file) = each %splits) {
     my @arr = <$fh>;
     is($lines{$feature},scalar @arr);
     close $fh;
-    unlink $file;
+    #unlink $file;
 }
 
 __DATA__
-.	TAIR8	gene	3631	5899	.	+	.	ID=AT1G01010;Name=AT1G01010;Note=ANAC001 (Arabidopsis NAC domain containing protein 1),transcription factor
-Chr1	TAIR8	gene	6790	8737	.	-	.	ID=AT1G01020;Name=AT1G01020;Note=ARV1
-Chr1	TAIR8	gene	11649	13714	.	-	.	ID=AT1G01030.1;Name=AT1G01030;Note=NGA3 (NGATHA3),transcription factor
-Chr1	TAIR8	gene	23146	31227	.	+	.	ID=AT1G01040;Name=AT1G01040;Note=DCL1 (DICER-LIKE1),ATP-dependent helicase,ribonuclease III
-Chr1	TAIR8	gene	28500	28706	.	+	.	ID=AT1G01046;Name=AT1G01046;Note=MIR838a,miRNA
-Chr1	TAIR8	gene	31170	33153	.	-	.	ID=AT1G01050;Name=AT1G01050;Note=ATPPA1 (ARABIDOPSIS THALIANA PYROPHOSPHORYLASE 1),inorganic diphosphatase,pyrophosphatase
-Chr1	TAIR8	gene	33379	37840	.	-	.	ID=AT1G01060;Name=AT1G01060;Note=LHY (LATE ELONGATED HYPOCOTYL),DNA binding,transcription factor
-Chr1	TAIR8	gene	38752	40944	.	-	.	ID=AT1G01070;Name=AT1G01070;Note=nodulin MtN21 family protein
-Chr1	TAIR8	gene	45296	47019	.	-	.	ID=AT1G01080;Name=AT1G01080;Note=33 kDa ribonucleoprotein,chloroplast,putative,RNA-binding protein cp33,putative
-Chr1	TAIR8	gene	47485	49286	.	-	.	ID=AT1G01090;Name=AT1G01090;Note=PDH-E1 ALPHA (PYRUVATE DEHYDROGENASE E1 ALPHA),pyruvate dehydrogenase (acetyl-transferring)
-Chr1	TAIR8	gene	50075	51199	.	-	.	ID=AT1G01100;Name=AT1G01100;Note=60S acidic ribosomal protein P1 (RPP1A)
-Chr1	TAIR8	gene	52239	54692	.	+	.	ID=AT1G01110;Name=AT1G01110;Note=IQD18 (IQ-domain 18)
-Chr1	TAIR8	gene	57269	59167	.	-	.	ID=AT1G01120;Name=AT1G01120;Note=KCS1 (3-KETOACYL-COA SYNTHASE 1),acyltransferase
-Chr1	TAIR8	gene	61963	63811	.	-	.	ID=AT1G01130;Name=AT1G01130;HELLLO
-Chr1	TAIR8	gene	64166	67625	.	-	.	ID=AT1G01140;Name=AT1G01140;Note=CIPK9 (CBL-INTERACTING PROTEIN KINASE 9),kinase
-Chr1	TAIR8	gene	70115	72138	.	-	.	ID=AT1G01150;Name=AT1G01150;Note=DNA binding,zinc ion binding
-Chr1	TAIR8	gene	72339	74096	.	+	.	ID=AT1G01160;Name=AT1G01160;Note=GIF2 (GRF1-INTERACTING FACTOR 2)
-Chr1	TAIR8	gene	73931	74737	.	-	.	ID=AT1G01170;Name=AT1G01170;Note=ozone-responsive stress-related protein,putative
-Chr1	TAIR8	gene	75633	77446	.	+	.	ID=AT1G01180;Name=AT1G01180
-Chr1	TAIR8	gene	78932	79032	.	-	.	ID=AT1G01183;Name=AT1G01183;Note=MIR165/MIR165A,miRNA
-Chr1	TAIR8	gene	83045	84864	.	-	.	ID=AT1G01190;Name=AT1G01190;Note=CYP78A8 (cytochrome P450,family 78,subfamily A,polypeptide 8),oxygen binding
-Chr1	TAIR8	gene	86515	88213	.	-	.	ID=AT1G01200;Name=AT1G01200;Note=AtRABA3 (Arabidopsis Rab GTPase homolog A3),GTP binding
-Chr1	TAIR8	gene	88898	89745	.	+	.	ID=AT1G01210;Name=AT1G01210;Note=DNA-directed RNA polymerase III family protein
-Chr1	TAIR8	gene	91750	95651	.	+	.	ID=AT1G01220;Name=AT1G01220;Note=GHMP kinase-related
-Chr1	TAIR8	gene	95987	97407	.	+	.	ID=AT1G01225;Name=AT1G01225;Note=NC domain-containing protein-related
-Chr1	TAIR8	gene	97456	99240	.	+	.	ID=AT1G01230;Name=AT1G01230;Note=ORMDL family protein
-Chr1	TAIR8	gene	99894	101834	.	+	.	ID=AT1G01240;Name=AT1G01240
-Chr1	TAIR8	gene	104491	105330	.	-	.	ID=AT1G01250;Name=AT1G01250;Note=AP2 domain-containing transcription factor,putative
-Chr1	TAIR8	gene	109032	111609	.	+	.	ID=AT1G01260;Name=AT1G01260;Note=basic helix-loop-helix (bHLH) family protein
-Chr1	TAIR8	gene	111890	111961	.	-	.	ID=AT1G01270;Name=AT1G01270;Note=pre-tRNA
-Chr1	TAIR8	gene	112263	113947	.	+	.	ID=AT1G01280;Name=AT1G01280;Note=CYP703/CYP703A2 (CYTOCHROME P450,FAMILY 703,SUBFAMILY A,POLYPEPTIDE 2),oxidoreductase,acting on paired donors,with incorporation or reduction of molecular oxygen,NADH or NADPH as one donor,and incorporation of one atom of oxygen,oxygen binding
-Chr1	TAIR8	gene	114286	115549	.	+	.	ID=AT1G01290;Name=AT1G01290;Note=CNX3 (COFACTOR OF NITRATE REDUCTASE AND XANTHINE DEHYDROGENASE 3),catalytic
-Chr1	TAIR8	gene	116943	118764	.	+	.	ID=AT1G01300;Name=AT1G01300;Note=aspartyl protease family protein
 Chr1	TAIR8	gene	119397	119997	.	+	.	ID=AT1G01305;Name=AT1G01305;Note=unknown protein
 Chr1	TAIR8	gene	120154	121130	.	+	.	ID=AT1G01310;Name=AT1G01310;Note=allergen V5/Tpx-1-related family protein
 Chr1	TAIR8	gene	121124	130099	.	-	.	ID=AT1G01320;Name=AT1G01320;Note=tetratricopeptide repeat (TPR)-containing protein
@@ -72,6 +39,37 @@ Chr1	TAIR8	gene	138513	139568	.	+	.	ID=AT1G01355;Name=AT1G01355;Note=nucleic aci
 Chr1	TAIR8	gene	141971	143183	.	+	.	ID=AT1G01360;Name=AT1G01360
 Chr1	TAIR8	gene	143564	145684	.	+	.	ID=AT1G01370;Name=AT1G01370;Note=HTR12 (CENTROMERIC HISTONE H3),DNA binding
 Chr1	TAIR8	gene	147153	147942	.	+	.	ID=AT1G01380;Name=AT1G01380;Note=ETC1 (ENHANCER OF TRY AND CPC 1),DNA binding,transcription factor
+Chr2	TAIR8	gene	172146	172948	.	-	.	ID=AT1G01470;Name=AT1G01470;Note=LEA14 (LATE EMBRYOGENESIS ABUNDANT 14)
+Chr2	TAIR8	gene	173251	173466	.	+	.	ID=AT1G01471;Name=AT1G01471;Note=unknown protein
+Chr2	TAIR8	gene	175782	178400	.	+	.	ID=AT1G01480;Name=AT1G01480;Note=ACS2 (1-Amino-cyclopropane-1-carboxylate synthase 2)
+Chr2	TAIR8	gene	180059	182358	.	-	.	ID=AT1G01490;Name=AT1G01490;Note=heavy-metal-associated domain-containing protein
+.	TAIR8	gene	3631	5899	.	+	.	ID=AT1G01010;Name=AT1G01010;Note=ANAC001 (Arabidopsis NAC domain containing protein 1),transcription factor
+Chr1	TAIR8	gene	6790	8737	.	-	.	ID=AT1G01020;Name=AT1G01020;Note=ARV1
+Chr1	TAIR8	gene	11649	13714	.	-	.	ID=AT1G01030.1;Name=AT1G01030;Note=NGA3 (NGATHA3),transcription factor
+Chr1	TAIR8	gene	23146	31227	.	+	.	ID=AT1G01040;Name=AT1G01040;Note=DCL1 (DICER-LIKE1),ATP-dependent helicase,ribonuclease III
+Chr1	TAIR8	gene	28500	28706	.	+	.	ID=AT1G01046;Name=AT1G01046;Note=MIR838a,miRNA
+Chr1	TAIR8	gene	31170	33153	.	-	.	ID=AT1G01050;Name=AT1G01050;Note=ATPPA1 (ARABIDOPSIS THALIANA PYROPHOSPHORYLASE 1),inorganic diphosphatase,pyrophosphatase
+Chr1	TAIR8	gene	33379	37840	.	-	.	ID=AT1G01060;Name=AT1G01060;Note=LHY (LATE ELONGATED HYPOCOTYL),DNA binding,transcription factor
+Chr1	TAIR8	gene	38752	40944	.	-	.	ID=AT1G01070;Name=AT1G01070;Note=nodulin MtN21 family protein
+Chr1	TAIR8	gene	45296	47019	.	-	.	ID=AT1G01080;Name=AT1G01080;Note=33 kDa ribonucleoprotein,chloroplast,putative,RNA-binding protein cp33,putative
+Chr1	TAIR8	gene	73931	74737	.	-	.	ID=AT1G01170;Name=AT1G01170;Note=ozone-responsive stress-related protein,putative
+Chr1	TAIR8	gene	75633	77446	.	+	.	ID=AT1G01180;Name=AT1G01180
+Chr1	TAIR8	gene	78932	79032	.	-	.	ID=AT1G01183;Name=AT1G01183;Note=MIR165/MIR165A,miRNA
+Chr1	TAIR8	gene	83045	84864	.	-	.	ID=AT1G01190;Name=AT1G01190;Note=CYP78A8 (cytochrome P450,family 78,subfamily A,polypeptide 8),oxygen binding
+Chr1	TAIR8	gene	47485	49286	.	-	.	ID=AT1G01090;Name=AT1G01090;Note=PDH-E1 ALPHA (PYRUVATE DEHYDROGENASE E1 ALPHA),pyruvate dehydrogenase (acetyl-transferring)
+Chr1	TAIR8	gene	50075	51199	.	-	.	ID=AT1G01100;Name=AT1G01100;Note=60S acidic ribosomal protein P1 (RPP1A)
+Chr1	TAIR8	gene	52239	54692	.	+	.	ID=AT1G01110;Name=AT1G01110;Note=IQD18 (IQ-domain 18)
+Chr1	TAIR8	gene	57269	59167	.	-	.	ID=AT1G01120;Name=AT1G01120;Note=KCS1 (3-KETOACYL-COA SYNTHASE 1),acyltransferase
+Chr1	TAIR8	gene	61963	63811	.	-	.	ID=AT1G01130;Name=AT1G01130;HELLLO
+Chr1	TAIR8	gene	114286	115549	.	+	.	ID=AT1G01290;Name=AT1G01290;Note=CNX3 (COFACTOR OF NITRATE REDUCTASE AND XANTHINE DEHYDROGENASE 3),catalytic
+Chr1	TAIR8	gene	64166	67625	.	-	.	ID=AT1G01140;Name=AT1G01140;Note=CIPK9 (CBL-INTERACTING PROTEIN KINASE 9),kinase
+Chr1	TAIR8	gene	70115	72138	.	-	.	ID=AT1G01150;Name=AT1G01150;Note=DNA binding,zinc ion binding
+Chr1	TAIR8	gene	72339	74096	.	+	.	ID=AT1G01160;Name=AT1G01160;Note=GIF2 (GRF1-INTERACTING FACTOR 2)
+Chr1	TAIR8	gene	86515	88213	.	-	.	ID=AT1G01200;Name=AT1G01200;Note=AtRABA3 (Arabidopsis Rab GTPase homolog A3),GTP binding
+Chr1	TAIR8	gene	88898	89745	.	+	.	ID=AT1G01210;Name=AT1G01210;Note=DNA-directed RNA polymerase III family protein
+Chr1	TAIR8	gene	91750	95651	.	+	.	ID=AT1G01220;Name=AT1G01220;Note=GHMP kinase-related
+Chr1	TAIR8	gene	95987	97407	.	+	.	ID=AT1G01225;Name=AT1G01225;Note=NC domain-containing protein-related
+Chr1	TAIR8	gene	97456	99240	.	+	.	ID=AT1G01230;Name=AT1G01230;Note=ORMDL family protein
 Chr1	TAIR8	gene	148120	149806	.	-	.	ID=AT1G01390;Name=AT1G01390;Note=UDP-glucoronosyl/UDP-glucosyl transferase family protein
 Chr1	TAIR8	gene	150689	152210	.	-	.	ID=AT1G01400;Name=AT1G01400;Note=unknown protein
 Chr1	TAIR8	gene	153113	154198	.	+	.	ID=AT1G01410;Name=AT1G01410;Note=APUM22 (ARABIDOPSIS PUMILIO 22),RNA binding,binding
@@ -82,10 +80,12 @@ Chr1	TAIR8	gene	163419	166239	.	+	.	ID=AT1G01448;Name=AT1G01448;Note=other RNA
 Chr1	TAIR8	gene	164105	165517	.	-	.	ID=AT1G01450;Name=AT1G01450;Note=protein kinase-related
 Chr2	TAIR8	gene	166589	167842	.	-	.	ID=AT1G01453;Name=AT1G01453
 Chr2	TAIR8	gene	168723	171165	.	+	.	ID=AT1G01460;Name=AT1G01460;Note=ATPIPK11,1-phosphatidylinositol-4-phosphate 5-kinase
-Chr2	TAIR8	gene	172146	172948	.	-	.	ID=AT1G01470;Name=AT1G01470;Note=LEA14 (LATE EMBRYOGENESIS ABUNDANT 14)
-Chr2	TAIR8	gene	173251	173466	.	+	.	ID=AT1G01471;Name=AT1G01471;Note=unknown protein
-Chr2	TAIR8	gene	175782	178400	.	+	.	ID=AT1G01480;Name=AT1G01480;Note=ACS2 (1-Amino-cyclopropane-1-carboxylate synthase 2)
-Chr2	TAIR8	gene	180059	182358	.	-	.	ID=AT1G01490;Name=AT1G01490;Note=heavy-metal-associated domain-containing protein
+Chr1	TAIR8	gene	99894	101834	.	+	.	ID=AT1G01240;Name=AT1G01240
+Chr1	TAIR8	gene	104491	105330	.	-	.	ID=AT1G01250;Name=AT1G01250;Note=AP2 domain-containing transcription factor,putative
+Chr1	TAIR8	gene	109032	111609	.	+	.	ID=AT1G01260;Name=AT1G01260;Note=basic helix-loop-helix (bHLH) family protein
+Chr1	TAIR8	gene	111890	111961	.	-	.	ID=AT1G01270;Name=AT1G01270;Note=pre-tRNA
+Chr1	TAIR8	gene	112263	113947	.	+	.	ID=AT1G01280;Name=AT1G01280;Note=CYP703/CYP703A2 (CYTOCHROME P450,FAMILY 703,SUBFAMILY A,POLYPEPTIDE 2),oxidoreductase,acting on paired donors,with incorporation or reduction of molecular oxygen,NADH or NADPH as one donor,and incorporation of one atom of oxygen,oxygen binding
+Chr1	TAIR8	gene	116943	118764	.	+	.	ID=AT1G01300;Name=AT1G01300;Note=aspartyl protease family protein
 Chr2	TAIR8	gene	185133	186923	.	+	.	ID=AT1G01500;Name=AT1G01500
 Chr2	TAIR8	gene	187211	190056	.	+	.	ID=AT1G01510;Name=AT1G01510;Note=AN (ANGUSTIFOLIA)
 Chr2	TAIR8	gene	190596	192139	.	+	.	ID=AT1G01520;Name=AT1G01520;Note=myb family transcription factor
