@@ -25,7 +25,7 @@ sub to_gff{
     croak "abstract class: unimplemented";
 }
 
-has seqname     => (is => 'rw', isa => 'Str', required => 1);
+has sequence    => (is => 'rw', isa => 'Str', required => 1);
 has feature     => (is => 'ro', isa => 'Str', default  => 'window');
 has source      => (is => 'ro', isa => 'Str', default  => 'dzlab');
 has start       => (is => 'ro', isa => 'Int', required => 1);
@@ -34,6 +34,16 @@ has score_total => (is => 'rw', isa => 'Num', default  => 0);
 has strand      => (is => 'ro', isa => 'Str', default  => '.');
 has frame       => (is => 'ro', isa => 'Str', default  => '.');
 has counter     => (is => 'rw', isa => 'Int', default  => 0);
+has window_id   => (is => 'ro', isa => 'Maybe[Str]' );
+
+sub winattr{
+    my $self = shift;
+    return defined $self->window_id ? "WindowID=" . $self->window_id . ";" : '' ;
+}
+sub overlaps_with{
+    my ($self,$gff) = @_;
+    return $self->start <= $gff->end && $self->end >= $gff->start;
+}
 
 no Moose;
 __PACKAGE__->meta->make_immutable;
@@ -42,6 +52,7 @@ __PACKAGE__->meta->make_immutable;
 
 #==================================================================
 # Window::SumScore
+# extra_args: reverse => [0|1]
 
 package Window::SumScore;
 use strict;
@@ -63,11 +74,11 @@ override to_gff => sub {
     my ($score, $count) = ($self->score_total,$self->counter);
     ($score,$count) = ($count,$score) if $self->reverse();
     return join "\t", 
-    $self->seqname, $self->source, $self->feature, $self->start, $self->end,
+    $self->sequence, $self->source, $self->feature, $self->start, $self->end,
     $score,
     $self->strand,
     $self->frame,
-    "n=" . $count;
+    $self->winattr . "n=$count";
 };
 
 #==================================================================
@@ -84,25 +95,36 @@ use Carp;
 
 extends 'Window';
 
-has t => (is => 'rw', isa => 'Int', default => 0);
-has c => (is => 'rw', isa => 'Int', default => 0);
+has t => (
+    traits  => ['Counter'],
+    is => 'ro', 
+    isa => 'Num', 
+    default => 0,
+    handles => { inc_t   => 'inc', },
+);
+has c => (
+    traits  => ['Counter'],
+    is => 'ro', 
+    isa => 'Num', 
+    default => 0,
+    handles => { inc_c   => 'inc', },
+);
 
 override accumulate => sub {
     my ($self,$gff) = @_;
     super();
-    $self->t($self->t() + $gff->{t});
-    $self->c($self->c() + $gff->{c});
-    # more
+    $self->inc_t($gff->get_attribute('t'));
+    $self->inc_c($gff->get_attribute('c'));
 };
 
 override to_gff => sub {
     my ($self) = @_;
     return join "\t", 
-    $self->seqname, $self->source, $self->feature, $self->start, $self->end,
+    $self->sequence, $self->source, $self->feature, $self->start, $self->end,
     $self->methscore(),
     $self->strand,
     $self->frame,
-    sprintf("n=%d;c=%d;t=%d", $self->counter, $self->c, $self->t)
+    $self->winattr . sprintf("n=%d;c=%d;t=%d", $self->counter, $self->c, $self->t)
 };
 
 sub methscore{ my ($self) = @_; return $self->c() / ($self->c() + $self->t()); }
@@ -155,11 +177,11 @@ override accumulate => sub {
 override to_gff => sub{
     my ($self) = @_;
     return join "\t", 
-    $self->seqname, $self->source, $self->feature, $self->start, $self->end,
+    $self->sequence, $self->source, $self->feature, $self->start, $self->end,
     $self->score_avg,
     $self->strand,
     $self->frame,
-    sprintf("n=%d;var=%d;std=%d", $self->counter, $self->score_var, sqrt($self->score_std))
+    $self->winattr . sprintf("n=%d;var=%f;std=%f", $self->counter, $self->score_var, sqrt($self->score_var))
 };
 
 no Moose;
@@ -169,6 +191,7 @@ __PACKAGE__->meta->make_immutable;
 
 #==================================================================
 # Window::Locus 
+# extra arg: loci
 
 package Window::Locus;
 use strict;
@@ -181,27 +204,35 @@ use Carp;
 
 extends 'Window';
 
-has loci      => (is => 'ro', isa => 'ArrayRef[Str]', default => sub {[]});
+has loci => (
+    traits  => ['Array'],
+    is => 'ro', 
+    isa => 'ArrayRef[Str]', 
+    default => sub {[]},
+    handles => {
+        push_loci => 'push',
+        join_loci => 'join',
+    },
+);
 has locus_tag => (is => 'ro', isa => 'Str', init_arg   => 'locus');
 
 override accumulate => sub {
     my ($self,$gff) = @_;
     super();
-    push @{$self->loci}, $gff->{$self->locus_tag};
+    $self->push_loci($gff->get_attribute($self->locus_tag));
 };
 
 override to_gff => sub{
     my ($self) = @_;
     return join "\t", 
-    $self->seqname, $self->source, $self->feature, $self->start, $self->end,
+    $self->sequence, $self->source, $self->feature, $self->start, $self->end,
     $self->counter,
     $self->strand,
     $self->frame,
-    sprintf("n=%d;%s_id=%s",
+    $self->winattr . sprintf("n=%d;%s_list=%s",
         $self->counter,
         $self->locus_tag,
-        join ",", @{$self->loci}
-    );
+        $self->join_loci(','));
 };
 
 no Moose;
@@ -224,7 +255,7 @@ use Smart::Comments;
 
 use FindBin;
 use lib "$FindBin::Bin";
-use GFF::Parser::Attributes;
+use GFF::Parser;
 
 my $data_pos = tell DATA;
 
@@ -235,11 +266,11 @@ unless (caller()){
     {
         seek DATA, $data_pos, 0;
         my $w = Window::FractionalMethylation->new(
-            seqname => 'chr1', 
+            sequence => 'chr1', 
             start => 1, 
             end => 50
         ); 
-        my $p = GFF::Parser::Attributes->new(file => \*DATA);
+        my $p = GFF::Parser->new(file => \*DATA);
 
         while (my $gff = $p->next()){ $w->accumulate($gff); }
         say $w->to_gff();
@@ -248,9 +279,9 @@ unless (caller()){
     ### SumScore
     {
         seek DATA, $data_pos, 0;
-        my $w = Window::SumScore->new( seqname => 'chr1', start => 1, end => 50, reverse => 1); 
-        my $x = Window::SumScore->new( seqname => 'chr1', start => 1, end => 50); 
-        my $p = GFF::Parser::Attributes->new(file => \*DATA);
+        my $w = Window::SumScore->new( sequence => 'chr1', start => 1, end => 50, reverse => 1); 
+        my $x = Window::SumScore->new( sequence => 'chr1', start => 1, end => 50,window_id => 'hello'); 
+        my $p = GFF::Parser->new(file => \*DATA);
 
         while (my $gff = $p->next()){ 
             $w->accumulate($gff); 
@@ -264,11 +295,11 @@ unless (caller()){
     {
         seek DATA, $data_pos, 0;
         my $w = Window::AverageScore->new(
-            seqname => 'chr1', 
+            sequence => 'chr1', 
             start => 1, 
             end => 50
         ); 
-        my $p = GFF::Parser::Attributes->new(file => \*DATA);
+        my $p = GFF::Parser->new(file => \*DATA);
 
         while (my $gff = $p->next()){ $w->accumulate($gff); }
         say $w->to_gff();
@@ -278,12 +309,12 @@ unless (caller()){
     {
         seek DATA, $data_pos, 0;
         my $w = Window::Locus->new(
-            seqname => 'chr1', 
+            sequence => 'chr1', 
             start => 1, 
             end => 50,
             locus => 'ID'
         ); 
-        my $p = GFF::Parser::Attributes->new(file => \*DATA);
+        my $p = GFF::Parser->new(file => \*DATA);
 
         while (my $gff = $p->next()){ $w->accumulate($gff); }
         say $w->to_gff();

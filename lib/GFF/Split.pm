@@ -32,7 +32,7 @@ returns hash of sequence/feature to filename.
 =cut
 sub gff_split{
     my (%opt) = @_;
-    my ($file, $sequence,$feature,$sort) = @opt{qw/file sequence feature sort/};
+    my ($file, $sequence,$feature,$sort,$keep) = @opt{qw/file sequence feature sort keep/};
 
     croak "gff_split(file => 'filename',[sequence|feature] => 'all', sort => 'start')" unless ($sequence xor $feature);
 
@@ -46,7 +46,7 @@ sub gff_split{
     }
 
     # for now always use tempdir... $path is wasted
-    my $outdir = tempdir(CLEANUP => 1); 
+    my $outdir = tempdir(CLEANUP => !$keep); 
 
     my %file_handle;
     my %files;

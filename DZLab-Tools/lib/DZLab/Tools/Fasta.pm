@@ -7,7 +7,7 @@ use Carp;
 require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT_OK = qw();
-our @EXPORT = qw(slurp_fasta format_fasta);
+our @EXPORT = qw(slurp_fasta format_fasta count_fasta count_fasta_complete);
 
 =head1 EXPORTED FUNCTIONS
 
@@ -49,6 +49,37 @@ sub slurp_fasta {
     close $fh;
 
     return \%accum;
+}
+
+sub count_fasta_complete {
+    my ($file) = @_;
+    return {} unless $file;
+
+    my %accum = ();
+
+    open my $fh, '<', $file or croak "Can't open $file: $?";
+
+    my $current;
+    while (defined(my $line = <$fh>)) {
+        $line =~ tr/\r\n//d;
+        if ($line =~ /^>(\w+)/){
+            $current = lc $1;
+        } 
+        else{
+            my ($len, $bp) = (length $line, $line =~ tr/acgtACGT//);
+            $accum{$current}{length} += $len;
+            $accum{$current}{bp}     += $bp;
+            $accum{$current}{nonbp}  += $len-$bp;
+        }
+    }
+    close $fh;
+
+    return \%accum;
+}
+sub count_fasta {
+    my ($file) = @_;
+    my $counts = count_fasta_complete($file);
+    return {map { $_ => $counts->{$_}{length} } keys %$counts};
 }
 
 
