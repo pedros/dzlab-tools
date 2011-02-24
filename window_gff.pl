@@ -7,6 +7,7 @@ use Carp;
 use Getopt::Long qw(:config bundling);
 use Pod::Usage;
 use List::Util qw(sum);
+use Statistics::Descriptive;
 #use Devel::Size qw(size total_size);
 
 my $output;
@@ -19,6 +20,7 @@ my $scoring = 'meth';    # meth, average, sum or seq_freq
 my $reverse = 0;         # reverse score and count
 my $gff;
 my $tag = 'ID';
+my $qtag = 'ID';
 my $feature;
 my $absolute = 0;
 
@@ -32,6 +34,7 @@ my $result = GetOptions(
     'no-skip|k'    => \$no_skip,
     'gff|g=s'      => \$gff,
     'tag|t=s'      => \$tag,
+    'query-tag|u=s' => \$qtag,
     'feature|f=s'  => \$feature,
     'reverse|r'    => \$reverse,
     'absolute|b=s' => \$absolute,
@@ -43,10 +46,12 @@ my $result = GetOptions(
 );
 
 my %scoring_dispatch = (
-    meth     => \&fractional_methylation,
-    average  => \&average_scores,
-    sum      => \&sum_scores,
-    seq_freq => \&seq_freq,
+    meth            => \&fractional_methylation,
+    average         => \&average_scores,
+    sum             => \&sum_scores,
+    seq_freq        => \&seq_freq,
+    weighed_average => \&weighed_average,
+    locus_collector => \&locus_collector,
 );
 
 # Check required command line parameters
@@ -167,16 +172,18 @@ for my $sequence ( sort keys %chromosomes ) {
 
     print STDERR "Windowing...";
   WINDOW:
-    while ( my ( $ranges, $locus ) = $window_iterator->($sequence) ) {
-
-        #print STDERR ($locus // "@{$ranges->[0]}"), "\n";
+    while ( my ( $targets, $locus ) = $window_iterator->($sequence) ) {
 
         my $brs_iterator = binary_range_search(
-            range  => $ranges,
-            ranges => $gff_records{$sequence},
+            targets => $targets,
+            queries => $gff_records{$sequence},
         );
 
-        my $scores_ref = $scoring_dispatch{$scoring}->($brs_iterator, $reverse);
+        my $scores_ref = $scoring_dispatch{$scoring}->($brs_iterator, 
+            reverse => $reverse, 
+            targets => $targets,
+            locus_tag => $qtag
+        );
 
         my ( $score, $attribute );
 
@@ -207,7 +214,7 @@ for my $sequence ( sort keys %chromosomes ) {
         print join( "\t",
             $sequence, 'dzlab',
             ( $feature ? $feature : $gff ? 'locus' : 'window' ),
-            $ranges->[0][0], $ranges->[-1][1],
+            $targets->[0][0], $targets->[-1][1],
             $score, q{.}, q{.}, $attribute, ),
             "\n";
     }
@@ -332,6 +339,26 @@ sub make_annotation_iterator {
 # on.
 #
 # return { sequence_names => { locus_id => [ranges]} }
+
+sub get_locus_id{
+    my ($locus_gff, $locus_tag,$merge_feature, $first) = @_;
+
+    my ($locus_id) = $locus_gff->{attribute} =~ m/$locus_tag[=\s]?([^;,]+)/;
+
+
+    if ( !defined $locus_id ) {
+        ( $locus_id, undef ) = split /;/, $locus_gff->{attribute} if $first;
+        $locus_id ||= q{.};
+    }
+    else {
+        $locus_id =~ s/["\t\r\n]//g;
+        $locus_id
+        =~ s/\.\w+$// # this fetches the parent ID in GFF gene models (eg. exon is Parent=ATG101010.n)
+        if $merge_feature and $locus_gff->{feature} eq $merge_feature;
+    }
+    return $locus_id;
+}
+
 sub index_annotation {
     my (%options) = @_;
 
@@ -347,18 +374,7 @@ LOCUS:
 
         next LOCUS unless ref $locus eq 'HASH';
 
-        my ($locus_id) = $locus->{attribute} =~ m/$locus_tag[=\s]?([^;,]+)/;
-
-        if ( !defined $locus_id ) {
-            ( $locus_id, undef ) = split /;/, $locus->{attribute};
-            $locus_id ||= q{.};
-        }
-        else {
-            $locus_id =~ s/["\t\r\n]//g;
-            $locus_id
-                =~ s/\.\w+$// # this fetches the parent ID in GFF gene models (eg. exon is Parent=ATG101010.n)
-                if $merge_feature and $locus->{feature} eq $merge_feature;
-        }
+        my $locus_id = get_locus_id($locus, $locus_tag, $merge_feature,1);
 
         push @{ $annotation{ $locus->{seqname} }{$locus_id} },
             [ $locus->{start}, $locus->{end} ]
@@ -425,7 +441,8 @@ sub fractional_methylation {
 # return sum of scores of ranges returned by brs
 
 sub sum_scores {
-    my ($brs_iterator, $reverse) = @_;
+    my ($brs_iterator, %opt) = @_;
+    my $reverse = $opt{reverse};
 
     my ( $score_sum, $score_count ) = ( 0, 0 );
 
@@ -506,6 +523,96 @@ sub seq_freq {
     }
 }
 
+#==================================================================
+# Locus
+
+sub locus_collector{
+    my ($brs_iterator,%opt) = @_;
+    my $locus_tag = $opt{locus_tag};
+    my $counter = 0;
+
+    my @accum;
+    my $unknown=0;
+    COORD:
+    while ( my $gff_line = $brs_iterator->() ) {
+        next COORD unless ref $gff_line eq 'HASH';
+        ++$counter;
+        my $l = get_locus_id($gff_line, $locus_tag,0,0);
+        if ('.' eq $l){ 
+            ++$unknown;
+        } else {
+            push @accum, $l;
+        }
+    }
+
+    if ($counter) {
+        return {
+            score       => $counter,
+            locimatches => join(",", @accum),
+            unknowns    => $unknown
+        };
+    }
+}
+
+#==================================================================
+# weight_average
+# return size of overlap
+sub overlap{
+    my ($x_start, $x_end, $y_start, $y_end) = @_;
+
+    # no overlap
+    if ($y_end < $x_start || $x_end < $y_start) {return 0; } 
+    # x: |------|
+    # y:  |--|
+    elsif ($x_start <= $y_start && $y_end <= $x_end){ return $y_start - $y_end + 1 } #complete overlap
+    # x:  |--|
+    # y: |------|
+    elsif ($y_start <= $x_start && $x_end <= $y_end){ return $x_start - $x_end + 1 } #complete overlap
+    # x:    |------|
+    # y:  |---|
+    elsif ($y_start <= $x_start && $y_end <= $x_end) { return $y_end-$x_start +1} #partial
+    # x: |------|
+    # y:     |---|
+    elsif ($x_start <= $y_start && $x_end <= $y_end) { return $x_end-$y_start +1} #partial
+    # shouldn't happen
+    else { return 0 }
+}
+
+sub weighed_average{
+    my ($brs_iterator, %opt) = @_;
+    my $targets = $opt{targets};
+    my $stat = Statistics::Descriptive::Full->new();
+    my $counter = 0;
+
+    COORD:
+    while ( my $gff_line = $brs_iterator->() ) {
+        next COORD unless ref $gff_line eq 'HASH';
+        ++$counter;
+
+        my ($gstart, $gend, $gscore) = @{$gff_line}{qw/start end score/};
+        my $glen = $gend-$gstart+1;
+
+        for my $target (@$targets){
+            my ($tstart, $tend) = @{$target}[0,1];
+            my $tlen = $tend-$tstart+1;
+            my $overlap = overlap($gstart, $gend, $tstart, $tend);
+            $stat->add_data(
+                ($overlap / $tlen) * ($overlap / $glen) * $gscore
+            );
+        }
+    }
+
+    if ($counter) {
+        return {
+            score => $stat->mean(),
+            std   => $stat->standard_deviation(),
+            var   => $stat->variance(),
+            n     => $counter,
+        };
+    }
+}
+
+
 ##########################################################
 # average_scores
 # for ranges returned by brs_iterator, calculate average/stddev
@@ -552,10 +659,10 @@ COORD:
 sub binary_range_search {
     my %options = @_;
 
-    my $targets = $options{range}  || croak 'Need a range parameter';
-    my $ranges  = $options{ranges} || croak 'Need a ranges parameter';
+    my $targets = $options{targets} || croak 'Need a targets parameter';
+    my $queries = $options{queries} || croak 'Need a queries parameter';
 
-    my ( $low, $high ) = ( 0, $#{$ranges} );     #what does this do?
+    my ( $low, $high ) = ( 0, $#{$queries} );     #what does this do?
     my @iterators = ();
 
 TARGET:
@@ -567,33 +674,33 @@ TARGET:
             my $try = int( ( $low + $high ) / 2 );
 
             $low = $try + 1, next RANGE_CHECK
-                if $ranges->[$try]{end} < $range->[0];
+                if $queries->[$try]{end} < $range->[0];
             $high = $try - 1, next RANGE_CHECK
-                if $ranges->[$try]{start} > $range->[1];
+                if $queries->[$try]{start} > $range->[1];
 
             my ( $down, $up ) = ($try) x 2;
             my %seen = ();
 
             my $brs_iterator = sub {
 
-                if (    $ranges->[ $up + 1 ]{end} >= $range->[0]
-                    and $ranges->[ $up + 1 ]{start} <= $range->[1]
+                if (    $queries->[ $up + 1 ]{end} >= $range->[0]
+                    and $queries->[ $up + 1 ]{start} <= $range->[1]
                     and !exists $seen{ $up + 1 } )
                 {
                     $seen{ $up + 1 } = undef;
-                    return $ranges->[ ++$up ];
+                    return $queries->[ ++$up ];
                 }
-                elsif ( $ranges->[ $down - 1 ]{end} >= $range->[0]
-                    and $ranges->[ $down - 1 ]{start} <= $range->[1]
+                elsif ( $queries->[ $down - 1 ]{end} >= $range->[0]
+                    and $queries->[ $down - 1 ]{start} <= $range->[1]
                     and !exists $seen{ $down - 1 }
                     and $down > 0 )
                 {
                     $seen{ $down - 1 } = undef;
-                    return $ranges->[ --$down ];
+                    return $queries->[ --$down ];
                 }
                 elsif ( !exists $seen{$try} ) {
                     $seen{$try} = undef;
-                    return $ranges->[$try];
+                    return $queries->[$try];
                 }
                 else {
                     return;
@@ -607,16 +714,16 @@ TARGET:
 # In scalar context return master iterator that iterates over the list of range iterators.
 # In list context returns a list of range iterators.
     return wantarray
-        ? @iterators
-        : sub {
+    ? @iterators
+    : sub {
         while (@iterators) {
-            if ( my $range = $iterators[0]->() ) {
-                return $range;
+            if ( my $gff = $iterators[0]->() ) {
+                return $gff;
             }
             shift @iterators;
         }
         return;
-        };
+    };
 }
 
 sub gff_read {
@@ -708,12 +815,16 @@ sub make_gff_iterator {
  
  -w, --width       sliding window width                                  (default: 50, integer)
  -s, --step        sliding window interval                               (default: 50, integer)
- -c, --scoring     score computation scheme                              (default: meth, string [available: meth, average, sum, seq_freq])
+ -c, --scoring     score computation scheme                              
+                    (meth (default), average, sum, weighed_average, locus_collector)
  -m, --merge       merge this feature as belonging to same locus         (default: no, string [eg: exon])
  -n, --no-sort     GFFv3 data assumed sorted by start coordinate         (default: no)
  -k, --no-skip     print windows or loci for which there is no coverage  (deftaul: no)
  -g, --gff         GFFv3 annotation file
- -t, --tag         attribute field tag from which to extract locus ID    (default: ID, string)
+ -t, --tag         attribute field tag in _annotation_ file from which to extract locus ID    
+                    (default: ID, string)
+ -u, --query-tag   attribute field tag in _input_ file from which to extract locus ID    
+                    (default: ID, string)
  -f, --feature     overwrite GFF feature field with this label           (default: no, string)
  -b, --absolute    organism name to fetch chromosome lengths, implies -k (default: no, string [available: arabidopsis, rice, puffer])
  -r, --reverse     reverse score and counts
@@ -722,6 +833,38 @@ sub make_gff_iterator {
  -q, --quiet       supress perl's diagnostic and warning messages
  -h, --help        print this information
  -m, --manual      print the plain old documentation page
+
+=head1 SCORING
+
+possible values for --scoring are:
+
+=over
+
+=item sum
+
+For each window, sum the score from each overlap and report in the score column (column 6). 
+
+=item meth
+
+For each window, sum the 'n', 'c', and 't' from each overlap and report the fractional methylation c/(c+t) as the score. 
+
+=item average         
+
+For each window, calculate the mean, standard deviation, variance for the scores of overlaps.
+
+=item weighed_average 
+
+For each window, calculate the mean, standard deviation, variance for the DILUTED scores.  Diluted means that 
+
+ Query:    |-------------------|                 Length: x, Score: n
+ Window:                |--------------------|   Length: y
+ Overlap:               |------|                 Length: z
+
+Then the score contribution of the query to the window is n * (x/z) * (y/z).  This was yvonne's idea so if it doesn't
+make sense, blame her.
+
+=item locus          
+
 
 =head1 REVISION
 
