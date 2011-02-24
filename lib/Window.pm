@@ -45,6 +45,23 @@ sub overlaps_with{
     return $self->start <= $gff->end && $self->end >= $gff->start;
 }
 
+# return size of overlap
+sub overlap{
+    my ($self,$gff) = @_;
+    my $ss = $self->start;
+    my $se = $self->end;
+    my $gs = $gff->start;
+    my $ge = $gff->end;
+
+    # no overlap
+    if ($ss > $ge || $se < $gs) {return 0; } 
+    elsif ($ss <= $gs && $se >= $ge){ return $gs - $ge + 1 } #complete overlap
+    elsif ($gs <= $ss && $ge >= $se){ return $ss - $se + 1 } #complete overlap
+    elsif ($gs <= $ss && $ge <= $se) { return $ge-$ss +1} #partial
+    elsif ($ss <= $gs && $se <= $ge) { return $se-$gs +1} #partial
+    else { return 0 }
+}
+
 no Moose;
 __PACKAGE__->meta->make_immutable;
 
@@ -145,43 +162,31 @@ use feature 'say';
 use Moose;
 use autodie;
 use Carp;
+use Statistics::Descriptive;
 
 extends 'Window';
 
-has score_avg => (is => 'rw', isa => 'Num', default => 0);
-has score_std => (is => 'rw', isa => 'Num', default => 0);
-has score_var => (is => 'rw', isa => 'Num', default => 0);
+has stat => (
+    is => 'ro', 
+    isa => 'Statistics::Descriptive::Full', 
+    default => sub { Statistics::Descriptive::Full->new()}
+);
 
-# is this right?
 override accumulate => sub {
     my ($self,$gff) = @_;
     super();
-
-    my $previous_score_avg = $self->score_avg;
-
-    $self->score_avg(
-        $self->score_avg + ( $gff->{score} - $self->score_avg ) / $self->counter()
-    );
-
-    $self->score_std(
-        $self->score_std
-        + ( $gff->{score} - $previous_score_avg )
-        * ( $gff->{score} - $self->score_avg )
-    );
-
-    $self->score_var(
-        $self->score_std / ( $self->counter - 1 )
-    ) if $self->counter > 1;
+    $self->stat->add_data($gff->score);
 };
 
 override to_gff => sub{
     my ($self) = @_;
     return join "\t", 
     $self->sequence, $self->source, $self->feature, $self->start, $self->end,
-    $self->score_avg,
+    $self->stat->mean,
     $self->strand,
     $self->frame,
-    $self->winattr . sprintf("n=%d;var=%f;std=%f", $self->counter, $self->score_var, sqrt($self->score_var))
+    $self->winattr . sprintf("n=%d;var=%f;std=%f", $self->counter, $self->stat->variance,
+        $self->stat->standard_deviation)
 };
 
 no Moose;

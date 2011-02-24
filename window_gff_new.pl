@@ -115,7 +115,7 @@ sub window_gff{
         my @keep; # indices to keep
         for my $i (0 .. $#window_pool){
             my $win = $window_pool[$i];
-            if ($win->overlaps_with($query)){
+            if ($win->overlap($query)){
                 $win->accumulate($query);
                 push @keep, $i;
             } elsif ($win->end < $query->start){
@@ -218,7 +218,14 @@ Gff annotation file. Cannot be combined with --fixed
 
 Locus tag in annotation file.  Used to label each line of output file.
 
+=back
+
 =for comment #####################################################################
+
+Common Options
+
+=over
+
 
 =item --output <file>
 
