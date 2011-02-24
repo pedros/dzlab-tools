@@ -13,8 +13,11 @@ use Fasta;
 use GFF::Parser;
 use GFF::Split;
 use GFF::Sort;
+use GFF::Slurp;
 use Window;
 use WindowSource;
+use File::Temp qw/tempdir/;
+use Devel::Size qw/total_size/;
 
 Log::Log4perl->easy_init({ 
         level    => $INFO,
@@ -43,15 +46,23 @@ INFO("Scoring Method: $scoring");
 
 INFO("Splitting query file by sequence and sorting each by start position.");
 
-my %split_queries = gff_split(file => $opt_query, sort => 'start', sequence => 'all', keep => 0);
-my %temp_outfiles = map {$_ => $split_queries{$_} . '.windowed'} keys %split_queries;
+my $tempdir = tempdir( CLEANUP => 1 );
+
+INFO("Temporary directory is $tempdir");
+
+INFO("Slurping up and sorting query file...");
+my $query_by_sequence = gff_slurp_index($opt_query, 'sequence');
+INFO("query sequence splured and using " . total_size($query_by_sequence) . " bytes");
+
+my @sequences = keys %$query_by_sequence;
+
+my %temp_outfiles = map { $_ => File::Spec->catfile($tempdir, $_) . '.windowed'} @sequences;
 my %temp_outfh    = map {open my $fh, '>', $temp_outfiles{$_}; $_ => $fh} keys %temp_outfiles;
 
-my @sequences = keys %split_queries;
 
-INFO("%split_queries: " . Dumper \%split_queries);
+#INFO("$query_by_sequence: " . Dumper query_by_sequence);
 INFO("%temp_output: "   . Dumper \%temp_outfiles);
-INFO("%temp_fh: "       . Dumper \%temp_outfh);
+#INFO("%temp_fh: "       . Dumper \%temp_outfh);
 
 INFO("Ok, windowing " . join ", ", @sequences);
 
@@ -63,12 +74,12 @@ if ($opt_target){
     INFO("%split_target: " . Dumper \%split_target);
 
     for my $sequence (@sequences){
-        my $query_file = $split_queries{$sequence};
+        my $query_seqs = $query_by_sequence->{$sequence};
         my $target_file = $split_target{$sequence};
-        INFO("Windowing $sequence ($query_file, $target_file)");
+        INFO("Windowing $sequence ($target_file)");
 
         INFO("Creating query_parser and window source");
-        my $query_parser = GFF::Parser->new(file => $query_file);
+        #my $query_parser = GFF::Parser->new(file => $query_file);
         my $target_window_source = WindowSource::Annotation->new(
             class => $scoring,
             file => $target_file,
@@ -76,7 +87,7 @@ if ($opt_target){
             sequence => $sequence,
         );
 
-        window_gff($query_parser, $target_window_source, $temp_outfh{$sequence});
+        window_gff($query_seqs, $target_window_source, $temp_outfh{$sequence});
     }
 }
 if ($opt_fixed){
@@ -87,10 +98,9 @@ if ($opt_fixed){
     INFO("%seq_lengths: " . Dumper \%seq_lengths);
 
     for my $sequence (@sequences){
-        my $query_file = $split_queries{$sequence};
-        INFO("Windowing $sequence ($query_file)");
+        my $query_seqs = $query_by_sequence->{$sequence};
+        INFO("Windowing $sequence");
 
-        my $query_parser = GFF::Parser->new(file => $query_file);
         my $target_window_source = WindowSource::Fixed->new(
             class => $scoring,
             sequence => $sequence,
@@ -99,7 +109,7 @@ if ($opt_fixed){
         );
 
         INFO("Running window_gff()");
-        window_gff($query_parser, $target_window_source, $temp_outfh{$sequence});
+        window_gff($query_seqs, $target_window_source, $temp_outfh{$sequence});
     }
 }
 
@@ -127,16 +137,18 @@ for my $seq (@sequences){
 if ($opt_output ne '-'){
     close $outfh;
 }
+INFO("DONE");
 
 ### Done
 
 sub window_gff{
-    my ($query_parser, $target_window_source,$fh)  = @_;
+    my ($query_seqs, $target_window_source,$fh)  = @_;
     my @window_pool;
 
     #my $counter = 0;
 
-    while (my $query = $query_parser->next()){
+    #while (my $query = $query_parser->next()){
+    for my $query (@$query_seqs){
         #INFO("$counter");
         #LOGDIE("Stopping after 1000 like you told me") if (++$counter == 1000);
 

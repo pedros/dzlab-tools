@@ -25,16 +25,17 @@ sub to_gff{
     croak "abstract class: unimplemented";
 }
 
-has sequence    => (is => 'rw', isa => 'Str', required => 1);
-has feature     => (is => 'ro', isa => 'Str', default  => 'window');
-has source      => (is => 'ro', isa => 'Str', default  => 'dzlab');
-has start       => (is => 'ro', isa => 'Int', required => 1);
-has end         => (is => 'ro', isa => 'Int', required => 1);
-has score_total => (is => 'rw', isa => 'Num', default  => 0);
-has strand      => (is => 'ro', isa => 'Str', default  => '.');
-has frame       => (is => 'ro', isa => 'Str', default  => '.');
-has counter     => (is => 'rw', isa => 'Int', default  => 0);
-has window_id   => (is => 'ro', isa => 'Maybe[Str]' );
+# constraints removed
+has sequence    => (is => 'rw', required => 1);
+has feature     => (is => 'ro', default  => 'window');
+has source      => (is => 'ro', default  => 'dzlab');
+has start       => (is => 'ro', required => 1);
+has end         => (is => 'ro', required => 1);
+has score_total => (is => 'rw', default  => 0);
+has strand      => (is => 'ro', default  => '.');
+has frame       => (is => 'ro', default  => '.');
+has counter     => (is => 'rw', default  => 0);
+has window_id   => (is => 'ro', );
 
 sub winattr{
     my $self = shift;
