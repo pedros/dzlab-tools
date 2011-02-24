@@ -18,6 +18,10 @@ has window_args => (is => 'ro',default => sub { [] });
 
 # return a Window (or descendant) for next one in line
 sub next{ return; }
+
+# return start of next window which would be returned
+sub peak {return;}
+
 sub create_window{
     my ($self,$start,$end,$window_id)=@_;
     return $self->class->new(
@@ -71,6 +75,11 @@ has current => (
 );
 has length  => (is => 'ro', isa => 'Int');
 has step    => (is => 'ro', isa => 'Int');
+
+override peak => sub{
+    my ($self) = @_;
+    return $self->current;
+};
 
 override 'next' => sub{
     my ($self) = @_;

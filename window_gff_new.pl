@@ -17,10 +17,11 @@ use Window;
 use WindowSource;
 
 Log::Log4perl->easy_init({ 
-        level    => $DEBUG,
+        level    => $INFO,
         layout   => "%d{HH:mm:ss} %p> (%L) %M - %m%n", 
-        file     => ">log4perl.log",
+        file     => ">log4perl-window-gff.log",
     });
+
 
 pod2usage(-verbose => 99,-sections => [qw/NAME SYNOPSIS OPTIONS SCORING/]) 
 if ! ($opt_target && $opt_locus_tag xor $opt_fixed && $opt_genome);
@@ -43,8 +44,8 @@ INFO("Scoring Method: $scoring");
 INFO("Splitting query file by sequence and sorting each by start position.");
 
 my %split_queries = gff_split(file => $opt_query, sort => 'start', sequence => 'all', keep => 0);
-my %temp_outfiles   = map {$_ => $split_queries{$_} . '.windowed'} keys %split_queries;
-my %temp_outfh      = map {open my $fh, '>', $temp_outfiles{$_}; $_ => $fh} keys %temp_outfiles;
+my %temp_outfiles = map {$_ => $split_queries{$_} . '.windowed'} keys %split_queries;
+my %temp_outfh    = map {open my $fh, '>', $temp_outfiles{$_}; $_ => $fh} keys %temp_outfiles;
 
 my @sequences = keys %split_queries;
 
@@ -89,7 +90,6 @@ if ($opt_fixed){
         my $query_file = $split_queries{$sequence};
         INFO("Windowing $sequence ($query_file)");
 
-        INFO("Creating query_parser and window source");
         my $query_parser = GFF::Parser->new(file => $query_file);
         my $target_window_source = WindowSource::Fixed->new(
             class => $scoring,
@@ -98,6 +98,7 @@ if ($opt_fixed){
             step => $opt_fixed,
         );
 
+        INFO("Running window_gff()");
         window_gff($query_parser, $target_window_source, $temp_outfh{$sequence});
     }
 }
@@ -133,14 +134,26 @@ sub window_gff{
     my ($query_parser, $target_window_source,$fh)  = @_;
     my @window_pool;
 
+    #my $counter = 0;
+
     while (my $query = $query_parser->next()){
+        #INFO("$counter");
+        #LOGDIE("Stopping after 1000 like you told me") if (++$counter == 1000);
+
         DEBUG("Pulled from query_parser: \n" . $query->to_string);
-        while (my $w = $target_window_source->next()){
+
+        while ($query->end >= $target_window_source->peak()){
+            my $w = $target_window_source->next();
+            if ($query->start > $w->end){
+                flush($w, $fh);
+                next;
+            }
             push @window_pool, $w;
             last if $w->start > $query->end; 
             # (we've already gotten the last possible window $query could overlap with)
         }
-        DEBUG("Pool has " . scalar @window_pool . " elements:\n" . join("\n", map {$_->to_gff} @window_pool));
+        DEBUG("Pool has " . scalar @window_pool . " elements:");
+        DEBUG("\n" . join("\n", map {$_->to_gff} @window_pool));
 
         my @keep; # indices to keep
         for my $i (0 .. $#window_pool){
