@@ -46,16 +46,16 @@ my $result = GetOptions(
 );
 
 my %scoring_dispatch = (
-    meth            => \&fractional_methylation,
-    average         => \&average_scores,
-    sum             => \&sum_scores,
-    seq_freq        => \&seq_freq,
-    weighed_average => \&weighed_average,
-    locus_collector => \&locus_collector,
+    meth                 => \&fractional_methylation,
+    sum                  => \&sum_scores,
+    average              => \&unweighed_average,
+    weighed_average      => \&full_weighed_average,
+    half_weighed_average => \&half_weighed_average,
+    locus_collector      => \&locus_collector,
 );
 
 # Check required command line parameters
-pod2usage( -verbose => 1 )
+pod2usage( -verbose => 99,-sections => [qw/NAME DESCRIPTION OPTIONS SCORING/]  )
     unless @ARGV
         and $result
         and ( ( $width and $step ) or $gff )
@@ -578,6 +578,20 @@ sub overlap{
     else { return 0 }
 }
 
+sub full_weighed_average{
+    my ($brs_iterator, %opt) = @_;
+    weighed_average($brs_iterator, %opt, source => 1, dest => 1);
+}
+
+sub half_weighed_average{
+    my ($brs_iterator, %opt) = @_;
+    weighed_average($brs_iterator, %opt, source => 0, dest => 1);
+}
+sub unweighed_average{
+    my ($brs_iterator, %opt) = @_;
+    weighed_average($brs_iterator, %opt, source => 0, dest => 0);
+}
+
 sub weighed_average{
     my ($brs_iterator, %opt) = @_;
     my $targets = $opt{targets};
@@ -597,7 +611,9 @@ sub weighed_average{
             my $tlen = $tend-$tstart+1;
             my $overlap = overlap($gstart, $gend, $tstart, $tend);
             $stat->add_data(
-                ($overlap / $tlen) * ($overlap / $glen) * $gscore
+                ($opt{source} ? ($overlap / $glen) : 1) * 
+                ($opt{dest}   ? ($overlap / $tlen) : 1) * 
+                $gscore
             );
         }
     }
@@ -611,6 +627,7 @@ sub weighed_average{
         };
     }
 }
+
 
 
 ##########################################################
@@ -785,14 +802,21 @@ sub make_gff_iterator {
 
 =head1 SYNOPSIS
 
- # Run a sliding window of 50bp every 25bp interval on methylation data (attribute field assumed to be 'c=n; t=m')
+Run a sliding window of 50bp every 25bp interval on methylation data (attribute field assumed to be 'c=n; t=m')
+
  window_gff.pl --width 50 --step 25 --scoring meth --output out.gff in.gff
 
- # Average data per each locus (on score field)
+Average data per each locus (on score field)
+
  window_gff.pl --gff genes.gff --scoring average --output out.gff in.gff
 
- # Merge 'exon' features in GFF annotation file per parent ID (eg. per gene)
- window_gff.pl --gff exons.gff --scoring average --output out.gff --tag Parent --merge exon
+Merge 'exon' features in GFF annotation file per parent ID (eg. per gene)
+
+ window_gff.pl --gff exons.gff --scoring average --output out.gff --tag Parent --merge exon in.gff
+
+Collect the ID's of lines in in.gff which map to windows in exons.gff
+
+ window_gff.pl --gff exons.gff --scoring locus_collector --output out.gff --tag Parent --merge exon --query-tag ID in.gff 
 
 =head1 DESCRIPTION
 
@@ -816,7 +840,7 @@ sub make_gff_iterator {
  -w, --width       sliding window width                                  (default: 50, integer)
  -s, --step        sliding window interval                               (default: 50, integer)
  -c, --scoring     score computation scheme                              
-                    (meth (default), average, sum, weighed_average, locus_collector)
+                    (meth (default), average, sum, weighed_average, half_weighed_average, locus_collector)
  -m, --merge       merge this feature as belonging to same locus         (default: no, string [eg: exon])
  -n, --no-sort     GFFv3 data assumed sorted by start coordinate         (default: no)
  -k, --no-skip     print windows or loci for which there is no coverage  (deftaul: no)
@@ -840,21 +864,22 @@ possible values for --scoring are:
 
 =over
 
-=item sum
+=item sum:
 
 For each window, sum the score from each overlap and report in the score column (column 6). 
 
-=item meth
+=item meth:
 
 For each window, sum the 'n', 'c', and 't' from each overlap and report the fractional methylation c/(c+t) as the score. 
 
-=item average         
+=item average:
 
-For each window, calculate the mean, standard deviation, variance for the scores of overlaps.
+For each window, calculate the mean, standard deviation, variance for the scores of overlapping queries.
 
-=item weighed_average 
+=item weighed_average:
 
-For each window, calculate the mean, standard deviation, variance for the DILUTED scores.  Diluted means that 
+For each window, calculate the mean, standard deviation, variance for the FULL DILUTED scores.  Diluted means that, if
+the windows are arranged like so:
 
  Query:    |-------------------|                 Length: x, Score: n
  Window:                |--------------------|   Length: y
@@ -863,8 +888,21 @@ For each window, calculate the mean, standard deviation, variance for the DILUTE
 Then the score contribution of the query to the window is n * (x/z) * (y/z).  This was yvonne's idea so if it doesn't
 make sense, blame her.
 
-=item locus          
+=item half_weighed_average:
 
+For each window, calculate the mean, standard deviation, variance for the HALF DILUTED scores.  Diluted means that, if
+the windows are arranged like so:
+
+ Query:    |-------------------|                 Length: x, Score: n
+ Window:                |--------------------|   Length: y
+ Overlap:               |------|                 Length: z
+
+Then the score contribution of the query to the window is n * (y/z).
+
+=item locus_collector:
+
+For each overlapping query for a given window, collect the queries' ID's (defined by --query-tag) and list them in the
+attributes column.  In the case where a query doesn't have a valid ID, report total in 'unknowns' attribute.
 
 =head1 REVISION
 
