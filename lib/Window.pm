@@ -149,7 +149,7 @@ override to_gff => sub {
     $self->winattr . sprintf("n=%d;c=%d;t=%d", $self->counter, $self->c, $self->t)
 };
 
-sub methscore{ my ($self) = @_; return $self->c() / ($self->c() + $self->t()); }
+sub methscore{ my ($self) = @_; return ($self->c || $self->t) ? $self->c() / ($self->c() + $self->t()) : 0; }
 
 no Moose;
 __PACKAGE__->meta->make_immutable;
