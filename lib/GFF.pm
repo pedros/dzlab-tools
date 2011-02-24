@@ -96,6 +96,11 @@ sub equals{
     return 1;
 }
 
+sub length{
+    my $self = shift;
+    return $self->end - $self->start + 1;
+}
+
 no Moose;
 __PACKAGE__->meta->make_immutable;
 

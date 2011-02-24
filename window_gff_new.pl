@@ -32,10 +32,11 @@ if ($opt_output ne '-'){
 ### Scoring
 
 my %scoring_dispatch = (
-    sum      => 'Window::SumScore',
-    fracmeth => 'Window::FractionalMethylation',
-    average  => 'Window::SumScore',
-    locus    => 'Window::AverageScore',
+    sum             => 'Window::SumScore',
+    fracmeth        => 'Window::FractionalMethylation',
+    average         => 'Window::AverageScore::Full',
+    diluted_average => 'Window::AverageScore::Diluted',
+    locus           => 'Window::Locus',
 );
 my $scoring = $scoring_dispatch{$opt_scoring};
 INFO("Scoring Method: $scoring");

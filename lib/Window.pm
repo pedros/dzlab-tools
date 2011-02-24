@@ -62,6 +62,11 @@ sub overlap{
     else { return 0 }
 }
 
+sub length{
+    my $self = shift;
+    return $self->end - $self->start + 1;
+}
+
 no Moose;
 __PACKAGE__->meta->make_immutable;
 
@@ -172,12 +177,6 @@ has stat => (
     default => sub { Statistics::Descriptive::Full->new()}
 );
 
-override accumulate => sub {
-    my ($self,$gff) = @_;
-    super();
-    $self->stat->add_data($gff->score);
-};
-
 override to_gff => sub{
     my ($self) = @_;
     return join "\t", 
@@ -185,8 +184,61 @@ override to_gff => sub{
     $self->stat->mean,
     $self->strand,
     $self->frame,
-    $self->winattr . sprintf("n=%d;var=%f;std=%f", $self->counter, $self->stat->variance,
-        $self->stat->standard_deviation)
+    $self->winattr . sprintf(
+        "n=%d;var=%f;std=%f", 
+        $self->counter, 
+        $self->counter ? ($self->stat->variance, $self->stat->standard_deviation) : (0,0)
+    )
+};
+
+no Moose;
+__PACKAGE__->meta->make_immutable;
+
+1;
+
+#==================================================================
+# Window::AverageScore::Full
+
+package Window::AverageScore::Full;
+use strict;
+use warnings;
+use Moose;
+use autodie;
+
+extends 'Window::AverageScore';
+
+override accumulate => sub {
+    my ($self,$gff) = @_;
+    super();
+    $self->stat->add_data($gff->score);
+};
+
+no Moose;
+__PACKAGE__->meta->make_immutable;
+
+1;
+
+#==================================================================
+# Window::AverageScore::Diluted;
+
+package Window::AverageScore::Diluted;
+use strict;
+use warnings;
+use Moose;
+use autodie;
+
+extends 'Window::AverageScore';
+
+override accumulate => sub {
+    my ($self,$gff) = @_;
+    super();
+    my $overlap = $self->overlap($gff);
+    return unless $overlap;
+
+    my $source_dilution = $overlap / $gff->length;
+    my $dest_dilution   = $overlap / $self->length;
+
+    $self->stat->add_data($gff->score * $source_dilution * $dest_dilution);
 };
 
 no Moose;
@@ -299,7 +351,7 @@ unless (caller()){
     ### AverageScore
     {
         seek DATA, $data_pos, 0;
-        my $w = Window::AverageScore->new(
+        my $w = Window::AverageScore::Full->new(
             sequence => 'chr1', 
             start => 1, 
             end => 50
@@ -309,6 +361,19 @@ unless (caller()){
         while (my $gff = $p->next()){ $w->accumulate($gff); }
         say $w->to_gff();
     }
+    {
+        seek DATA, $data_pos, 0;
+        my $w = Window::AverageScore::Diluted->new(
+            sequence => 'chr1', 
+            start => 1, 
+            end => 59990
+        ); 
+        my $p = GFF::Parser->new(file => \*DATA);
+
+        while (my $gff = $p->next()){ $w->accumulate($gff); }
+        say $w->to_gff();
+    }
+
 
     ### Locus
     {
