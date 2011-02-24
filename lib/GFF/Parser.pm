@@ -79,51 +79,6 @@ sub next_no_skip{
     return;
 }
 
-=head2 $p->slurp()
-
-return an arrayref of all gff records
-
-=cut
-
-sub slurp{
-    my ($self) = @_;
-    my @accum;
-    while (my $gff = $self->next()){
-        # if we're skipping, no need to check
-        if (_is_gff($gff)){ 
-            push @accum, $gff;
-        }
-    }
-    return \@accum;
-}
-
-=head2 $p->slurp_index('colname')
-
-return a hashref of column val to gff record
-
-=cut
-
-sub slurp_index{
-    my ($self, $column) = @_;
-    my %index;
-    my $counter = 0;
-    my $badrecords = 0;
-    while (my $gff = $self->next()){
-        if (_is_gff($gff)){ 
-            if (defined $gff->get_column($column)){
-                push @{$index{$gff->get_column($column)}}, $gff;
-            } else {
-                $badrecords++;
-            }
-            $counter++;
-        }
-    }
-    carp "warning: $badrecords out of $counter records didn't have a column/attribute $column in " .  $self->filename_or_handle
-    if $badrecords;
-
-    return \%index;
-}
-
 =head2 $p->do(sub { my $gff = shift; ... })
 
 =cut
