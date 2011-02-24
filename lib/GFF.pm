@@ -7,15 +7,17 @@ use Moose;
 use Carp;
 use autodie;    
 
-has sequence    => ( is => 'ro', isa => 'Maybe[Str]',);
-has source      => ( is => 'ro', isa => 'Maybe[Str]',);
-has feature     => ( is => 'ro', isa => 'Maybe[Str]',);
-has start       => ( is => 'ro', isa => 'Maybe[Int]',);
-has end         => ( is => 'ro', isa => 'Maybe[Int]',);
-has score       => ( is => 'ro', isa => 'Maybe[Str]',);
-has strand      => ( is => 'ro', isa => 'Maybe[Str]',);
-has frame       => ( is => 'ro', isa => 'Maybe[Str]',);
-has attribute_string => ( is => 'ro', isa => 'Maybe[Str]',);
+has asterisk         => ( is => 'rw', isa => 'Bool', default => 0);
+# type constraints very slow? removed.
+has sequence         => ( is => 'ro');
+has source           => ( is => 'ro');
+has feature          => ( is => 'ro');
+has start            => ( is => 'ro');
+has end              => ( is => 'ro');
+has score            => ( is => 'ro');
+has strand           => ( is => 'ro');
+has frame            => ( is => 'ro');
+has attribute_string => ( is => 'rw');
 has attr_hash => (
       traits    => ['Hash'],
       is        => 'ro',
@@ -31,8 +33,13 @@ has attr_hash => (
 sub _build_attr_hash{
     my $self = shift;
     my %accum;
-    if (defined($self->attribute_string) ){
-        for (split /;/, $self->attribute_string){
+    my $attrstr = $self->attribute_string;
+    if (defined($attrstr) ){
+        if ($attrstr=~s/\*$//){
+            $self->asterisk(1);
+            $self->attribute_string($attrstr);
+        }
+        for (split /;/, $attrstr){
             my ($key, $val) = split /=/, $_;
             $key =~ s/^\s+//;
             $key =~ s/\s+$//;
