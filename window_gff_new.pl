@@ -12,22 +12,19 @@ use lib "$FindBin::Bin/lib";
 use Fasta;
 use GFF::Parser;
 use GFF::Split;
+use GFF::Sort;
 use Window;
 use WindowSource;
 
 Log::Log4perl->easy_init({ 
         level    => $DEBUG,
         layout   => "%d{HH:mm:ss} %p> (%L) %M - %m%n", 
-        #file     => ">>log4perl.log",
+        file     => ">log4perl.log",
     });
 
 pod2usage(-verbose => 99,-sections => [qw/NAME SYNOPSIS OPTIONS/]) 
 if ! ($opt_target xor $opt_fixed);
 
-if ($opt_output ne '-'){
-    close STDOUT;
-    open STDOUT, '>', $opt_output;
-}
 
 ### Scoring
 
@@ -46,9 +43,14 @@ INFO("Scoring Method: $scoring");
 INFO("Splitting query file by sequence and sorting each by start position.");
 
 my %split_queries = gff_split(file => $opt_query, sort => 'start', sequence => 'all', keep => 0);
+my %temp_outfiles   = map {$_ => $split_queries{$_} . '.windowed'} keys %split_queries;
+my %temp_outfh      = map {open my $fh, '>', $temp_outfiles{$_}; $_ => $fh} keys %temp_outfiles;
+
 my @sequences = keys %split_queries;
 
 INFO("%split_queries: " . Dumper \%split_queries);
+INFO("%temp_output: "   . Dumper \%temp_outfiles);
+INFO("%temp_fh: "       . Dumper \%temp_outfh);
 
 INFO("Ok, windowing " . join ", ", @sequences);
 
@@ -73,7 +75,7 @@ if ($opt_target){
             sequence => $sequence,
         );
 
-        window_gff($query_parser, $target_window_source);
+        window_gff($query_parser, $target_window_source, $temp_outfh{$sequence});
     }
 }
 if ($opt_fixed){
@@ -96,12 +98,39 @@ if ($opt_fixed){
             step => $opt_fixed,
         );
 
-        window_gff($query_parser, $target_window_source);
+        window_gff($query_parser, $target_window_source, $temp_outfh{$sequence});
     }
 }
 
+while (my ($seq,$fh) = each %temp_outfh) {
+    INFO("closing $seq file handle");
+    close $fh;
+}
+
+my $outfh;
+if ($opt_output eq '-'){
+    $outfh = \*STDOUT;
+} else {
+    open $outfh, '>', $opt_output;
+}
+
+for my $seq (@sequences){
+    my $file = $temp_outfiles{$seq};
+    INFO("sorting and writing $seq ($file) to $opt_output");
+    gff_sort(file => $file, overwrite => 1, column => 'start');
+
+    open my $fh, '<', $file;
+    while (defined (my $line = <$fh>)) { print $outfh $line; }
+    close $fh;
+}
+if ($opt_output ne '-'){
+    close $outfh;
+}
+
+### Done
+
 sub window_gff{
-    my ($query_parser, $target_window_source)  = @_;
+    my ($query_parser, $target_window_source,$fh)  = @_;
     my @window_pool;
 
     while (my $query = $query_parser->next()){
@@ -121,7 +150,7 @@ sub window_gff{
                 push @keep, $i;
             } elsif ($win->end < $query->start){
                 # pool's end is behind the queries start, so no more will ever match. flush
-                flush($win);
+                flush($win,$fh);
             } else {
                 push @keep, $i;
             }
@@ -130,21 +159,21 @@ sub window_gff{
         @window_pool = @window_pool[@keep];
     }
     foreach my $win (@window_pool) {
-        flush($win);
+        flush($win,$fh);
     }
     if ($opt_no_skip){
         while (my $win = $target_window_source->next()){
-            flush($win);
+            flush($win,$fh);
         }
     }
 }
 
 sub flush{
-    my $win = shift;
+    my ($win,$fh) = @_;
     if ($win->counter || $opt_no_skip){
         my $s = $win->to_gff;
         DEBUG("This is being flushed:\n" . $s);
-        say $s;
+        say $fh $s;
     }
 }
 
