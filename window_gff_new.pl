@@ -22,8 +22,8 @@ Log::Log4perl->easy_init({
         file     => ">log4perl.log",
     });
 
-pod2usage(-verbose => 99,-sections => [qw/NAME SYNOPSIS OPTIONS/]) 
-if ! ($opt_target xor $opt_fixed);
+pod2usage(-verbose => 99,-sections => [qw/NAME SYNOPSIS OPTIONS SCORING/]) 
+if ! ($opt_target && $opt_locus_tag xor $opt_fixed && $opt_genome);
 
 
 ### Scoring
@@ -184,13 +184,13 @@ window_gff_new.pl - Your program here
 
 =head1 SYNOPSIS
 
-Usage examples:
+ perl window_gff_new.pl --query tiny-query.gff --scoring sum --fixed 50 --genome tiny-genome.fas --output output.txt
 
- window_gff_new.pl [options]...
-
-=head1 REQUIRED ARGUMENTS
+=head1 OPTIONS
 
 =for comment #####################################################################
+
+Required options:
 
 =over
 
@@ -206,8 +206,6 @@ The GFF file we are windowing.
 Scoring Method to use. (See SCORING METHODS section below for detail).
 
 =back
-
-=head1 OPTIONS
 
 =for comment #####################################################################
 
@@ -270,6 +268,41 @@ Output
 Pass this option if you want windows without any matches to be printed as well.
 
 =item --help
+
+=back
+
+=head1 SCORING
+
+possible values for --scoring are:
+
+=over
+
+=item sum
+
+For each window, sum the score from each overlap and report in the score column (column 6). 
+
+=item fracmeth
+
+For each window, sum the 'n', 'c', and 't' from each overlap and report the fractional methylation c/(c+t) as the score. 
+
+=item average         
+
+For each window, calculate the mean, standard deviation, variance for the scores of overlaps.
+
+=item diluted_average 
+
+For each window, calculate the mean, standard deviation, variance for the DILUTED scores.  Diluted means that 
+
+ Query:    |-------------------|                 Length: x, Score: n
+ Window:                |--------------------|   Length: y
+ Overlap:               |------|                 Length: z
+
+Then the score contribution of the query to the window is n * (x/z) * (y/z).  This was yvonne's idea so if it doesn't
+make sense, blame her.
+
+=item locus          
+
+
 
 =back
 
