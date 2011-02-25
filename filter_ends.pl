@@ -18,6 +18,7 @@ my $ends_tag  = 'ID=';
 my $sort      = 0;
 my $id_column = 1;
 my $output;
+my $missing;
 
 # Grabs and parses command line options
 my $result = GetOptions (
@@ -28,10 +29,10 @@ my $result = GetOptions (
     'ends-tag|t=s'     => \$ends_tag,
     'id-column|c=i'    => \$id_column,
     'output|o=s'       => \$output,
+    'missing|m=s'       => \$missing,
     'verbose|v'        => sub { use diagnostics; },
     'quiet|q'          => sub { no warnings; },
     'help|h'           => sub { pod2usage ( -verbose => 1 ); },
-    'manual|m'         => sub { pod2usage ( -verbose => 2 ); }
 );
 
 if ($output) {
@@ -40,6 +41,7 @@ if ($output) {
 }
 
 $list = index_list ($list, $ends_tag) if $list;
+my $unseen = { map { $_ => 0 } keys %$list } ;
 my @sorted_list;
 
 $id_column--;
@@ -57,6 +59,8 @@ while (<>) {
     and ($min_score == 0 or $list->{$id}->[0] >= $min_score)
     and ($max_score == 0 or $list->{$id}->[0] <= $max_score);
 
+    delete $unseen->{$id};
+
     if ($sort) {
         $sorted_list[$list->{$id}->[2]] = $_;
     }
@@ -66,6 +70,15 @@ while (<>) {
 }
 
 print map { "$_\n" } grep {defined $_} @sorted_list if $sort;
+
+if ($missing){
+    use autodie;
+    open my $m, '>', $missing;
+    foreach my $miss (keys %$unseen) {
+        print $m "$miss\n";
+    }
+    close $m;
+}
 
 
 sub index_list {
@@ -121,11 +134,11 @@ __END__
  -S, --max-score   maximum score to filter by (0 by default)
  -r, --sort        sort input file by order in list
  -c, --id-column   select which column in file to filter contains the locus id (default: 1)
+ -m, --missing     filename to write ID from list which are not present in file
  -o, --output      filename to write results to (defaults to STDOUT)
  -v, --verbose     output perl's diagnostic and warning messages
  -q, --quiet       supress perl's diagnostic and warning messages
  -h, --help        print this information
- -m, --manual      print the plain old documentation page
 
 =head1 REVISION
 
