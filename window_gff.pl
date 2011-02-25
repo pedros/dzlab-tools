@@ -20,7 +20,7 @@ my $scoring = 'meth';    # meth, average, sum or seq_freq
 my $reverse = 0;         # reverse score and count
 my $gff;
 my $tag = 'ID';
-my $qtag = 'ID';
+my $qtag;
 my $feature;
 my $absolute = 0;
 
@@ -34,7 +34,7 @@ my $result = GetOptions(
     'no-skip|k'    => \$no_skip,
     'gff|g=s'      => \$gff,
     'tag|t=s'      => \$tag,
-    'query-tag|u=s' => \$qtag,
+    'collect-tag|u=s' => \$qtag,
     'feature|f=s'  => \$feature,
     'reverse|r'    => \$reverse,
     'absolute|b=s' => \$absolute,
@@ -55,7 +55,7 @@ my %scoring_dispatch = (
 );
 
 # Check required command line parameters
-pod2usage( -verbose => 99,-sections => [qw/NAME DESCRIPTION OPTIONS SCORING/]  )
+pod2usage( -verbose => 99,-sections => [qw/NAME DESCRIPTION SYNOPSIS OPTIONS SCORING/]  )
     unless @ARGV
         and $result
         and ( ( $width and $step ) or $gff )
@@ -182,7 +182,7 @@ for my $sequence ( sort keys %chromosomes ) {
         my $scores_ref = $scoring_dispatch{$scoring}->($brs_iterator, 
             reverse => $reverse, 
             targets => $targets,
-            locus_tag => $qtag
+            locus_tag => $qtag,
         );
 
         my ( $score, $attribute );
@@ -407,14 +407,16 @@ sub uniq_ranges {
 # for the ranges from brs, count the c's and the t's in the attributes field
 
 sub fractional_methylation {
-    my ($brs_iterator) = @_;
+    my ($brs_iterator,%opt) = @_;
 
     my ( $c_count, $t_count, $score_count ) = ( 0, 0, 0 );
+    my $lc = make_locus_collector($opt{locus_tag}) if $opt{locus_tag};
 
   COORD:
     while ( my $gff_line = $brs_iterator->() ) {
 
         next COORD unless ref $gff_line eq 'HASH';
+        $lc->($gff_line) if $opt{locus_tag};
 
         my ( $c, $t ) = $gff_line->{attribute} =~ m/
                                                      c=(\d+)
@@ -433,6 +435,7 @@ sub fractional_methylation {
             c     => $c_count,
             t     => $t_count,
             n     => $score_count,
+            ($opt{locus_tag} ? $lc->() : ())
         };
     }
 }
@@ -446,9 +449,12 @@ sub sum_scores {
 
     my ( $score_sum, $score_count ) = ( 0, 0 );
 
+    my $lc = make_locus_collector($opt{locus_tag}) if $opt{locus_tag};
+
 COORD:
     while ( my $gff_line = $brs_iterator->() ) {
         next COORD unless ref $gff_line eq 'HASH';
+        $lc->($gff_line) if $opt{locus_tag};
 
         $score_sum += $gff_line->{score} eq q{.} ? 0 : $gff_line->{score};
         $score_count++;
@@ -464,6 +470,7 @@ COORD:
         return {
             score => $score_sum,
             n     => $score_count,
+            ($opt{locus_tag} ? $lc->() : ())
         };
     }
 }
@@ -531,27 +538,41 @@ sub locus_collector{
     my $locus_tag = $opt{locus_tag};
     my $counter = 0;
 
-    my @accum;
-    my $unknown=0;
+    my $lc = make_locus_collector($locus_tag);
     COORD:
     while ( my $gff_line = $brs_iterator->() ) {
         next COORD unless ref $gff_line eq 'HASH';
         ++$counter;
-        my $l = get_locus_id($gff_line, $locus_tag,0,0);
-        if ('.' eq $l){ 
-            ++$unknown;
-        } else {
-            push @accum, $l;
-        }
+        $lc->($gff_line);
     }
 
     if ($counter) {
         return {
             score       => $counter,
-            locimatches => join(",", @accum),
-            unknowns    => $unknown
+            $lc->()
         };
     }
+}
+sub make_locus_collector{
+    my $locus_tag = shift;
+    my @accum;
+    my $unknown = 0;
+    return sub {
+        if (@_){
+            my $gff_line = shift;
+            my $l = get_locus_id($gff_line, $locus_tag,0,0);
+            if ('.' eq $l){ 
+                ++$unknown;
+            } else {
+                push @accum, $l;
+            }
+        } else {
+            return (
+                locimatches => join(",", @accum),
+                unknowns    => $unknown
+            );
+        }
+    };
 }
 
 #==================================================================
@@ -597,11 +618,13 @@ sub weighed_average{
     my $targets = $opt{targets};
     my $stat = Statistics::Descriptive::Full->new();
     my $counter = 0;
+    my $lc = make_locus_collector($opt{locus_tag}) if $opt{locus_tag};
 
     COORD:
     while ( my $gff_line = $brs_iterator->() ) {
         next COORD unless ref $gff_line eq 'HASH';
         ++$counter;
+        $lc->($gff_line) if $opt{locus_tag};
 
         my ($gstart, $gend, $gscore) = @{$gff_line}{qw/start end score/};
         my $glen = $gend-$gstart+1;
@@ -624,6 +647,7 @@ sub weighed_average{
             std   => $stat->standard_deviation(),
             var   => $stat->variance(),
             n     => $counter,
+            ($opt{locus_tag} ? $lc->() : ())
         };
     }
 }
@@ -814,10 +838,6 @@ Merge 'exon' features in GFF annotation file per parent ID (eg. per gene)
 
  window_gff.pl --gff exons.gff --scoring average --output out.gff --tag Parent --merge exon in.gff
 
-Collect the ID's of lines in in.gff which map to windows in exons.gff
-
- window_gff.pl --gff exons.gff --scoring locus_collector --output out.gff --tag Parent --merge exon --query-tag ID in.gff 
-
 =head1 DESCRIPTION
 
  This program works in two modes. It will either run a sliding window through the input GFF data,
@@ -836,27 +856,72 @@ Collect the ID's of lines in in.gff which map to windows in exons.gff
 =head1 OPTIONS
 
  window_gff.pl [OPTION]... [FILE]...
+
+=over
  
- -w, --width       sliding window width                                  (default: 50, integer)
- -s, --step        sliding window interval                               (default: 50, integer)
- -c, --scoring     score computation scheme                              
-                    (meth (default), average, sum, weighed_average, half_weighed_average, locus_collector)
- -m, --merge       merge this feature as belonging to same locus         (default: no, string [eg: exon])
- -n, --no-sort     GFFv3 data assumed sorted by start coordinate         (default: no)
- -k, --no-skip     print windows or loci for which there is no coverage  (deftaul: no)
- -g, --gff         GFFv3 annotation file
- -t, --tag         attribute field tag in _annotation_ file from which to extract locus ID    
-                    (default: ID, string)
- -u, --query-tag   attribute field tag in _input_ file from which to extract locus ID    
-                    (default: ID, string)
- -f, --feature     overwrite GFF feature field with this label           (default: no, string)
- -b, --absolute    organism name to fetch chromosome lengths, implies -k (default: no, string [available: arabidopsis, rice, puffer])
- -r, --reverse     reverse score and counts
- -o, --output      filename to write results to (defaults to STDOUT)
- -v, --verbose     output perl's diagnostic and warning messages
- -q, --quiet       supress perl's diagnostic and warning messages
- -h, --help        print this information
- -m, --manual      print the plain old documentation page
+=item -w, --width       
+
+sliding window width (default: 50, integer)
+
+=item -s, --step        
+
+sliding window interval (default: 50, integer)
+
+=item -c, --scoring     
+
+score computation scheme.  can be: meth (default), average, sum weighed_average, half_weighed_average. See SCORING
+section for enlightenment.
+
+=item -m, --merge       
+
+merge this feature as belonging to same locus. (default: no, string [eg: exon])
+
+=item -n, --no-sort     
+
+GFFv3 data assumed sorted by start coordinate. (default: no)
+
+=item -k, --no-skip     
+
+print windows or loci for which there is no coverage  (deftaul: no)
+
+=item -g, --gff         
+
+GFFv3 annotation file. Not compatible with --width or --step.
+
+=item -t, --tag         
+
+attribute field tag in _annotation_ file from which to extract locus ID (default: ID, string)
+
+=item -u, --collect-tag 
+
+If this attribute is given, the attribute with the field tag in _input_ file will be collected and reported in the
+output. (default: [null]. Example: 'ID').
+
+=item -f, --feature     
+
+overwrite GFF feature field with this label           (default: no, string)
+
+=item -b, --absolute    
+
+organism name to fetch chromosome lengths, implies -k (default: no, string [available: arabidopsis, rice, puffer])
+
+=item -r, --reverse     
+
+reverse score and counts.  (not sure what this option is... ask yvonne?)
+
+=item -o, --output      
+
+filename to write results to (defaults to STDOUT)
+
+=item -v, --verbose     output perl's diagnostic and warning messages
+
+=item -q, --quiet       supress perl's diagnostic and warning messages
+
+=item -h, --help        print this information
+
+=item -m, --manual      print the plain old documentation page
+
+=back
 
 =head1 SCORING
 
@@ -898,11 +963,6 @@ the windows are arranged like so:
  Overlap:               |------|                 Length: z
 
 Then the score contribution of the query to the window is n * (y/z).
-
-=item locus_collector:
-
-For each overlapping query for a given window, collect the queries' ID's (defined by --query-tag) and list them in the
-attributes column.  In the case where a query doesn't have a valid ID, report total in 'unknowns' attribute.
 
 =head1 REVISION
 
