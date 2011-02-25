@@ -568,7 +568,7 @@ sub make_locus_collector{
             }
         } else {
             return (
-                locimatches => join(",", @accum),
+                ID => join(",", @accum),
                 unknowns    => $unknown
             );
         }
@@ -585,10 +585,10 @@ sub overlap{
     if ($y_end < $x_start || $x_end < $y_start) {return 0; } 
     # x: |------|
     # y:  |--|
-    elsif ($x_start <= $y_start && $y_end <= $x_end){ return $y_start - $y_end + 1 } #complete overlap
+    elsif ($x_start <= $y_start && $y_end <= $x_end){ return $y_end - $y_start + 1 } #complete overlap
     # x:  |--|
     # y: |------|
-    elsif ($y_start <= $x_start && $x_end <= $y_end){ return $x_start - $x_end + 1 } #complete overlap
+    elsif ($y_start <= $x_start && $x_end <= $y_end){ return $x_end - $x_start + 1 } #complete overlap
     # x:    |------|
     # y:  |---|
     elsif ($y_start <= $x_start && $y_end <= $x_end) { return $y_end-$x_start +1} #partial
