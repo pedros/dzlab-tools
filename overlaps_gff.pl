@@ -99,7 +99,7 @@ for my $sequence ( sort keys %gff_records ) {
                            $_->{score},
                            $_->{strand},
                            $_->{frame},
-                           $_->{attribute},
+                           ($_->{attribute} . ";ID=$locus"),
                        ), "\n"
                        while local $_ = $brs_iterator->();
         }
