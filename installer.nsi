@@ -1,4 +1,4 @@
-outFile "dzlab-tools-0.0.18.exe"
+outFile "dzlab-tools-0.0.19.exe"
  
 InstallDir C:\dzlab-tools
 !define UNINSTALLER $INSTDIR\uninstaller.exe
