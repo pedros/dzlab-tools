@@ -38,9 +38,16 @@ open my $A_NAME, '>', $ARGV[0]
 open my $B_NAME, '>', $ARGV[1]
     or croak "Can't write to $ARGV[1]: $!";
 
+open my $A_original, '>', $ARGV[0] . ".orig"
+    or croak "Can't write to $ARGV[0]: $!";
+open my $B_original, '>', $ARGV[1] . ".orig"
+    or croak "Can't write to $ARGV[1]: $!";
+
 CMP:
 while (    defined (my $a_record = <$A_IN>)
        and defined (my $b_record = <$B_IN>)) {
+   print $A_original $a_record;
+   print $B_original $b_record;
 
     my ($a_id, $a_mm) = (split /\t/, $a_record)[0,2];
     my ($b_id, $b_mm) = (split /\t/, $b_record)[0,2];
