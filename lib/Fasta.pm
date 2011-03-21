@@ -3,10 +3,14 @@ use version; our $VERSION = qv('0.0.1');
 use strict;
 use warnings;
 use Carp;
+use Data::Dumper;
+use feature 'say';
+use autodie;
+
 
 require Exporter;
 our @ISA = qw(Exporter);
-our @EXPORT_OK = qw();
+our @EXPORT_OK = qw(convert_file convert bisulfite_convert);
 our @EXPORT = qw(slurp_fasta format_fasta count_fasta count_fasta_complete);
 
 =head1 EXPORTED FUNCTIONS
@@ -51,6 +55,74 @@ sub slurp_fasta {
     return \%accum;
 }
 
+
+# convert c2t/g2a/rc in-place
+sub convert{
+    my ($seqs, $pattern) = @_;
+    for my $s (keys %$seqs){
+        $seqs->{$s} =~ tr/cC/tT/ if $pattern eq 'c2t';
+        $seqs->{$s} =~ tr/gG/aA/ if $pattern eq 'g2a';
+        $seqs->{$s} =~ tr/acgtACGT/tgcaTGCA/ if $pattern eq 'rc';
+    }
+}
+
+sub convert_file{
+    my ($infile,$outfile,$pattern) = @_;
+    open my $in, '<', $infile;
+    open my $out, '>', $outfile;
+
+    while(my $line = <$in>) {
+        if($line =~ m/^[ACGTN]+/i) {
+            $line =~ tr/Cc/Tt/ if $pattern eq 'c2t';
+            $line =~ tr/Gg/Aa/ if $pattern eq 'g2a';
+            $line =~ tr/acgtACGT/tgcaTGCA/ if $pattern eq 'rc';
+        }
+        print $out $line;
+    }
+    close($in);
+    close($out);
+}
+
+# bisulfite convert
+# c2t of forward strand + c2t of original reverse complemented
+sub bisulfite_convert{
+    my ($file,$outfile) = @_;
+    my $forward = slurp_fasta($file,{-l => 1});
+    my $reverse;
+    for my $s (keys %$forward){
+        $reverse->{"rc_$s"} = $forward->{$s};
+        $reverse->{"rc_$s"} =~ tr/acgtACGT/tgcaTGCA/;
+    }
+    say Dumper $forward;
+    say Dumper $reverse;
+
+    convert($forward,'c2t');
+    convert($reverse,'c2t');
+    my @seqs = sort keys %$forward;
+    open my $fh, '>', $outfile;
+    for my $s (@seqs){
+        print $fh format_fasta($s,$forward->{$s});
+        print $fh format_fasta("rc_$s",$reverse->{"rc_$s"});
+    }
+    close $fh;
+}
+
+sub fastq2fasta_file {
+    my ($infile,$outfile) = @_;
+    open my $i, '>', $infile;
+    open my $o, '>', $outfile;
+    
+    while (<$i>) {
+        if (/^@(\S+)/) {
+            print $o ">$1\n";
+            $_ = <>; print $i $_;
+            <>; <>;
+        }
+    }
+    close $i;
+    close $o;
+}
+
 sub count_fasta_complete {
     my ($file) = @_;
     return {} unless $file;
@@ -91,7 +163,7 @@ format a header and seq for printing as a fasta.
 sub format_fasta{
     my ($header, $seq, $width) = @_;
 
-    croak "need a sequence and header" unless ($seq and $header);
+    confess "need a sequence and header" unless ($seq and $header);
 
     my @buffer;
     $buffer[0] = ">$header" if defined $header;
