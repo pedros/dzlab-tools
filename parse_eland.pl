@@ -167,7 +167,8 @@ __END__
 
 =head1 NAME
 
- parse_eland.pl - Convert Solexa export (eland) to GFF format
+ parse_eland.pl - Convert Solexa export (eland) to GFF format. strips off read ID's, extrapolates . Each line is a read. 
+ Score is number of mismatches a read has to the region.
 
 =head1 SYNOPSIS
 

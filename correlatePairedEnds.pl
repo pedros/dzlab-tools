@@ -23,9 +23,18 @@
  Takes a paired ends sequencing output (needs to be preprocessed to fit above)
  and compares each pair to maximize unique alignment matches to a genome.
  Considers the following occurrences:
- (1) both sides of pair have 0 matches; (2) one side of the pair has unique match;
- (3) one side of the pair has multiple matches; (4) both sides of the pair have unique matches;
- (5) one side of the pair has unique match, other has multiple matches; (6) both sides of the pair have multiple matches.
+ (1) both sides of pair have 0 matches; 
+    Neither get through
+ (2) one side of the pair has unique match;
+    If left, it gets through. If right and trust-2, gets through, otherwise no.
+ (3) one side of the pair has multiple matches; 
+    If left, it gets through. If right and trust-2, gets through, otherwise no.
+ (4) both sides of the pair have unique matches;
+ (5) one side of the pair has unique match, other has multiple matches; 
+ (6) both sides of the pair have multiple matches.
+    If unique reconcile, both get through. 
+    If multiple reconciliations and random assign, one gets through. If not, discard,
+
  Considers the following criteria:
  (a) Each side of a pair matches to a reverse complement chromosome of its own;
  (b) The distance between potential pairs in the case of multiple matches must be larger than $offset and smaller than $offset+$distance

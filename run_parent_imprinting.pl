@@ -142,6 +142,7 @@ sub build_common_commands {
             output    => [$names->{bowtie}])
         : 0,
 
+        # parse bowtie-eland to eland3. use -u to recover non-matchers 
         need_file( $names->{eland} )
         ? System::Wrapper->new(
             interpreter => 'perl',
@@ -151,6 +152,7 @@ sub build_common_commands {
             output      => { -o => $names->{eland}})
         : 0,
 
+        # sort by col 1, so comparable with other ecotype
         need_file( $names->{reads_gff} )
         ? System::Wrapper->new(
             executable => 'sort',
@@ -162,6 +164,7 @@ sub build_common_commands {
 
     my @post_processing = (
 
+        # convert eland3 file to .gff file, line-by-line. get rid of read ids.
         need_file( $names->{reads_gff} )
         ? System::Wrapper->new(
             interpreter => 'perl', 
@@ -179,6 +182,7 @@ sub build_common_commands {
             output     => { q{>} => $names->{reads_gff} },)
         : 0,
 
+        # 
         need_file( $names->{filter_gff} )
         ? System::Wrapper->new(
             interpreter => 'perl',
