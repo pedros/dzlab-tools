@@ -34,4 +34,23 @@ from any directory.  For example:
 
 Be sure to check out the new console windows settings (Edit->Settings) to adjust font sizes/etc.  
 
+=head2 On Linux
+
+Install Git.  For ubuntu:
+
+ sudo apt-get install git-core 
+
+Install bowtie by downloading from bowtie-bio.sourceforge.net, extracting the directory and running 'make'.
+
+Checkout the dzlab-tools bundle:
+
+ git clone git://dzlab.pmb.berkeley.edu/dzlab-tools
+
+Make sure to set the PATH variable correctly by pointing it to the directories with dzlab-tools and bowtie.  On bash
+(default on ubuntu and most linux distros), put this in your ~/.profile or ~/.bash_profile:
+
+ export PATH=/path/to/dzlab-tools:/path/to/bowtie:$PATH
+
+You may have to log out and back in to see the effects of this. 
+
 =cut
