@@ -18,22 +18,22 @@ my $right_read;  # required
 my $reference;   # required
 my $base_name     = 'out';
 my $overwrite;
-my $read_size     = 76;
-my $library_size  = 300;
-my $mismatches    = 2;
-my $organism      = q{.};
-my $batch         = 1;
-my $window_size   = 50;
+my $read_size     = 76;     # length of the reads
+my $library_size  = 300;    # for paired ends, approx size of the reads.  For single, use 0
+my $mismatches    = 2;      # num mismatches to allow for bowtie
+my $organism      = q{.};   # label for collectStats.
+my $batch         = 1;      # label for collectStats.
+my $window_size   = 50;     
 my $trust_dash_2  = 0;
 my $single_ends   = 1;
 my @left_splice;
 my @right_splice;
 my @groups        = (); 	# sequences (chr1, chr2, ...)
 my $aligner       = 'bowtie';
-my $max_hits      = 0;
-my $random_assign = 1;
-my $pthreads      = 1;
-my $di_nuc_freqs  = 0;
+my $max_hits      = 0;      # cutoff for bowtie alighnment before discarding
+my $random_assign = 1;      # if there is multiple reconciliation between ends, use one randomly.  Otherwise discard.
+my $pthreads      = 1;      # not used... for bowtie.
+my $di_nuc_freqs  = 0;      # if true, CG, CT, CC, CA instead of CHH, CHG, CG. 
 my @contexts;		# CG, CHG, CHH, etc.
 
 my @date = localtime (time);
@@ -181,24 +181,6 @@ else {
 	run_cmd ("perl -S parse_bowtie.pl -u $files{lfa} -s @right_splice  $files{rel3} -o $files{rel3}.post") unless file_exists("$files{rel3}.post");
 }
 
-# deprecated: seqmap instead of bowtie.
-#    run_cmd ("seqmap $mismatches $files{lc2t} $reference.c2t $files{lel3} /eland:3 /forward_strand /available_memory:8000 /cut:$left_splice[0],$left_splice[1]")   unless file_exists($files{lel3});
-#    unless ($single_ends) {
-#        run_cmd ("seqmap $mismatches $files{rg2a} $reference.g2a $files{rel3} /eland:3 /forward_strand /available_memory:8000 /cut:$right_splice[0],$right_splice[1]") unless file_exists($files{rel3});
-#    }
-#    else {
-#        run_cmd ("seqmap $mismatches $files{lc2t} $reference.c2t $files{rel3} /eland:3 /forward_strand /available_memory:8000 /cut:$right_splice[0],$right_splice[1]") unless file_exists($files{rel3});
-#    }
-#
-#    # get back original non-converted reads
-#    run_cmd ("perl -S replace_reads.pl -f $files{lfa} -r $read_size -s @left_splice  $files{lel3} > $files{lel3}.post") unless file_exists("$files{lel3}.post");
-#    unless ($single_ends) {
-#        run_cmd ("perl -S replace_reads.pl -f $files{rfa} -r $read_size -s @right_splice $files{rel3} > $files{rel3}.post") unless file_exists("$files{rel3}.post");
-#    }
-#    else {
-#        run_cmd ("perl -S replace_reads.pl -f $files{lfa} -r $read_size -s @right_splice $files{rel3} > $files{rel3}.post") unless file_exists("$files{rel3}.post");
-#    }
-
 # make sure reads map together
 run_cmd ("perl -S correlatePairedEnds.pl -l $files{lel3}.post -r $files{rel3}.post -ref $reference -o $files{base} -t 0 -d $library_size -s $read_size -2 $trust_dash_2 -1 $single_ends -m $max_hits -a $random_assign") unless file_exists($files{base});
 
@@ -272,38 +254,149 @@ sub file_exists {
 
 =head1 SYNOPSIS
 
+Paired ends example, where s_7_1_sequence.txt is the left read and s_7_2_sequence is the right.
+
   bs-seq.pl --left-read s_7_1_sequence.txt --right-read s_7_2_sequence.txt --reference REF_COL.fa --base-name test-out --read-size 45 --library-size 300 --mismatches 2 --organism leco --batch 1 --left-splice 1 40 --right-splice 5 45
+
+Single ends example. Notice the left and right reads are the same file.
+
+ bs-seq.pl -l reads.fastq -r reads.fastq -f /path/to/genomes/TAIR_reference.fas -b bsseqrun -s 76 -k 0 -n 2 -t Arabidopsis -i 1 -ls 1 45 -rs 46 76 -1 1 -2 0 -rnd 0 -mh 10 -d output dir
 
 =head1 DESCRIPTION
 
-=head1 OPTIONS
 
- bs-seq-pl [OPTION]... [FILE]...
+=head2 OPTIONS
 
- -l,   --left-read
- -r,   --right-read
- -f,   --reference
- -b,   --base-name
- -o,   --overwrite
- -s,   --read-size
- -v,   --variable-length
- -k,   --library-size
- -n,   --mismatches
- -t,   --organism
- -i,   --batch
- -ls,  --left-splice
- -rs,  --right-splice
- -1,   --single-ends
- -2,   --trust-dash-2
- -g,   --groups
- -rnd, --random-assign
- -mh,  --max-hits
- -pt,  --pthreads
- -d,   --out-directory
- -V,   --verbose     output perl's diagnostic and warning messages
- -q,   --quiet       supress perl's diagnostic and warning messages
- -h,   --help        print this information
- -m,   --manual      print the plain old documentation page
+=over 1
+
+=item --reference <fasta> | --f <fasta>
+
+Reference genome file in Fasta format. Required.
+
+=item -l <fastq> | --left-read <fastq>
+
+Left reads file in fastq format. For single ends, -l and -r should be the same. Required.
+
+=item -r <fastq> | --right-read <fastq>
+
+Left reads file in fastq format. For single ends, -l and -r should be the same. Required.
+
+=item -l <start> <end> | --left-splice <start> <end>
+
+Start and end coordinate for the chunk of the --left-read fastq file to use for the left alignment.  Required.
+For example, if you are doing single ends with 1-45 and 46-76, use "-ls 1 45".
+
+=item -r <start> <end> | --right-splice <start> <end>
+
+Start and end coordinate for the chunk of the --right-read fastq file to use for the right alignment.  Required.
+For example, if you are doing single ends with 1-45 and 46-76, use "-rs 46 76".
+
+=item -s <len> | --read-size <len> 
+
+Length of each read.  76, 100, etc. Required.
+
+=item -b <label> | --base-name <label>
+
+Label for the file names... can be anything.  Choose something descriptive. Required
+
+=item -d | --out-directory
+
+Directory to put all result files. Required.
+
+=item -o <boolean> | --overwrite <boolean>
+
+Whether to overwrite the --directory if it already exists.  Default 0.
+
+=item -k <len> | --library-size <len>
+
+Approx length of the molecules in PAIRED ends. Default 300.  For single ends, use 0.  Ie, for paired ends, this
+parameter helps deal with possible inserts between the left and right reads:
+
+  |------------------------------------| (original read, paired end)
+  |----------->                          1', aligned to c2t
+               |---------|               insert
+                          <------------| 2', aligned to g2a
+
+For single ends, there isn't an insert use 0.
+
+  |----------------------|               (original read, single end)
+  |----------->                          1'
+               |                         insert (size 0)
+                |-------->               2' (simulated. compared against c2t just like 1')
+
+=item -t <orgname> | --organism <orgname>
+
+Label for collect_align_stats.pl (the .log file produced).  Arabidopsis, Rice, Puffer, etc.
+
+=item -w <size> | --window-size <size>
+
+Default 50, for windowing single-c files.
+
+=item -1 <boolean> | --single-ends <boolean>
+
+1 if single ends, 0 if paired.  Default 1.
+
+=back
+
+=head2 BOWTIE OPTIONS
+
+=over 
+
+=item -m <hits> | --max-hits <hits>
+
+Discards reads that map to the genome more the this many times, passed to bowtie.  In repetitive sections of the genome,
+reads can potentially map hundreds of times, so this helps us filter repetitive chunks out..  Defaults to 0  for no filtering.  
+Daniel says 10 is a good number to use. 
+
+=item -n <num> | --mismatches <num>
+
+For bowtie.  For each read alignment, allow this many mismatches.  Default 2.
+
+=back
+
+=head2 END CORRELATION OPTIONS
+
+=over 
+
+=item -r | --random-assign
+
+For correlatedPairedEnds.pl.  When there are multiple possible reconciliations between the left and right alignments,
+assign one randomly.  For Arabidopsis and other organisms with lower levels of repetitive sequences, use 0. For maize
+and similar, use 1.  Default 1.
+
+=item -2 <boolean> | --trust-dash-2 <boolean>
+
+For correlatedPairedEnds.pl.  If 1, when the dash-2 reads align when the dash-1 reads don't, KEEP the read.  This
+should be 0 for single ends since the downstream portion (right reads) of each read will be lower quality than the
+upstream (left reads).  Default 0.
+
+=back
+
+=head1 Less frequently used options
+
+=over 
+
+=item -d | --di-nuc-freqs
+
+When this is 0, calculate the CG, CHH and CHG contexts.  If 1, calculate CG, CA, CT, CC.  Default 0.
+
+=item -i <num> | --batch <num>
+
+Label for collect_align_stats.pl (the .log file produced).  Default to 1.
+
+=back
+
+=over
+
+=item -V | --verbose
+
+=item -q | --quiet
+
+=item -h | --help
+
+=item -m | --manual
+
+=back
 
 =head1 REVISION
 
