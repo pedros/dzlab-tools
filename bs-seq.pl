@@ -265,7 +265,7 @@ Single ends example. Notice the left and right reads are the same file.
 =head1 DESCRIPTION
 
 
-=head2 OPTIONS
+=head1 OPTIONS
 
 =over 1
 
@@ -354,7 +354,7 @@ For bowtie.  For each read alignment, allow this many mismatches.  Default 2.
 
 =back
 
-=head2 END CORRELATION OPTIONS
+=head2 Ends CORRELATION OPTIONS
 
 =over 
 
@@ -372,7 +372,7 @@ upstream (left reads).  Default 0.
 
 =back
 
-=head1 Less frequently used options
+=head2 Less frequently used options
 
 =over 
 
