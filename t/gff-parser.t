@@ -4,7 +4,6 @@ use warnings;
 use Data::Dumper;
 use feature 'say';
 use autodie;
-use Smart::Comments;
 
 use Test::More qw(no_plan);
 

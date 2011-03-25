@@ -27,9 +27,11 @@ for my $seq (sort keys %$original) {
 
     $original_forward =~ tr/cC/tT/;
     $original_backward =~ tr/cC/tT/;
+    $original_backward = reverse $original_backward;
 
     is($original_forward, $converted->{$seq});
     is($original_backward, $converted->{"RC_$seq"});
 }
 
+unlink $tmp;
 

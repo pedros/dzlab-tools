@@ -7,6 +7,7 @@ use feature 'say';
 use Carp;
 use autodie;
 use GFF::Parser;
+use GFF::Util;
 
 require Exporter;
 our @ISA = qw(Exporter);
@@ -26,7 +27,7 @@ sub gff_slurp{
     my @accum;
     while (my $gff = $p->next()){
         # if we're skipping, no need to check
-        if (_is_gff($gff)){ 
+        if (is_gff($gff)){ 
             push @accum, $gff;
         }
     }

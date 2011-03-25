@@ -13,16 +13,17 @@ use lib "$FindBin::Bin/../lib";
 
 use GFF;
 use GFF::Parser;
+use GFF::Slurp;
 
 my $data_pos = tell DATA;
-my $p = GFF::Parser->new(file => \*DATA);
 
-my $arr = $p->slurp();
+my $arr = gff_slurp(\*DATA);
+
 is(scalar @$arr, 8, "slurp");
 
 seek DATA, $data_pos, 0;
 
-my $hash = $p->slurp_index('sequence');
+my $hash = gff_slurp_index(\*DATA,'sequence');
 
 is(scalar @{$hash->{chr1}},6,"slurp index 1");
 is(scalar @{$hash->{chr2}},1,"slurp index 2");
