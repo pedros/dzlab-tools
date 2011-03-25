@@ -69,4 +69,16 @@ sub launch{
         $logger->logdie("failed to run, dying: ($cmd]");
     }
 }
+sub plaunch{
+    my ($numprocs, @jobs) = @_;
+    # Max 30 processes for parallel download
+    my $pm = new Parallel::ForkManager($numprocs);
+
+    foreach my $j (@jobs) {
+        $pm->start and next; # do the fork
+        launch(@$j);
+        $pm->finish; # do the exit in the child process
+    }
+    $pm->wait_all_children;
+}
 1;

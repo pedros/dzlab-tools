@@ -98,7 +98,8 @@ if ($opt_split) {
 sub _get_subseq {
     my ($seq_href, $seqid, $rc, $start, $end) = @_;
 
-    $seqid =~ tr/A-Z/a-z/;
+    $seqid = uc $seqid;
+    #$seqid =~ tr/A-Z/a-z/;
 
     unless (exists $seq_href->{$seqid}) {
         croak "Sequence ID $seqid does not exist";
@@ -108,18 +109,21 @@ sub _get_subseq {
 
     if ($start and $end) {
         # b/c start, end are 1-based
-        my $s0 = $start-1;
-        my $e0 = $end-1;
-        my $last = length($sequence) - 1;
+        my $len = length($sequence);
+        my $last = $len - 1;
+        my $s0 = $start > 0 ? $start-1 : $len + $start ;
+        my $e0 = $end > 0 ? $end-1 : $len + $end ;
 
         croak "Coordinates out of bounds" if ($s0 < 0 || $e0 > $last);
 
-        my $subseq = substr ($sequence, $s0 , $e0 - $s0);
+        my $subseq = substr ($sequence, $s0 , $e0 - $s0+1);
         $subseq =~ tr/ACGTacgt/TGCAtgca/ if $rc;
+        $subseq = reverse $subseq if $rc;
         return $subseq;
     }
     else {
         $sequence =~ tr/ACGTacgt/TGCAtgca/ if $rc;
+        $sequence = reverse $sequence if $rc;
         return $sequence;
     }
 }
@@ -164,8 +168,8 @@ sequence id from which to print sub sequence
 start and end coordinates to print
 
 =for Euclid
-    start.type: int >=0
-    end.type: int >=0
+    start.type: int 
+    end.type: int 
 
 =item -s | --split       
 

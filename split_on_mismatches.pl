@@ -8,6 +8,7 @@ use Data::Dumper;
 use Carp;
 use Getopt::Long;
 use Pod::Usage;
+use autodie;
 
 my $a_name;
 my $b_name;
@@ -26,28 +27,22 @@ my $result = GetOptions (
 pod2usage ( -verbose => 1 )
 unless @ARGV and $result and $a_name and $b_name;
 
-open my $A_IN, '<', $ARGV[0]
-    or croak "Can't open $ARGV[0]: $!";
-open my $B_IN, '<', $ARGV[1] 
-    or croak "Can't open $ARGV[1]: $!";
+open my $A_IN, '<', $ARGV[0];
+open my $B_IN, '<', $ARGV[1];
 
 unlink $ARGV[0], $ARGV[1];
 
-open my $A_NAME, '>', $ARGV[0]
-    or croak "Can't write to $ARGV[0]: $!";
-open my $B_NAME, '>', $ARGV[1]
-    or croak "Can't write to $ARGV[1]: $!";
+open my $A_NAME, '>', $ARGV[0];
+open my $B_NAME, '>', $ARGV[1];
 
-open my $A_original, '>', $ARGV[0] . ".orig"
-    or croak "Can't write to $ARGV[0]: $!";
-open my $B_original, '>', $ARGV[1] . ".orig"
-    or croak "Can't write to $ARGV[1]: $!";
+open my $A_original, '>', $ARGV[0] . ".orig";
+open my $B_original, '>', $ARGV[1] . ".orig";
 
 CMP:
 while (    defined (my $a_record = <$A_IN>)
-       and defined (my $b_record = <$B_IN>)) {
-   print $A_original $a_record;
-   print $B_original $b_record;
+        and defined (my $b_record = <$B_IN>)) {
+    print $A_original $a_record;
+    print $B_original $b_record;
 
     my ($a_id, $a_mm) = (split /\t/, $a_record)[0,2];
     my ($b_id, $b_mm) = (split /\t/, $b_record)[0,2];
@@ -56,18 +51,18 @@ while (    defined (my $a_record = <$A_IN>)
     $b_mm = get_score ($b_mm);
 
     if (! defined $a_mm and ! defined $b_mm) {
-	next CMP; # no matches at all
+        next CMP; # no matches at all
     }
     elsif (defined $a_mm and defined $b_mm) {
-	next CMP if $a_mm == $b_mm;
-	print $A_NAME $a_record if $a_mm < $b_mm;
-	print $B_NAME $b_record if $a_mm > $b_mm;
+        next CMP if $a_mm == $b_mm;
+        print $A_NAME $a_record if $a_mm < $b_mm;
+        print $B_NAME $b_record if $a_mm > $b_mm;
     }
     elsif (! defined $a_mm) {
-	print $B_NAME $b_record;
+        print $B_NAME $b_record;
     }	
     elsif (! defined $b_mm) {
-	print $A_NAME $a_record;
+        print $A_NAME $a_record;
     }
     else {croak "Impossible situation:\n$a_record\n$b_record"}
 }
@@ -82,10 +77,10 @@ sub get_score {
     my @mm = split /:/, $mm;
 
     for my $i (0 .. @mm - 1) {
-	return $i if 1 == $mm[$i];
+        return $i if 1 == $mm[$i];
     }
 }
-    
+
 
 __END__
 

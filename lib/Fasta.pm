@@ -21,10 +21,10 @@ return hash of seqid (the first word after the '>') to the sequence.
 
 =cut
 sub slurp_fasta {
-    my ($file, $opts) = @_;
+    my ($file, %opt) = @_;
     return {} unless $file;
 
-    $opts->{-l} //= 0;
+    $opt{normalize} //= 1;
 
     my %accum = ();
 
@@ -39,11 +39,12 @@ sub slurp_fasta {
                 $accum{$current} = join q{}, @buffer;
                 @buffer = ();
             }
-            $current = lc $1;
+            $current = $opt{normalize} ? uc $1 : $1;
+            
         } 
         else{
             chomp $line;
-            push @buffer, $opts->{-l} ? lc $line : $line;
+            push @buffer, $opt{normalize} ? uc $line : $line;
         }
     }
 
@@ -87,24 +88,34 @@ sub convert_file{
 # c2t of forward strand + c2t of original reverse complemented
 sub bisulfite_convert{
     my ($file,$outfile) = @_;
-    my $forward = slurp_fasta($file,{-l => 1});
+    my $forward = slurp_fasta($file,normalize => 1);
     my $reverse;
     for my $s (keys %$forward){
-        $reverse->{"rc_$s"} = $forward->{$s};
-        $reverse->{"rc_$s"} =~ tr/acgtACGT/tgcaTGCA/;
+        $reverse->{"RC_$s"} = reverse $forward->{$s};
+        $reverse->{"RC_$s"} =~ tr/acgtACGT/tgcaTGCA/;
     }
-    say Dumper $forward;
-    say Dumper $reverse;
+    #say Dumper $forward;
+    #say Dumper $reverse;
 
     convert($forward,'c2t');
     convert($reverse,'c2t');
     my @seqs = sort keys %$forward;
-    open my $fh, '>', $outfile;
-    for my $s (@seqs){
-        print $fh format_fasta($s,$forward->{$s});
-        print $fh format_fasta("rc_$s",$reverse->{"rc_$s"});
+
+    my $fh;
+    if ($outfile){
+        open $fh, '>', $outfile;
+    } else {
+        $fh = \*STDOUT;
     }
-    close $fh;
+
+    for my $s (sort @seqs){
+        print $fh format_fasta($s,$forward->{$s});
+        print $fh format_fasta("RC_$s",$reverse->{"RC_$s"});
+    }
+
+    if ($outfile){
+        close $fh;
+    }
 }
 
 sub fastq2fasta_file {

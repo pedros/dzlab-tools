@@ -1252,7 +1252,7 @@ while (my $leftend = <$LEFT>) {
 print STDERR "done!\n";
 close STDOUT;
 close $LEFT;
-close $RIGHT;
+close $RIGHT if $rightendfile;
 
 # main program finished
 
