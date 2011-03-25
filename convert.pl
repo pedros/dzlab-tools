@@ -4,7 +4,8 @@
 use strict;
 use warnings;
 
-unless (@ARGV == 2) {
+unless (@ARGV == 2 || ($ARGV[0] ne 'c2t' && $ARGV[0] ne 'g2a')){
+
     print STDERR ("Usage: convert.pl [c2t|g2a] <fastafile.fas>\n") ;
     exit(-1);
 }
@@ -15,8 +16,8 @@ my $fastafile = $ARGV[1];
 open(FAS,"<$fastafile") or die "Can't read input file";
 while(my $line = <FAS>) {
     if($line =~ m/^[ACGTN]+/i) {
-	$line =~ tr/Cc/Tt/ if $pattern eq 'c2t';
-	$line =~ tr/Gg/Aa/ if $pattern eq 'g2a';
+        $line =~ tr/Cc/Tt/ if $pattern eq 'c2t';
+        $line =~ tr/Gg/Aa/ if $pattern eq 'g2a';
     }
     print $line;
 }
