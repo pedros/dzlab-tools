@@ -32,7 +32,7 @@ for my $c (@chromosomes) {
         $counts{$opt_ecotype_b}{$c}{$mm} = 0;
     }
 }
-$logger->info(Dumper \%counts);
+$logger->debug(Dumper \%counts);
 
 for my $eco ([$opt_ecotype_a, $opt_eland_filtered_a], [$opt_ecotype_b, $opt_eland_filtered_b]){
     my ($ecotype, $file) = @$eco;
