@@ -21,5 +21,6 @@ Log::Log4perl::init( \$conf );
 
 rmtree('.done');
 
-ok(launch('sleep 1'));
+ok(launch('sleep 1',force => 1) );
 
+plaunch(2, ['echo 1',force => 1], ['echo 1',force => 1],);
