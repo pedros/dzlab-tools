@@ -16,7 +16,9 @@ use Fasta qw/bisulfite_convert/;
 use Launch;
 
 
-pod2usage(-verbose => 99,-sections => [qw/NAME SYNOPSIS OPTIONS/]) if $opt_help;
+pod2usage(-verbose => 99,-sections => [qw/NAME SYNOPSIS OPTIONS/]) 
+unless $opt_output_directory && $opt_reference_a && $opt_reference_b && $opt_raw && $opt_ecotype_a && $opt_ecotype_b && scalar %opt_splice;
+
 
 my $conf=qq/
     log4perl.logger          = DEBUG, Print
@@ -59,11 +61,6 @@ my ($trim5, $trim3) = ($opt_splice{start} - 1, $opt_read_length - $opt_splice{en
 
 #######################################################################
 # Handle options
-
-
-$logger->logdie("-o -r, -ra, -rb, -ea, -eb, -s required") 
-unless $opt_output_directory &&
-$opt_reference_a && $opt_reference_b && $opt_raw && $opt_ecotype_a && $opt_ecotype_b && scalar %opt_splice;
 
 $logger->info("raw file: $opt_raw");
 $logger->info("reference A: $opt_reference_a");
@@ -238,7 +235,7 @@ ratio.pl - Your program here
 
 Usage examples:
 
-ratio.pl [options]...
+ ratio.pl -r raw.fastq -ea Col -b Ler -ra genome-a.fasta -rb genome-b.fasta -l 100 -m 2 -s 1 50 -o outdir -b basename
 
 =head1 REQUIRED ARGUMENTS
 
@@ -294,7 +291,7 @@ Number of bp in each read.
 
 =item  -m <num> | --bowtie-mismatches <num>
 
-Number of mismatches to allow in bowtie
+Number of mismatches to allow in bowtie.
 
 =for Euclid
     num.default:     2
@@ -302,7 +299,7 @@ Number of mismatches to allow in bowtie
 
 =item -o <dir> | --output-directory <dir>
 
-Output Directory
+Output Directory.
 
 =item  -b <name> | --basename <name>
 
