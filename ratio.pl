@@ -308,14 +308,7 @@ Output Directory
 
 Prefix for the file names.
 
-
 =item --help | -h
-
-=back
-
-=over 
-
-=head1 Debug options
 
 =item  --force <level>
 
@@ -324,7 +317,6 @@ Level of forcefulness in doing jobs.  1 = Redo all run-specifics.  2 = Redo bowt
 =for Euclid
     force.default:     0
     force.type:        int, force >= 0
-
 
 =back
 
