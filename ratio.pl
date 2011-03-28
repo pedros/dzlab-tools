@@ -315,8 +315,8 @@ Prefix for the file names.
 Level of forcefulness in doing jobs.  1 = Redo all run-specifics.  2 = Redo bowtie-build as well.
 
 =for Euclid
-    force.default:     0
-    force.type:        int, force >= 0
+    level.default:     0
+    level.type:        int, level >= 0
 
 =back
 
