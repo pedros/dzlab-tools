@@ -7,6 +7,7 @@ use autodie;
 use Getopt::Euclid qw( :vars<opt_> );
 use Pod::Usage;
 use List::Util qw/sum/;
+use Cwd qw/abs_path/;
 
 pod2usage(-verbose => 99,-sections => [qw/NAME SYNOPSIS OPTIONS/]) 
 unless $opt_output && $opt_ecotype_a && $opt_ecotype_b && 
@@ -52,7 +53,10 @@ $logger->debug(Dumper \%counts);
 my $ratio_log = $opt_output;
 open my $ratiofh, '>', $ratio_log;
 
-say $ratiofh "$opt_ecotype_a / $opt_ecotype_b";
+say $ratiofh "$opt_ecotype_a = " . abs_path($opt_eland_filtered_a);
+say $ratiofh "$opt_ecotype_b = " . abs_path($opt_eland_filtered_b);
+
+say $ratiofh "\n$opt_ecotype_a / $opt_ecotype_b";
 
 for my $mm (0 .. $opt_bowtie_mismatches, 'total') {
     say $ratiofh "$mm mismatches";

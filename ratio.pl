@@ -93,19 +93,22 @@ $logger->info("basename: $basename");
 my $bsrc_reference_a = $opt_reference_a . ".bsrc";
 my $bsrc_reference_b = $opt_reference_b . ".bsrc";
 
-launch("perl -S fasta_bsrc.pl $opt_reference_a > $bsrc_reference_a", expected => $bsrc_reference_a);
-launch("perl -S fasta_bsrc.pl $opt_reference_b > $bsrc_reference_b", expected => $bsrc_reference_b);
+launch("perl -S fasta_bsrc.pl $opt_reference_a > $bsrc_reference_a", 
+    expected => $bsrc_reference_a, force => $opt_force >= 2 );
+launch("perl -S fasta_bsrc.pl $opt_reference_b > $bsrc_reference_b", 
+    expected => $bsrc_reference_b, force => $opt_force >= 2 );
 
 for my $ref ($bsrc_reference_a,$bsrc_reference_b) {
-    launch("bowtie-build $ref $ref", expected => ("$ref.1.ebwt"));
+    launch("bowtie-build $ref $ref", 
+        expected => ("$ref.1.ebwt"), force => $opt_force >= 2);
 }
 
 # raw: fastq -> fasta,  c2t
 $logger->info("converting fastq->fasta, then converting");
 my $rawfas = "$opt_raw.fasta";
 my $rawc2t = "$opt_raw.fasta.c2t";
-launch("perl -S fq_all2std.pl fq2fa $opt_raw > $rawfas", expected => $rawfas);
-launch("perl -S convert.pl c2t $rawfas > $rawc2t", expected => $rawc2t);
+launch("perl -S fq_all2std.pl fq2fa $opt_raw > $rawfas", expected => $rawfas, force => $opt_force>=2);
+launch("perl -S convert.pl c2t $rawfas > $rawc2t", expected => $rawc2t, force => $opt_force>=2);
 
 
 #######################################################################
@@ -118,9 +121,9 @@ my $basename_b = "$basename-vs-$opt_ecotype_b";
 my $bowtie_a = "$basename_a.bowtie";
 my $bowtie_b = "$basename_b.bowtie";
 launch("bowtie $bsrc_reference_a -f -B 1 -v $opt_bowtie_mismatches --norc --best -5 $trim5 -3 $trim3 $rawc2t $bowtie_a",
-    expected => $bowtie_a);
+    expected => $bowtie_a, force => $opt_force);
 launch("bowtie $bsrc_reference_b -f -B 1 -v $opt_bowtie_mismatches --norc --best -5 $trim5 -3 $trim3 $rawc2t $bowtie_b",
-    expected => $bowtie_b);
+    expected => $bowtie_b, force => $opt_force);
 
 #######################################################################
 # parse bowtie
@@ -129,9 +132,9 @@ $logger->info("parse bowtie -> eland");
 my $eland_a = "$basename_a.eland";
 my $eland_b = "$basename_b.eland";
 launch("perl -S parse_bowtie.pl -u $rawfas -s @opt_splice{qw/start end/} $bowtie_a -o $eland_a",
-    expected => $eland_a);
+    expected => $eland_a, force => $opt_force);
 launch("perl -S parse_bowtie.pl -u $rawfas -s @opt_splice{qw/start end/} $bowtie_b -o $eland_b",
-    expected => $eland_b);
+    expected => $eland_b, force => $opt_force);
 
 #######################################################################
 # Split on mismatches
@@ -139,8 +142,8 @@ launch("perl -S parse_bowtie.pl -u $rawfas -s @opt_splice{qw/start end/} $bowtie
 $logger->info("sort the eland files");
 my $eland_sorted_a = "$eland_a.sorted";
 my $eland_sorted_b = "$eland_b.sorted";
-launch("sort -k 1,1 -S 15% $eland_a -o $eland_sorted_a",expected => $eland_sorted_a);
-launch("sort -k 1,1 -S 15% $eland_b -o $eland_sorted_b",expected => $eland_sorted_b);
+launch("sort -k 1,1 -S 15% $eland_a -o $eland_sorted_a",expected => $eland_sorted_a, force => $opt_force);
+launch("sort -k 1,1 -S 15% $eland_b -o $eland_sorted_b",expected => $eland_sorted_b, force => $opt_force);
 
 $logger->info("split_on_mismatch.pl");
 my $eland_filtered_a = "$eland_a.filtered";
@@ -305,7 +308,23 @@ Output Directory
 
 Prefix for the file names.
 
+
 =item --help | -h
+
+=back
+
+=over 
+
+=head1 Debug options
+
+=item  --force <level>
+
+Level of forcefulness in doing jobs.  1 = Redo all run-specifics.  2 = Redo bowtie-build as well.
+
+=for Euclid
+    force.default:     0
+    force.type:        int, force >= 0
+
 
 =back
 

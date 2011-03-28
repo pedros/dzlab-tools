@@ -6,6 +6,7 @@ use Data::Dumper;
 use feature 'say';
 use Carp;
 use autodie;
+use GFF;
 
 require Exporter;
 our @ISA = qw(Exporter);
