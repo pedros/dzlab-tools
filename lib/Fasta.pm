@@ -11,7 +11,7 @@ use autodie;
 require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT_OK = qw(convert_file convert bisulfite_convert);
-our @EXPORT = qw(slurp_fasta format_fasta count_fasta count_fasta_complete);
+our @EXPORT = qw(slurp_fasta format_fasta count_fasta count_fasta_complete dump_fasta);
 
 =head1 EXPORTED FUNCTIONS
 
@@ -185,6 +185,14 @@ sub format_fasta{
         push @buffer, substr $seq, $position, $width;
     }
     return (join "\n", @buffer) . "\n";
+}
+
+sub dump_fasta{
+    my ($fasta) = @_;
+
+    for my $seq (sort keys %$fasta) {
+        say format_fasta(uc $seq, $fasta->{$seq});
+    }
 }
 
 1;
