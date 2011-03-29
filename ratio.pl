@@ -139,13 +139,13 @@ launch("perl -S parse_bowtie.pl -u $rawfas -s @opt_splice{qw/start end/} $bowtie
 $logger->info("sort the eland files");
 my $eland_sorted_a = "$eland_a.sorted";
 my $eland_sorted_b = "$eland_b.sorted";
-launch("sort -k 1,1 -S 15% $eland_a -o $eland_sorted_a",expected => $eland_sorted_a, force => $opt_force);
-launch("sort -k 1,1 -S 15% $eland_b -o $eland_sorted_b",expected => $eland_sorted_b, force => $opt_force);
+launch("sort -k 1,1 -k 4,4 -S 15% $eland_a -o $eland_sorted_a",expected => $eland_sorted_a, force => $opt_force);
+launch("sort -k 1,1 -k 4,4 -S 15% $eland_b -o $eland_sorted_b",expected => $eland_sorted_b, force => $opt_force);
 
-$logger->info("split_on_mismatch.pl");
+$logger->info("split_on_mismatch_2.pl");
 my $eland_filtered_a = "$eland_a.filtered";
 my $eland_filtered_b = "$eland_b.filtered";
-launch("perl -S split_on_mismatches_2.pl -ia $eland_a -ib $eland_b -oa $eland_filtered_a -ob $eland_filtered_b",
+launch("perl -S split_on_mismatches_2.pl -c -ia $eland_a -ib $eland_b -oa $eland_filtered_a -ob $eland_filtered_b",
     expected => [ $eland_filtered_a, $eland_filtered_b]);
 
 

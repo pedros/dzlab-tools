@@ -38,7 +38,7 @@ while (defined (my $a_record = <$ain>) and
     if (! defined $a_mm and ! defined $b_mm) {
         next CMP; # no matches at all
     }
-    elsif (defined $a_mm and defined $b_mm and $a_rawcoord == $b_rawcoord){
+    elsif (defined $a_mm and defined $b_mm and (!$opt_coord || $a_rawcoord == $b_rawcoord))){
         next CMP if $a_mm == $b_mm;
         print $aout $a_record if $a_mm < $b_mm;
         print $bout $b_record if $a_mm > $b_mm;
