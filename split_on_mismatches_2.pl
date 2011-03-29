@@ -8,8 +8,9 @@ use Pod::Usage;
 use autodie;
 use Getopt::Euclid qw( :vars<opt_> );
 use Pod::Usage;
+use feature 'say';
 
-pod2usage(-verbose => 99,-sections => [('NAME', 'SYNOPSIS', 'OPTIONS', 'REQUIRED ARGUMENTS'/]) 
+pod2usage(-verbose => 99,-sections => [('NAME', 'SYNOPSIS', 'OPTIONS', 'REQUIRED ARGUMENTS')] )
     if $opt_help;
 
 open my $ain, '<', $opt_input_a;
@@ -25,16 +26,19 @@ while (defined (my $a_record = <$ain>) and
     my ($a_id, $a_mm, $a_rawcoord) = (split /\t/, $a_record)[0,2,3];
     my ($b_id, $b_mm, $b_rawcoord) = (split /\t/, $b_record)[0,2,3];
 
-    $a_rawcoord =~ s/.*chr\d:(\d+).*/$1/;
-    $b_rawcoord =~ s/.*chr\d:(\d+).*/$1/;
+    $a_rawcoord =~ s/.*chr\d:(\d+).*/$1/xmsi;
+    $b_rawcoord =~ s/.*chr\d:(\d+).*/$1/ixms;
 
     $a_mm = get_score ($a_mm);
     $b_mm = get_score ($b_mm);
 
+    say $a_rawcoord;
+    say $b_rawcoord;
+
     if (! defined $a_mm and ! defined $b_mm) {
         next CMP; # no matches at all
     }
-    elsif (defined $a_mm and defined $b_mm and $a_mm and $b_mm) {
+    elsif (defined $a_mm and defined $b_mm and $a_rawcoord == $b_rawcoord){
         next CMP if $a_mm == $b_mm;
         print $aout $a_record if $a_mm < $b_mm;
         print $bout $b_record if $a_mm > $b_mm;
