@@ -27,8 +27,10 @@ my $refa = slurp_fasta($opt_reference_a);
 $logger->info("loading $opt_reference_b");
 my $refb = slurp_fasta($opt_reference_b);
 
+my $source = "$opt_ecotype_a->$opt_ecotype_b";
+
 my @seqs = sort keys %$refa;
-say "#Seq\tCoord\t$opt_reference_a\t$opt_reference_b";
+#say "#Seq\tCoord\t$opt_reference_a\t$opt_reference_b";
 
 my $counter = 0;
 
@@ -49,7 +51,7 @@ for my $seq (@seqs) {
 
         next if $aa eq $bb;
 
-        printf "%s\t%d\t%s\t%s\n", $seq, $i + 1, $aa, $bb;
+        say join "\t", $seq, q{}, $source, $i+1, $i+1, q{}, q{+}, q{}, "$aa>$bb";
     }
 }
 
@@ -75,6 +77,16 @@ Usage examples:
 
 =item  -b <fasta> | --reference-b <fasta>
 
+=item  -ea <eco> | --ecotype-a <eco>
+
+=for Euclid
+    eco.default:     'left'
+
+=item  -eb <eco> | --ecotype-b <eco>
+
+=for Euclid
+    eco.default:     'right'
+
 =for Euclid
     fasta.type: readable
 
@@ -82,4 +94,15 @@ Usage examples:
 
 =cut
 
-
+# Format:
+__DATA__
+CHR1		DZ_Ecker_Ler3	711	711		+		T>C
+CHR1		DZ_Ecker_Ler3	892	892		+		T>G
+CHR1		DZ_Ecker_Ler3	956	956		+		C>T
+CHR1		DZ_Ecker_Ler3	10904	10904		+		A>T
+CHR1		DZ_Ecker_Ler3	32210	32210		+		T>C
+CHR1		DZ_Ecker_Ler3	37388	37388		+		G>T
+CHR1		DZ_Ecker_Ler3	71348	71348		+		C>T
+CHR1		DZ_Ecker_Ler3	88300	88300		+		C>T
+CHR1		DZ_Ecker_Ler3	90571	90571		+		A>C
+CHR1		DZ_Ecker_Ler3	90809	90809		+		A>T
