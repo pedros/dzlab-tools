@@ -19,6 +19,9 @@ open my $bin, '<', $opt_input_b;
 open my $aout, '>', $opt_output_a;
 open my $bout, '>', $opt_output_b;
 
+open my $aerror, '>', "$opt_output_a.$opt_error_suffix";
+open my $berror, '>', "$opt_output_b.$opt_error_suffix";
+
 CMP:
 while (defined (my $a_record = <$ain>) and 
     defined (my $b_record = <$bin>)) {
@@ -26,22 +29,27 @@ while (defined (my $a_record = <$ain>) and
     my ($a_id, $a_mm, $a_rawcoord) = (split /\t/, $a_record)[0,2,3];
     my ($b_id, $b_mm, $b_rawcoord) = (split /\t/, $b_record)[0,2,3];
 
-    $a_rawcoord =~ s/.*chr\d:(\d+).*/$1/xmsi;
-    $b_rawcoord =~ s/.*chr\d:(\d+).*/$1/ixms;
+    $a_rawcoord =~ s/.*chr\w:(\d+).*/$1/xmsi;
+    $b_rawcoord =~ s/.*chr\w:(\d+).*/$1/ixms;
 
     $a_mm = get_score ($a_mm);
     $b_mm = get_score ($b_mm);
 
-    say $a_rawcoord;
-    say $b_rawcoord;
+    #say $a_rawcoord;
+    #say $b_rawcoord;
 
     if (! defined $a_mm and ! defined $b_mm) {
         next CMP; # no matches at all
     }
-    elsif (defined $a_mm and defined $b_mm and (!$opt_coord || $a_rawcoord == $b_rawcoord))){
+    elsif (defined $a_mm and defined $b_mm){
         next CMP if $a_mm == $b_mm;
-        print $aout $a_record if $a_mm < $b_mm;
-        print $bout $b_record if $a_mm > $b_mm;
+        if ($a_rawcoord == $b_rawcoord){
+            print $aout $a_record if $a_mm < $b_mm;
+            print $bout $b_record if $a_mm > $b_mm;
+        } else {
+            print $aerror $a_record;
+            print $berror $b_record;
+        }
     }
     elsif (! defined $a_mm) {
         print $bout $b_record;
@@ -54,6 +62,8 @@ while (defined (my $a_record = <$ain>) and
 
 close $aout; close $bout;
 close $ain;   close $bin;
+close $aerror;
+close $berror;
 
 sub get_score {
     my ($mm) = @_;
@@ -114,6 +124,12 @@ Filtered B eland output file
 =item --coord | -c
 
 Use coordinates for matching as well.
+
+=item  -e <suffix> | --error-suffix <suffix>
+
+=for Euclid
+    suffix.default:     'error'
+
 
 =item --help | -h
 

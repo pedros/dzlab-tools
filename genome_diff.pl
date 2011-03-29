@@ -49,7 +49,7 @@ for my $seq (@seqs) {
 
         next if $aa eq $bb;
 
-        printf "%s\t%d\t%s\t%s\n", $seq, $i, $aa, $bb;
+        printf "%s\t%d\t%s\t%s\n", $seq, $i + 1, $aa, $bb;
     }
 }
 
